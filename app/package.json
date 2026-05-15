@@ -1,0 +1,32 @@
+{
+  "name": "waldorf-reservations-triage",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "prisma generate && next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "date-fns": "^4.1.0",
+    "lucide-react": "^0.468.0",
+    "next": "^15.1.0",
+    "prisma": "^5.22.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^19.0.1",
+    "@types/react-dom": "^19.0.2",
+    "eslint": "^9.17.0",
+    "eslint-config-next": "^15.1.0",
+    "typescript": "^5.7.2"
+  }
+}
