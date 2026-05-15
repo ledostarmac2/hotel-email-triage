@@ -1,0 +1,108 @@
+spring:
+  application:
+    name: intelligent-email-assistant
+  
+  # Database Configuration (Supabase PostgreSQL)
+  datasource:
+    url: jdbc:postgresql://${SUPABASE_HOST:localhost:5432}/${SUPABASE_DB:postgres}
+    username: ${SUPABASE_USER:postgres}
+    password: ${SUPABASE_PASSWORD:password}
+    driver-class-name: org.postgresql.Driver
+    
+  # JPA Configuration
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        
+  # Security Configuration
+  security:
+    oauth2:
+      client:
+        registration:
+          microsoft:
+            client-id: ${MICROSOFT_CLIENT_ID}
+            client-secret: ${MICROSOFT_CLIENT_SECRET}
+            scope: 
+              - https://graph.microsoft.com/Mail.Read
+              - https://graph.microsoft.com/Mail.Send
+              - https://graph.microsoft.com/User.Read
+            authorization-grant-type: authorization_code
+            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+        provider:
+          microsoft:
+            authorization-uri: https://login.microsoftonline.com/common/oauth2/v2.0/authorize
+            token-uri: https://login.microsoftonline.com/common/oauth2/v2.0/token
+            user-info-uri: https://graph.microsoft.com/v1.0/me
+            user-name-attribute: id
+
+# Custom Application Configuration
+app:
+  microsoft:
+    tenant-id: ${MICROSOFT_TENANT_ID:common}
+    client-id: ${MICROSOFT_CLIENT_ID}
+    client-secret: ${MICROSOFT_CLIENT_SECRET}
+    redirect-uri: ${MICROSOFT_REDIRECT_URI:http://localhost:8081/api/login/oauth2/code/microsoft}
+    graph:
+      enabled: ${MICROSOFT_GRAPH_ENABLED:false}
+    
+  llm:
+    openai:
+      api-key: ${OPENAI_API_KEY}
+      base-url: https://api.openai.com/v1
+      model: gpt-4
+      
+    deepseek:
+      api-key: ${DEEPSEEK_API_KEY}
+      base-url: https://api.deepseek.com/v1
+      model: deepseek-chat
+      
+    default-provider: deepseek
+    
+  whatsapp:
+    twilio:
+      account-sid: ${TWILIO_ACCOUNT_SID}
+      auth-token: ${TWILIO_AUTH_TOKEN}
+      from-number: ${TWILIO_WHATSAPP_FROM}
+      to-number: ${WHATSAPP_TO_NUMBER}
+      
+  email:
+    check-interval-minutes: 5
+    batch-size: 10
+    max-response-length: 500
+    
+  supabase:
+    url: ${SUPABASE_URL}
+    anon-key: ${SUPABASE_ANON_KEY}
+
+# Server Configuration
+server:
+  port: 8081
+  servlet:
+    context-path: /api
+
+# Management Endpoints
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when_authorized
+
+# Logging Configuration
+logging:
+  level:
+    com.intelligentassistant.emailassistant: INFO
+    org.springframework.security: DEBUG
+    org.springframework.web: DEBUG
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/email-assistant.log

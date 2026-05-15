@@ -1,0 +1,95 @@
+# Test configuration that allows the app to start without database connection
+spring:
+  application:
+    name: intelligent-email-assistant
+  
+  # Use in-memory H2 database for testing  
+  datasource:
+    url: jdbc:h2:mem:testdb
+    username: sa
+    password: 
+    driver-class-name: org.h2.Driver
+    
+  # JPA Configuration for H2
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+        format_sql: true
+        
+  # Disable OAuth2 for testing
+  security:
+    oauth2:
+      client:
+        registration: {}
+        provider: {}
+
+# Custom Application Configuration - all disabled/stubbed for testing
+app:
+  microsoft:
+    tenant-id: test-tenant
+    client-id: test-client-id
+    client-secret: test-client-secret
+    redirect-uri: http://localhost:8081/api/login/oauth2/code/microsoft
+    graph:
+      enabled: false
+    
+  llm:
+    openai:
+      api-key: test-key
+      base-url: https://api.openai.com/v1
+      model: gpt-4
+      
+    deepseek:
+      api-key: test-key
+      base-url: https://api.deepseek.com/v1
+      model: deepseek-chat
+      
+    default-provider: deepseek
+    
+  whatsapp:
+    twilio:
+      account-sid: test-sid
+      auth-token: test-token
+      from-number: whatsapp:+14155238886
+      to-number: whatsapp:+1234567890
+      
+  email:
+    check-interval-minutes: 5
+    batch-size: 10
+    max-response-length: 500
+    
+  supabase:
+    url: https://test.supabase.co
+    anon-key: test-key
+
+# Server Configuration
+server:
+  port: 8081
+  servlet:
+    context-path: /api
+
+# Management Endpoints
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when_authorized
+
+# Logging Configuration
+logging:
+  level:
+    com.intelligentassistant.emailassistant: INFO
+    org.springframework.security: INFO
+    org.springframework.web: INFO
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/email-assistant.log
