@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Waldorf Email Intelligence</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <strong>Waldorf Email Intelligence</strong>
+        <span id="mailboxLabel">Shared Outlook inbox</span>
+      </div>
+      <div class="actions">
+        <a class="button secondary" href="/auth/login?mode=shared">Connect Microsoft</a>
+        <button class="button" id="syncButton" type="button">Sync Outlook</button>
+        <button class="button secondary" id="processButton" type="button">Process AI</button>
+        <button class="button ghost" id="mockButton" type="button">Load Mock</button>
+      </div>
+    </header>
+
+    <main class="app-shell">
+      <section class="metrics" id="metrics"></section>
+
+      <section class="workspace">
+        <aside class="queue-panel">
+          <div class="filters">
+            <input id="searchInput" type="search" placeholder="Search sender, subject, preview" />
+            <select id="categoryFilter"></select>
+            <select id="priorityFilter"></select>
+            <select id="statusFilter"></select>
+            <select id="riskFilter"></select>
+          </div>
+          <div class="queue-header">
+            <h1>Inbox Queue</h1>
+            <span id="queueCount"></span>
+          </div>
+          <div class="email-list" id="emailList"></div>
+        </aside>
+
+        <section class="detail-panel" id="detailPanel">
+          <div class="empty-state">Select an email to review.</div>
+        </section>
+      </section>
+    </main>
+
+    <div class="toast" id="toast" hidden></div>
+    <script src="/static/app.js"></script>
+  </body>
+</html>
