@@ -1,23 +1,57 @@
 $ErrorActionPreference = "Stop"
 
+# VS Code auto-activates project venvs, which may not have PyInstaller.
+# Skip any python inside a .venv or .build-venv folder; use the first system Python.
+$PYTHON = $null
+$candidates = Get-Command python -All -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source
+foreach ($c in $candidates) {
+    if ($c -match '[\\/]\.(venv|build-venv)[\\/]') { continue }
+    $PYTHON = $c
+    break
+}
+if (-not $PYTHON) { throw "Could not find a system Python. Ensure Python is installed outside any virtual environment." }
+Write-Host "Using Python: $PYTHON"
+
+# If the previous EXE is locked (e.g. by Windows Defender scanning it),
+# rename it out of the way so PyInstaller can write the new one.
+$oldExe = Join-Path (Get-Location) "dist\ReplyRight.exe"
+if (Test-Path $oldExe) {
+    try {
+        Remove-Item $oldExe -Force -ErrorAction Stop
+    } catch {
+        $backupExe = $oldExe + ".old"
+        Remove-Item $backupExe -Force -ErrorAction SilentlyContinue
+        Rename-Item $oldExe $backupExe -Force -ErrorAction Stop
+    }
+}
+
 $vendorPath = Join-Path (Get-Location) ".vendor"
 
 if (-not (Test-Path $vendorPath)) {
     $env:TEMP = Join-Path (Get-Location) ".build-tmp"
     $env:TMP = $env:TEMP
-    $env:PYTHONPATH = (Resolve-Path "build_support").Path
     New-Item -ItemType Directory -Force -Path $env:TEMP | Out-Null
     New-Item -ItemType Directory -Force -Path $vendorPath | Out-Null
-    python -m pip install --no-cache-dir --only-binary=:all: --target $vendorPath fastapi "uvicorn[standard]" httpx python-dotenv openai
+    # pythonnet is a pure-Python wheel so no C compiler needed; it must be
+    # listed explicitly so pip doesn't skip it as "no binary available".
+    & $PYTHON -m pip install --no-cache-dir --target $vendorPath `
+        fastapi "uvicorn[standard]" httpx python-dotenv openai `
+        "pywebview>=4.4,<6" pythonnet
 }
 
-python -m PyInstaller `
+& $PYTHON -m PyInstaller `
     --onefile `
     --windowed `
     --name ReplyRight `
     --icon "outlook_dashboard/static/replyright.ico" `
     --paths $vendorPath `
     --add-data "outlook_dashboard/static;outlook_dashboard/static" `
+    --collect-all webview `
+    --collect-all pythonnet `
+    --collect-all outlook_dashboard `
+    --hidden-import webview.platforms.edgechromium `
+    --hidden-import webview.platforms.winforms `
+    --hidden-import clr `
     run_desktop.py
 
 $exePath = (Resolve-Path "dist\ReplyRight.exe").Path

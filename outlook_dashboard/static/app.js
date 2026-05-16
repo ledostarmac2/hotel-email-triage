@@ -2,6 +2,7 @@ const state = {
   taxonomy: { categories: [], risk_flags: [], statuses: [] },
   emails: [],
   selectedId: null,
+  currentView: "inbox",
   filters: {
     category: "",
     status: "",
@@ -18,8 +19,6 @@ const els = {
   queueCount: document.getElementById("queueCount"),
   syncStatus: document.getElementById("syncStatus"),
   refreshButton: document.getElementById("refreshButton"),
-  processButton: document.getElementById("processButton"),
-  mockButton: document.getElementById("mockButton"),
   toast: document.getElementById("toast"),
   categoryFilter: document.getElementById("categoryFilter"),
   statusFilter: document.getElementById("statusFilter"),
@@ -49,13 +48,22 @@ async function boot() {
 
 function bindEvents() {
   els.refreshButton.addEventListener("click", () => runAction("Refreshing inbox", refreshInbox));
-  els.processButton.addEventListener("click", () => runAction("Running local triage", processPending));
-  els.mockButton.addEventListener("click", () => runAction("Loading demo inbox", seedMock));
   els.closeReplyModal.addEventListener("click", closeReplyModal);
   els.replyModal.addEventListener("click", (event) => {
     if (event.target === els.replyModal) closeReplyModal();
   });
   els.copyReplyButton.addEventListener("click", copyReply);
+
+  document.querySelectorAll(".nav-item[data-view]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".nav-item").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      state.currentView = btn.dataset.view;
+      state.selectedId = null;
+      renderEmailList();
+      renderEmptyDetail();
+    });
+  });
 
   for (const [key, element] of [
     ["category", els.categoryFilter],
@@ -103,17 +111,6 @@ async function pollInboxImport() {
   setSyncStatus("Ready");
 }
 
-async function processPending() {
-  const result = await fetchJson("/api/ai/process-pending?limit=100", { method: "POST" });
-  showToast(`Local triage complete. ${result.analyzed_count} email${result.analyzed_count === 1 ? "" : "s"} updated.`);
-  await loadEmails();
-}
-
-async function seedMock() {
-  const result = await fetchJson("/api/mock/seed", { method: "POST" });
-  showToast(`Demo inbox loaded. ${result.inserted_count} new, ${result.updated_count} updated.`);
-  await loadEmails();
-}
 
 async function loadEmails(options = {}) {
   const params = new URLSearchParams();
@@ -161,13 +158,24 @@ function renderMetrics() {
     .join("");
 }
 
+function viewEmails() {
+  const all = state.emails;
+  switch (state.currentView) {
+    case "urgent": return all.filter((e) => urgency(e) >= 4);
+    case "vip":    return all.filter((e) => (e.importance || "").toLowerCase() === "high");
+    case "missing": return all.filter((e) => (e.missing_information || []).length > 0);
+    default:       return all;
+  }
+}
+
 function renderEmailList() {
-  els.queueCount.textContent = `${state.emails.length} email${state.emails.length === 1 ? "" : "s"}`;
-  if (!state.emails.length) {
+  const visible = viewEmails();
+  els.queueCount.textContent = `${visible.length} email${visible.length === 1 ? "" : "s"}`;
+  if (!visible.length) {
     els.emailList.innerHTML = `<div class="empty-state">No emails match the current filters.</div>`;
     return;
   }
-  els.emailList.innerHTML = state.emails.map(emailRow).join("");
+  els.emailList.innerHTML = visible.map(emailRow).join("");
   els.emailList.querySelectorAll(".email-row").forEach((row) => {
     row.addEventListener("click", () => selectEmail(Number(row.dataset.id), true));
   });

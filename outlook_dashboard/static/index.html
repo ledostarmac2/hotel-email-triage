@@ -18,10 +18,10 @@
           </span>
         </div>
         <nav class="nav-list" aria-label="Views">
-          <button class="nav-item active" type="button">Inbox</button>
-          <button class="nav-item" type="button">Urgent</button>
-          <button class="nav-item" type="button">VIP</button>
-          <button class="nav-item" type="button">Missing Info</button>
+          <button class="nav-item active" type="button" data-view="inbox">Inbox</button>
+          <button class="nav-item" type="button" data-view="urgent">Urgent</button>
+          <button class="nav-item" type="button" data-view="vip">VIP</button>
+          <button class="nav-item" type="button" data-view="missing">Missing Info</button>
         </nav>
         <div class="sidebar-footer">
           <span id="mailboxLabel">NYCWA_Reservations</span>
@@ -37,8 +37,6 @@
           </div>
           <div class="actions">
             <button class="button primary" id="refreshButton" type="button">Refresh Inbox</button>
-            <button class="button secondary" id="processButton" type="button">Run Local Triage</button>
-            <button class="button ghost" id="mockButton" type="button">Load Demo</button>
           </div>
         </header>
 

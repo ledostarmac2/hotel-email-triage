@@ -4,13 +4,16 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException, Query
+import time
+
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from .ai import analyze_email, triage_email, urgency_score
-from .config import get_settings
+from .config import DATA_DIR, get_settings
 from .database import (
     email_count,
     emails_without_analysis,
@@ -32,19 +35,64 @@ from .graph import (
 )
 from .mock_data import build_mock_emails
 from .outlook_desktop import OutlookDesktopExportError, export_mailbox_folder_to_msg
+from .runtime_log import configure as _configure_runtime_log
+from .runtime_log import get_logger
 from .taxonomy import CATEGORIES, PRIORITY_LEVELS, RISK_FLAGS, STATUSES
 
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 
+_log = get_logger("app")
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    _configure_runtime_log(DATA_DIR)
     settings = get_settings()
+    _log.info(
+        "Server starting: host=%s port=%s db=%s openai=%s graph=%s",
+        settings.app_host,
+        settings.app_port,
+        settings.database_path,
+        settings.openai_configured,
+        settings.graph_configured,
+    )
     initialize_database(settings.database_path)
     if settings.auto_seed_mock and email_count(settings.database_path) == 0:
         _seed_mock(settings, analyze=True)
     yield
+    _log.info("Server shutdown.")
+
+
+_http_log = get_logger("http")
+
+
+class _RequestLogMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        start = time.perf_counter()
+        try:
+            response = await call_next(request)
+        except Exception as exc:
+            elapsed_ms = (time.perf_counter() - start) * 1000
+            _http_log.error(
+                "%s %s — UNHANDLED %s (%.0f ms)",
+                request.method, request.url.path, type(exc).__name__, elapsed_ms,
+                exc_info=True,
+            )
+            raise
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        level = 30 if response.status_code >= 400 else 20  # WARNING vs INFO
+        _http_log.log(
+            level,
+            "%s %s%s — %s (%.0f ms)",
+            request.method,
+            request.url.path,
+            f"?{request.url.query}" if request.url.query else "",
+            response.status_code,
+            elapsed_ms,
+        )
+        return response
 
 
 app = FastAPI(
@@ -52,6 +100,7 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+app.add_middleware(_RequestLogMiddleware)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
@@ -159,6 +208,12 @@ def seed_mock() -> dict[str, object]:
 @app.post("/api/outlook-desktop/export-inbox")
 def export_outlook_desktop_inbox() -> dict[str, object]:
     settings = get_settings()
+    _log.info(
+        "Outlook export requested: mailbox=%s folder=%s macro=%s",
+        settings.outlook_export_mailbox,
+        settings.outlook_export_folder,
+        settings.outlook_export_macro,
+    )
     try:
         result = export_mailbox_folder_to_msg(
             settings.outlook_export_mailbox,
@@ -166,8 +221,10 @@ def export_outlook_desktop_inbox() -> dict[str, object]:
             settings.outlook_export_dir,
             settings.outlook_export_macro,
         )
+        _log.info("Outlook export launched macro successfully: %s", settings.outlook_export_macro)
         return {"source": "outlook_desktop", **result}
     except OutlookDesktopExportError as exc:
+        _log.error("Outlook export failed: %s", exc)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
@@ -284,7 +341,20 @@ def api_analyze_email(email_id: int) -> dict[str, object]:
     email = get_email(email_id, db_path=settings.database_path)
     if not email:
         raise HTTPException(status_code=404, detail="Email not found.")
-    analysis = analyze_email(email, settings)
+    _log.info(
+        "AI analyze requested: email_id=%s engine=%s",
+        email_id,
+        "openai" if settings.openai_configured else "heuristic",
+    )
+    try:
+        analysis = analyze_email(email, settings)
+    except Exception as exc:
+        _log.error("AI analyze failed: email_id=%s error=%s", email_id, exc, exc_info=True)
+        raise
+    if analysis.get("analysis_error"):
+        _log.warning("AI analyze completed with error: email_id=%s error=%s", email_id, analysis["analysis_error"])
+    else:
+        _log.info("AI analyze succeeded: email_id=%s engine=%s", email_id, analysis.get("analysis_engine"))
     save_analysis(email_id, analysis, db_path=settings.database_path)
     refreshed = get_email(email_id, db_path=settings.database_path)
     return {"email": _decorate_email(refreshed or {})}

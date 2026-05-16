@@ -9,7 +9,7 @@
   --line: #dde2e8;
   --sidebar: #131722;
   --sidebar-soft: #202635;
-  --accent: #6f42c1;
+  --accent: #1565c0;
   --teal: #177e89;
   --amber: #bd6b00;
   --red: #b42318;
@@ -342,7 +342,7 @@ textarea {
 
 .email-row:hover,
 .email-row.active {
-  background: #f7f4fc;
+  background: #f0f5ff;
 }
 
 .urgency-badge {
