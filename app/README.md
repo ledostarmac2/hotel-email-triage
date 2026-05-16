@@ -1,6 +1,6 @@
-# Waldorf Reservations Triage App
+# ReplyRight App
 
-Initial production app scaffold for the Waldorf Astoria New York Reservations shared mailbox triage system.
+Initial production app scaffold for the ReplyRight shared mailbox triage system.
 
 ## Setup
 

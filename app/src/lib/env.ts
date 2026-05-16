@@ -12,7 +12,7 @@ const envSchema = z.object({
     .string()
     .default("true")
     .transform((value) => value.toLowerCase() !== "false"),
-  NEXT_PUBLIC_APP_NAME: z.string().default("Waldorf Reservations Triage")
+  NEXT_PUBLIC_APP_NAME: z.string().default("ReplyRight")
 });
 
 export const env = envSchema.parse(process.env);

@@ -1,4 +1,4 @@
-# Hotel Email Triage
+# ReplyRight
 
 Read-only Outlook email intelligence dashboard for a luxury hotel shared inbox.
 
@@ -34,9 +34,9 @@ It serves a simple browser dashboard from FastAPI, so there is no separate React
   - `hasAttachments`
 - SQLite email storage with duplicate prevention by Graph message ID
 - Mock email data for local use before credentials are configured
-- AI summary, category, priority, sentiment, next steps, missing information, risk flags, owner, and suggested reply draft
-- Dashboard filters for category, priority, status, and risk flag
-- Detail review pane with original email body and copyable suggested reply
+- Local triage summary, category, urgency score 1-5, sentiment, next steps, missing information, risk flags, and owner
+- Dashboard filters for category, status, and risk flag
+- On-demand AI recommended response modal for the selected email only
 - Local-only workflow status: `New`, `Reviewed`, `Drafted`, `Completed`, `Escalated`
 
 ## Local Setup
@@ -98,7 +98,27 @@ For shared mailbox sync, the signed-in Microsoft 365 user must have access to th
 
 ## Outlook Sync
 
-Use the dashboard button `Connect Microsoft` first. Then click `Sync Outlook`.
+The primary desktop workflow uses classic Outlook for Windows and the local VBA macro in:
+
+```text
+outlook_dashboard/static/outlook_refresh_macro.bas
+```
+
+Paste that macro into Outlook VBA with the name:
+
+```text
+ExportNYCWAReservationsInboxOnly
+```
+
+The dashboard `Refresh Inbox` button starts that macro. The macro reads only:
+
+```text
+NYCWA_Reservations > Inbox
+```
+
+It saves local `.msg` copies under `data/outlook_exports`, posts the inbox data to the local app, and the app performs fast local triage without calling OpenAI.
+
+Microsoft Graph sync is still available if credentials are configured. Use `Connect Microsoft` first, then call the Graph sync route:
 
 The sync route is:
 
@@ -116,7 +136,7 @@ Both modes are read-only and use Graph `GET` requests only.
 
 ## AI Processing
 
-If `OPENAI_API_KEY` is configured, the app attempts OpenAI structured analysis. If the key is missing or the API call fails, the app falls back to a deterministic local hotel-triage classifier so the dashboard remains usable.
+Inbox refresh and queue ranking use deterministic local triage for speed. If `OPENAI_API_KEY` is configured, OpenAI is called only when the user clicks `AI Response` for a selected email. If the key is missing or the API call fails, the app falls back to a deterministic local hotel-triage draft so the dashboard remains usable.
 
 Sensitive payment-like text is redacted before AI calls:
 
@@ -134,6 +154,8 @@ GET  /api/taxonomy
 GET  /auth/login?mode=shared
 GET  /auth/callback
 POST /api/mock/seed
+POST /api/outlook-desktop/export-inbox
+POST /api/outlook-desktop/import-json
 POST /api/sync/outlook?mode=shared&top=25&analyze=true
 POST /api/ai/process-pending?limit=25
 GET  /api/emails
@@ -155,10 +177,10 @@ From the repository root:
 Output:
 
 ```text
-dist\HotelEmailIntelligence.exe
+dist\ReplyRight.exe
 ```
 
-The executable starts the local FastAPI server and opens the dashboard in the default browser.
+The executable starts the local FastAPI server inside a standalone desktop window. It does not open the default browser.
 
 ## Notes Before Live Use
 

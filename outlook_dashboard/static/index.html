@@ -3,48 +3,87 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Waldorf Email Intelligence</title>
+    <title>ReplyRight</title>
+    <link rel="icon" href="/static/replyright.ico" />
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
-    <header class="topbar">
-      <div class="brand">
-        <strong>Waldorf Email Intelligence</strong>
-        <span id="mailboxLabel">Shared Outlook inbox</span>
-      </div>
-      <div class="actions">
-        <a class="button secondary" href="/auth/login?mode=shared">Connect Microsoft</a>
-        <button class="button" id="syncButton" type="button">Sync Outlook</button>
-        <button class="button secondary" id="processButton" type="button">Process AI</button>
-        <button class="button ghost" id="mockButton" type="button">Load Mock</button>
-      </div>
-    </header>
+    <div class="desktop-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <img class="brand-logo" src="/static/replyright-logo.png" alt="ReplyRight" />
+          <span>
+            <strong>ReplyRight</strong>
+            <small>The right response, every time.</small>
+          </span>
+        </div>
+        <nav class="nav-list" aria-label="Views">
+          <button class="nav-item active" type="button">Inbox</button>
+          <button class="nav-item" type="button">Urgent</button>
+          <button class="nav-item" type="button">VIP</button>
+          <button class="nav-item" type="button">Missing Info</button>
+        </nav>
+        <div class="sidebar-footer">
+          <span id="mailboxLabel">NYCWA_Reservations</span>
+          <small>Local read-only workflow</small>
+        </div>
+      </aside>
 
-    <main class="app-shell">
-      <section class="metrics" id="metrics"></section>
-
-      <section class="workspace">
-        <aside class="queue-panel">
-          <div class="filters">
-            <input id="searchInput" type="search" placeholder="Search sender, subject, preview" />
-            <select id="categoryFilter"></select>
-            <select id="priorityFilter"></select>
-            <select id="statusFilter"></select>
-            <select id="riskFilter"></select>
+      <main class="main-shell">
+        <header class="topbar">
+          <div>
+            <h1>Inbox Triage</h1>
+            <p>Ranked by urgency, ready for the right reservations response.</p>
           </div>
-          <div class="queue-header">
-            <h1>Inbox Queue</h1>
-            <span id="queueCount"></span>
+          <div class="actions">
+            <button class="button primary" id="refreshButton" type="button">Refresh Inbox</button>
+            <button class="button secondary" id="processButton" type="button">Run Local Triage</button>
+            <button class="button ghost" id="mockButton" type="button">Load Demo</button>
           </div>
-          <div class="email-list" id="emailList"></div>
-        </aside>
+        </header>
 
-        <section class="detail-panel" id="detailPanel">
-          <div class="empty-state">Select an email to review.</div>
+        <section class="metrics" id="metrics"></section>
+
+        <section class="workspace">
+          <section class="queue-panel">
+            <div class="filters">
+              <input id="searchInput" type="search" placeholder="Search sender, subject, summary" />
+              <select id="categoryFilter"></select>
+              <select id="statusFilter"></select>
+              <select id="riskFilter"></select>
+            </div>
+            <div class="queue-header">
+              <div>
+                <h2>Priority queue</h2>
+                <span id="queueCount"></span>
+              </div>
+              <span class="sync-status" id="syncStatus">Ready</span>
+            </div>
+            <div class="email-list" id="emailList"></div>
+          </section>
+
+          <section class="detail-panel" id="detailPanel">
+            <div class="empty-state">Select an email to review.</div>
+          </section>
         </section>
-      </section>
-    </main>
+      </main>
+    </div>
 
+    <div class="modal-layer" id="replyModal" hidden>
+      <section class="reply-modal" role="dialog" aria-modal="true" aria-labelledby="replyModalTitle">
+        <header class="modal-header">
+          <div>
+            <h2 id="replyModalTitle">AI Recommended Response</h2>
+            <p id="replyModalMeta"></p>
+          </div>
+          <button class="icon-button" id="closeReplyModal" type="button" aria-label="Close">x</button>
+        </header>
+        <textarea class="reply-box" id="replyBox" readonly></textarea>
+        <footer class="modal-actions">
+          <button class="button secondary" id="copyReplyButton" type="button">Copy Reply</button>
+        </footer>
+      </section>
+    </div>
     <div class="toast" id="toast" hidden></div>
     <script src="/static/app.js"></script>
   </body>

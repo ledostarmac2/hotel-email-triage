@@ -7,9 +7,9 @@ from typing import Literal
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from .ai import analyze_email
+from .ai import analyze_email, triage_email, urgency_score
 from .config import get_settings
 from .database import (
     email_count,
@@ -31,6 +31,7 @@ from .graph import (
     fetch_recent_messages,
 )
 from .mock_data import build_mock_emails
+from .outlook_desktop import OutlookDesktopExportError, export_mailbox_folder_to_msg
 from .taxonomy import CATEGORIES, PRIORITY_LEVELS, RISK_FLAGS, STATUSES
 
 
@@ -56,6 +57,29 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 class StatusUpdate(BaseModel):
     status: str
+
+
+class DesktopOutlookMessage(BaseModel):
+    graph_message_id: str | None = None
+    subject: str | None = None
+    sender_name: str | None = None
+    sender_email: str | None = None
+    from_name: str | None = None
+    from_email: str | None = None
+    received_datetime: str | None = None
+    body_preview: str | None = None
+    body_content_type: str | None = "text"
+    body_content: str | None = None
+    body_text: str | None = None
+    conversation_id: str | None = None
+    importance: str | None = "normal"
+    has_attachments: bool = False
+
+
+class DesktopOutlookImport(BaseModel):
+    mailbox: str = "NYCWA_Reservations"
+    folder: str = "Inbox"
+    messages: list[DesktopOutlookMessage] = Field(default_factory=list)
 
 
 @app.get("/")
@@ -85,6 +109,11 @@ def config() -> dict[str, object]:
         "required_graph_fields": GRAPH_FIELDS,
         "required_graph_permissions": ["Mail.Read", "Mail.Read.Shared"],
         "read_only_outlook": True,
+        "outlook_desktop_export": {
+            "mailbox": settings.outlook_export_mailbox,
+            "folder": settings.outlook_export_folder,
+            "export_dir": str(settings.outlook_export_dir),
+        },
     }
 
 
@@ -125,6 +154,44 @@ def auth_callback(code: str | None = None, state: str | None = None, error: str 
 def seed_mock() -> dict[str, object]:
     settings = get_settings()
     return _seed_mock(settings, analyze=True)
+
+
+@app.post("/api/outlook-desktop/export-inbox")
+def export_outlook_desktop_inbox() -> dict[str, object]:
+    settings = get_settings()
+    try:
+        result = export_mailbox_folder_to_msg(
+            settings.outlook_export_mailbox,
+            settings.outlook_export_folder,
+            settings.outlook_export_dir,
+            settings.outlook_export_macro,
+        )
+        return {"source": "outlook_desktop", **result}
+    except OutlookDesktopExportError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/outlook-desktop/import-json")
+def import_outlook_desktop_json(payload: DesktopOutlookImport) -> dict[str, object]:
+    settings = get_settings()
+    messages = [_desktop_message_to_email(message, payload.mailbox, payload.folder) for message in payload.messages]
+    result = _store_and_optionally_analyze(messages, settings, analyze=True)
+    record_sync_run(
+        source="outlook_desktop",
+        mailbox_mode="shared",
+        fetched_count=len(messages),
+        inserted_count=result["inserted_count"],
+        updated_count=result["updated_count"],
+        analyzed_count=result["analyzed_count"],
+        db_path=settings.database_path,
+    )
+    return {
+        "source": "outlook_desktop",
+        "mailbox": payload.mailbox,
+        "folder": payload.folder,
+        "fetched_count": len(messages),
+        **result,
+    }
 
 
 @app.post("/api/sync/outlook")
@@ -173,7 +240,7 @@ def process_pending(limit: int = Query(default=25, ge=1, le=100)) -> dict[str, i
     pending = emails_without_analysis(limit=limit, db_path=settings.database_path)
     analyzed = 0
     for email in pending:
-        save_analysis(email["id"], analyze_email(email, settings), db_path=settings.database_path)
+        save_analysis(email["id"], triage_email(email, settings), db_path=settings.database_path)
         analyzed += 1
     return {"analyzed_count": analyzed}
 
@@ -197,6 +264,8 @@ def api_list_emails(
         limit=limit,
         db_path=settings.database_path,
     )
+    emails = [_decorate_email(email) for email in emails]
+    emails.sort(key=lambda email: (email["urgency_score"], email.get("received_datetime") or ""), reverse=True)
     return {"emails": emails, "count": len(emails)}
 
 
@@ -206,7 +275,7 @@ def api_get_email(email_id: int) -> dict[str, object]:
     email = get_email(email_id, db_path=settings.database_path)
     if not email:
         raise HTTPException(status_code=404, detail="Email not found.")
-    return {"email": email}
+    return {"email": _decorate_email(email)}
 
 
 @app.post("/api/emails/{email_id}/analyze")
@@ -217,7 +286,8 @@ def api_analyze_email(email_id: int) -> dict[str, object]:
         raise HTTPException(status_code=404, detail="Email not found.")
     analysis = analyze_email(email, settings)
     save_analysis(email_id, analysis, db_path=settings.database_path)
-    return {"email": get_email(email_id, db_path=settings.database_path)}
+    refreshed = get_email(email_id, db_path=settings.database_path)
+    return {"email": _decorate_email(refreshed or {})}
 
 
 @app.patch("/api/emails/{email_id}/status")
@@ -229,7 +299,32 @@ def api_update_status(email_id: int, update: StatusUpdate) -> dict[str, object]:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Email not found.") from exc
-    return {"email": get_email(email_id, db_path=settings.database_path), "read_only_outlook": True}
+    email = get_email(email_id, db_path=settings.database_path)
+    return {"email": _decorate_email(email or {}), "read_only_outlook": True}
+
+
+def _desktop_message_to_email(message: DesktopOutlookMessage, mailbox: str, folder: str) -> dict[str, object]:
+    data = message.model_dump() if hasattr(message, "model_dump") else message.dict()
+    raw_id = data.get("graph_message_id") or f"{mailbox}:{folder}:{data.get('conversation_id')}:{data.get('received_datetime')}:{data.get('subject')}"
+    body = data.get("body_text") or data.get("body_content") or data.get("body_preview") or ""
+    preview = data.get("body_preview") or body[:240]
+    return {
+        **data,
+        "graph_message_id": f"outlook-desktop:{raw_id}",
+        "body_preview": preview,
+        "body_content_type": data.get("body_content_type") or "text",
+        "body_content": data.get("body_content") or body,
+        "body_text": body,
+        "source": "outlook_desktop",
+        "mailbox_mode": "shared",
+    }
+
+
+def _decorate_email(email: dict[str, object]) -> dict[str, object]:
+    decorated = dict(email)
+    decorated["urgency_score"] = urgency_score(decorated)
+    decorated["priority_rank"] = decorated["urgency_score"]
+    return decorated
 
 
 def _seed_mock(settings, analyze: bool) -> dict[str, object]:
@@ -260,6 +355,6 @@ def _store_and_optionally_analyze(messages, settings, analyze: bool) -> dict[str
         if analyze:
             email = get_email(email_id, db_path=settings.database_path)
             if email:
-                save_analysis(email_id, analyze_email(email, settings), db_path=settings.database_path)
+                save_analysis(email_id, triage_email(email, settings), db_path=settings.database_path)
                 analyzed += 1
     return {"inserted_count": inserted, "updated_count": updated, "analyzed_count": analyzed}

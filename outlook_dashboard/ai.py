@@ -10,6 +10,12 @@ from .taxonomy import CATEGORIES, DEPARTMENT_OWNERS, PRIORITY_LEVELS, RISK_FLAGS
 
 
 INTERNAL_DOMAINS = ("waldorfastoria.com", "hilton.com")
+PRIORITY_SCORE = {
+    "Low": 1,
+    "Normal": 2,
+    "High": 4,
+    "Immediate": 5,
+}
 
 
 def analyze_email(email: dict[str, Any], settings: Settings) -> dict[str, Any]:
@@ -22,6 +28,38 @@ def analyze_email(email: dict[str, Any], settings: Settings) -> dict[str, Any]:
     except Exception as exc:  # OpenAI should never block local triage usability.
         heuristic["analysis_error"] = str(exc)[:500]
         return heuristic
+
+
+def triage_email(email: dict[str, Any], settings: Settings | None = None) -> dict[str, Any]:
+    analysis = heuristic_analysis(email, settings)
+    analysis["suggested_reply_draft"] = ""
+    analysis["model"] = "local-rules"
+    analysis["analysis_engine"] = "local-triage"
+    return analysis
+
+
+def urgency_score(email: dict[str, Any]) -> int:
+    score = PRIORITY_SCORE.get(str(email.get("priority_level") or ""), 2)
+    category = email.get("category") or ""
+    text = " ".join(
+        str(email.get(key) or "")
+        for key in ("subject", "body_preview", "body_text", "body_content", "ai_summary")
+    ).lower()
+    risks = email.get("risk_flags") or []
+    if isinstance(risks, str):
+        risks = [risks]
+
+    if category in {"Urgent same-day arrival", "Complaint", "Billing dispute", "Accessibility request"}:
+        score = max(score, 4)
+    if any(flag in risks for flag in ["Legal", "Medical", "Discrimination", "Chargeback", "Manager review required"]):
+        score = 5
+    if any(term in text for term in ["urgent", "asap", "as soon as possible", "today", "tonight", "immediately"]):
+        score = max(score, 4)
+    if any(term in text for term in ["fifa", "vip", "owner", "celebrity"]):
+        score = max(score, 3)
+    if email.get("importance") == "high":
+        score = max(score, 3)
+    return max(1, min(5, int(score)))
 
 
 def heuristic_analysis(email: dict[str, Any], settings: Settings | None = None) -> dict[str, Any]:

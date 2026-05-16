@@ -1,10 +1,9 @@
 const state = {
-  taxonomy: { categories: [], priorities: [], risk_flags: [], statuses: [] },
+  taxonomy: { categories: [], risk_flags: [], statuses: [] },
   emails: [],
   selectedId: null,
   filters: {
     category: "",
-    priority: "",
     status: "",
     risk: "",
     q: "",
@@ -17,15 +16,20 @@ const els = {
   emailList: document.getElementById("emailList"),
   detailPanel: document.getElementById("detailPanel"),
   queueCount: document.getElementById("queueCount"),
-  syncButton: document.getElementById("syncButton"),
+  syncStatus: document.getElementById("syncStatus"),
+  refreshButton: document.getElementById("refreshButton"),
   processButton: document.getElementById("processButton"),
   mockButton: document.getElementById("mockButton"),
   toast: document.getElementById("toast"),
   categoryFilter: document.getElementById("categoryFilter"),
-  priorityFilter: document.getElementById("priorityFilter"),
   statusFilter: document.getElementById("statusFilter"),
   riskFilter: document.getElementById("riskFilter"),
   searchInput: document.getElementById("searchInput"),
+  replyModal: document.getElementById("replyModal"),
+  replyModalMeta: document.getElementById("replyModalMeta"),
+  replyBox: document.getElementById("replyBox"),
+  closeReplyModal: document.getElementById("closeReplyModal"),
+  copyReplyButton: document.getElementById("copyReplyButton"),
 };
 
 async function boot() {
@@ -34,9 +38,9 @@ async function boot() {
     fetchJson("/api/taxonomy"),
   ]);
   state.taxonomy = taxonomy;
-  els.mailboxLabel.textContent = config.shared_mailbox_email || "Shared Outlook inbox";
+  els.mailboxLabel.textContent =
+    config.outlook_desktop_export?.mailbox || config.shared_mailbox_email || "NYCWA_Reservations";
   fillSelect(els.categoryFilter, "All categories", taxonomy.categories);
-  fillSelect(els.priorityFilter, "All priorities", taxonomy.priorities);
   fillSelect(els.statusFilter, "All statuses", taxonomy.statuses);
   fillSelect(els.riskFilter, "All risks", taxonomy.risk_flags);
   bindEvents();
@@ -44,12 +48,17 @@ async function boot() {
 }
 
 function bindEvents() {
-  els.syncButton.addEventListener("click", () => runAction("Syncing Outlook", syncOutlook));
-  els.processButton.addEventListener("click", () => runAction("Processing AI", processPending));
-  els.mockButton.addEventListener("click", () => runAction("Loading mock emails", seedMock));
+  els.refreshButton.addEventListener("click", () => runAction("Refreshing inbox", refreshInbox));
+  els.processButton.addEventListener("click", () => runAction("Running local triage", processPending));
+  els.mockButton.addEventListener("click", () => runAction("Loading demo inbox", seedMock));
+  els.closeReplyModal.addEventListener("click", closeReplyModal);
+  els.replyModal.addEventListener("click", (event) => {
+    if (event.target === els.replyModal) closeReplyModal();
+  });
+  els.copyReplyButton.addEventListener("click", copyReply);
+
   for (const [key, element] of [
     ["category", els.categoryFilter],
-    ["priority", els.priorityFilter],
     ["status", els.statusFilter],
     ["risk", els.riskFilter],
   ]) {
@@ -58,74 +67,107 @@ function bindEvents() {
       loadEmails();
     });
   }
-  els.searchInput.addEventListener("input", debounce(() => {
-    state.filters.q = els.searchInput.value.trim();
-    loadEmails();
-  }, 250));
+
+  els.searchInput.addEventListener(
+    "input",
+    debounce(() => {
+      state.filters.q = els.searchInput.value.trim();
+      loadEmails();
+    }, 180),
+  );
 }
 
-async function syncOutlook() {
-  const result = await fetchJson("/api/sync/outlook?mode=shared&top=25&analyze=true", { method: "POST" });
-  showToast(`Outlook sync complete. ${result.inserted_count} new, ${result.updated_count} updated.`);
+async function refreshInbox() {
+  setSyncStatus("Starting Outlook refresh");
+  const result = await fetchJson("/api/outlook-desktop/export-inbox", { method: "POST" });
+  if (result.launched_macro) {
+    showToast("Outlook refresh started. The queue will update when the macro finishes.");
+    await pollInboxImport();
+    return;
+  }
+  showToast(`Inbox refreshed. ${result.exported_count || 0} saved.`);
   await loadEmails();
 }
 
+async function pollInboxImport() {
+  const originalCount = state.emails.length;
+  for (let attempt = 1; attempt <= 15; attempt += 1) {
+    await sleep(2000);
+    setSyncStatus(`Refreshing ${attempt}/15`);
+    await loadEmails({ preserveSelection: true, quiet: true });
+    if (state.emails.length !== originalCount || attempt >= 4) {
+      setSyncStatus("Ready");
+      return;
+    }
+  }
+  setSyncStatus("Ready");
+}
+
 async function processPending() {
-  const result = await fetchJson("/api/ai/process-pending?limit=50", { method: "POST" });
-  showToast(`AI processing complete. ${result.analyzed_count} email${result.analyzed_count === 1 ? "" : "s"} analyzed.`);
+  const result = await fetchJson("/api/ai/process-pending?limit=100", { method: "POST" });
+  showToast(`Local triage complete. ${result.analyzed_count} email${result.analyzed_count === 1 ? "" : "s"} updated.`);
   await loadEmails();
 }
 
 async function seedMock() {
   const result = await fetchJson("/api/mock/seed", { method: "POST" });
-  showToast(`Mock inbox loaded. ${result.inserted_count} new, ${result.updated_count} updated.`);
+  showToast(`Demo inbox loaded. ${result.inserted_count} new, ${result.updated_count} updated.`);
   await loadEmails();
 }
 
-async function loadEmails() {
+async function loadEmails(options = {}) {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(state.filters)) {
     if (value) params.set(key, value);
   }
+  params.set("limit", "500");
   const data = await fetchJson(`/api/emails?${params.toString()}`);
   state.emails = data.emails;
   renderMetrics();
   renderEmailList();
+
   if (state.selectedId && state.emails.some((email) => email.id === state.selectedId)) {
     await selectEmail(state.selectedId, false);
-  } else if (state.emails.length > 0) {
+  } else if (!options.preserveSelection && state.emails.length > 0) {
     await selectEmail(state.emails[0].id, false);
-  } else {
+  } else if (!state.emails.length) {
     state.selectedId = null;
     renderEmptyDetail();
   }
 }
 
 function renderMetrics() {
+  const urgent = state.emails.filter((email) => urgency(email) >= 4).length;
+  const immediate = state.emails.filter((email) => urgency(email) === 5).length;
+  const missing = state.emails.filter((email) => (email.missing_information || []).length > 0).length;
+  const manager = state.emails.filter((email) => (email.risk_flags || []).includes("Manager review required")).length;
   const metrics = [
-    ["Queue", state.emails.length],
-    ["New", countBy("status", "New")],
-    ["Immediate", countBy("priority_level", "Immediate")],
-    ["High", countBy("priority_level", "High")],
-    ["VIP Risk", state.emails.filter((email) => (email.risk_flags || []).includes("VIP")).length],
-    ["Missing Info", state.emails.filter((email) => (email.missing_information || []).length > 0).length],
+    ["Open inbox", state.emails.length, "active messages"],
+    ["Urgency 4-5", urgent, "work first"],
+    ["Level 5", immediate, "immediate"],
+    ["Missing info", missing, "needs reply"],
+    ["Manager review", manager, "escalate"],
   ];
   els.metrics.innerHTML = metrics
-    .map(([label, value]) => `<div class="metric"><span>${escapeHtml(label)}</span><strong>${value}</strong></div>`)
+    .map(
+      ([label, value, caption]) => `
+        <article class="metric">
+          <span>${escapeHtml(label)}</span>
+          <strong>${value}</strong>
+          <small>${escapeHtml(caption)}</small>
+        </article>
+      `,
+    )
     .join("");
-}
-
-function countBy(key, value) {
-  return state.emails.filter((email) => email[key] === value).length;
 }
 
 function renderEmailList() {
   els.queueCount.textContent = `${state.emails.length} email${state.emails.length === 1 ? "" : "s"}`;
-  if (state.emails.length === 0) {
+  if (!state.emails.length) {
     els.emailList.innerHTML = `<div class="empty-state">No emails match the current filters.</div>`;
     return;
   }
-  els.emailList.innerHTML = state.emails.map((email) => emailRow(email)).join("");
+  els.emailList.innerHTML = state.emails.map(emailRow).join("");
   els.emailList.querySelectorAll(".email-row").forEach((row) => {
     row.addEventListener("click", () => selectEmail(Number(row.dataset.id), true));
   });
@@ -133,18 +175,22 @@ function renderEmailList() {
 
 function emailRow(email) {
   const active = email.id === state.selectedId ? " active" : "";
-  const risks = (email.risk_flags || []).slice(0, 2).map((risk) => `<span class="badge risk">${escapeHtml(risk)}</span>`).join("");
+  const score = urgency(email);
+  const risks = (email.risk_flags || [])
+    .slice(0, 2)
+    .map((risk) => `<span class="badge risk">${escapeHtml(risk)}</span>`)
+    .join("");
   return `
     <button class="email-row${active}" type="button" data-id="${email.id}">
-      <span>
-        <div class="email-subject">${escapeHtml(email.subject || "(No subject)")}</div>
-        <div class="queue-meta">${escapeHtml(email.sender_name || email.sender_email || "Unknown")} · ${formatDate(email.received_datetime)}</div>
-        <div class="email-preview">${escapeHtml(email.ai_summary || email.body_preview || "")}</div>
-      </span>
-      <span class="pill-stack">
-        ${badge(email.priority_level || "Pending", `priority-${String(email.priority_level || "normal").toLowerCase()}`)}
-        ${badge(email.status || "New", "status")}
-        ${risks}
+      <span class="urgency-badge urgency-${score}">${score}</span>
+      <span class="queue-copy">
+        <span class="email-subject">${escapeHtml(email.subject || "(No subject)")}</span>
+        <span class="queue-meta">${escapeHtml(email.sender_name || email.sender_email || "Unknown")} · ${formatDate(email.received_datetime)}</span>
+        <span class="email-preview">${escapeHtml(email.ai_summary || email.body_preview || "")}</span>
+        <span class="pill-stack">
+          ${badge(email.category || "Unclassified")}
+          ${risks}
+        </span>
       </span>
     </button>
   `;
@@ -158,53 +204,45 @@ async function selectEmail(id, rerenderList) {
 }
 
 function renderDetail(email) {
-  const riskBadges = (email.risk_flags || []).map((risk) => `<span class="badge risk">${escapeHtml(risk)}</span>`).join("");
+  const risks = (email.risk_flags || []).map((risk) => `<span class="badge risk">${escapeHtml(risk)}</span>`).join("");
   els.detailPanel.innerHTML = `
-    <div class="detail-header">
+    <header class="detail-header">
       <div class="detail-title">
+        <span class="detail-kicker">Urgency level ${urgency(email)} of 5</span>
         <h2>${escapeHtml(email.subject || "(No subject)")}</h2>
-        <span class="muted">${escapeHtml(email.sender_name || email.sender_email || "Unknown sender")} · ${formatDate(email.received_datetime)}</span>
+        <p>${escapeHtml(email.sender_name || email.sender_email || "Unknown sender")} · ${formatDate(email.received_datetime)}</p>
         <span class="pill-stack">
           ${badge(email.category || "Unclassified")}
-          ${badge(email.priority_level || "Pending", `priority-${String(email.priority_level || "normal").toLowerCase()}`)}
           ${badge(email.status || "New", "status")}
-          ${riskBadges}
+          ${risks}
         </span>
       </div>
       <div class="detail-actions">
-        <select id="statusSelect">${state.taxonomy.statuses.map((status) => `<option value="${escapeHtml(status)}" ${status === email.status ? "selected" : ""}>${escapeHtml(status)}</option>`).join("")}</select>
-        <button class="button secondary" id="analyzeButton" type="button">Analyze</button>
-        <button class="button" id="copyReplyButton" type="button">Copy Reply</button>
+        <select id="statusSelect">${state.taxonomy.statuses
+          .map((status) => `<option value="${escapeHtml(status)}" ${status === email.status ? "selected" : ""}>${escapeHtml(status)}</option>`)
+          .join("")}</select>
+        <button class="button primary" id="replyAiButton" type="button">AI Response</button>
       </div>
-    </div>
+    </header>
     <div class="detail-body">
-      <div class="analysis-column">
-        ${section("AI Summary", `<p>${escapeHtml(email.ai_summary || "Not analyzed yet.")}</p>`)}
-        ${section("Internal Next Steps", list(email.internal_next_steps))}
-        ${section("Missing Information", list(email.missing_information))}
-        ${section("Recommended Owner", `<p>${escapeHtml(email.recommended_department_owner || "Reservations")}</p>`)}
-        ${section("Suggested Reply Draft", `<textarea class="reply-box" id="replyBox">${escapeHtml(email.suggested_reply_draft || "")}</textarea>`)}
-      </div>
-      <div class="original-column">
+      <section class="insight-panel">
+        ${section("Email Chain Summary", `<p>${escapeHtml(email.ai_summary || "Run local triage to summarize this email chain.")}</p>`)}
+        ${section("Reservations Steps", actionList(email.internal_next_steps))}
+        ${section("Missing Information", actionList(email.missing_information, "None noted."))}
+      </section>
+      <section class="source-panel">
         <div class="field-grid">
-          ${field("Sender", `${email.sender_name || ""} ${email.sender_email || ""}`)}
-          ${field("From", `${email.from_name || ""} ${email.from_email || ""}`)}
-          ${field("Conversation", email.conversation_id || "")}
+          ${field("Owner", email.recommended_department_owner || "Reservations")}
+          ${field("Sentiment", email.guest_sentiment || "Neutral")}
           ${field("Importance", email.importance || "normal")}
           ${field("Attachments", email.has_attachments ? "Yes" : "No")}
-          ${field("Source", `${email.source || "outlook"} / ${email.mailbox_mode || "shared"}`)}
         </div>
-        ${section("Body Preview", `<p>${escapeHtml(email.body_preview || "")}</p>`)}
-        ${section("Full Email Body", `<div class="email-body">${escapeHtml(email.body_text || email.body_content || "")}</div>`)}
-      </div>
+        ${section("Original Email", `<div class="email-body">${escapeHtml(email.body_text || email.body_content || email.body_preview || "")}</div>`)}
+      </section>
     </div>
   `;
-  document.getElementById("copyReplyButton").addEventListener("click", copyReply);
-  document.getElementById("analyzeButton").addEventListener("click", () => runAction("Analyzing email", async () => {
-    await fetchJson(`/api/emails/${email.id}/analyze`, { method: "POST" });
-    showToast("Email analysis refreshed.");
-    await loadEmails();
-  }));
+
+  document.getElementById("replyAiButton").addEventListener("click", () => generateAiReply(email.id));
   document.getElementById("statusSelect").addEventListener("change", async (event) => {
     await fetchJson(`/api/emails/${email.id}/status`, {
       method: "PATCH",
@@ -212,8 +250,20 @@ function renderDetail(email) {
       body: JSON.stringify({ status: event.target.value }),
     });
     showToast("Local status updated.");
-    await loadEmails();
+    await loadEmails({ preserveSelection: true });
   });
+}
+
+async function generateAiReply(emailId) {
+  openReplyModal("Generating response...", "The app is checking this email only.");
+  try {
+    const data = await fetchJson(`/api/emails/${emailId}/analyze`, { method: "POST" });
+    const reply = data.email.suggested_reply_draft || "No suggested response was returned.";
+    openReplyModal(reply, `${data.email.analysis_engine || "AI"} · ${data.email.model || "model"}`);
+    await loadEmails({ preserveSelection: true });
+  } catch (error) {
+    openReplyModal(error.message || "Could not generate a recommended response.", "AI response failed");
+  }
 }
 
 function renderEmptyDetail() {
@@ -225,13 +275,13 @@ function section(title, content) {
 }
 
 function field(label, value) {
-  return `<div class="field"><div class="field-label">${escapeHtml(label)}</div><div class="field-value">${escapeHtml(value || "")}</div></div>`;
+  return `<div class="field"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value || "")}</strong></div>`;
 }
 
-function list(items) {
+function actionList(items, emptyLabel = "No steps available.") {
   const values = Array.isArray(items) ? items : [];
-  if (!values.length) return `<p class="muted">None noted.</p>`;
-  return `<ul>${values.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
+  if (!values.length) return `<p class="muted">${escapeHtml(emptyLabel)}</p>`;
+  return `<ol>${values.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ol>`;
 }
 
 function badge(text, extraClass = "") {
@@ -239,32 +289,31 @@ function badge(text, extraClass = "") {
 }
 
 function fillSelect(element, label, values) {
-  element.innerHTML = `<option value="">${escapeHtml(label)}</option>` + values
-    .map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`)
-    .join("");
+  element.innerHTML =
+    `<option value="">${escapeHtml(label)}</option>` +
+    values.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join("");
+}
+
+function openReplyModal(value, meta) {
+  els.replyModalMeta.textContent = meta || "";
+  els.replyBox.value = value || "";
+  els.replyModal.hidden = false;
+}
+
+function closeReplyModal() {
+  els.replyModal.hidden = true;
 }
 
 async function copyReply() {
-  const replyBox = document.getElementById("replyBox");
-  const value = replyBox?.value || "";
+  const value = els.replyBox.value || "";
   try {
-    if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(value);
-    } else {
-      fallbackCopy(replyBox);
-    }
-    showToast("Suggested reply copied.");
+    await navigator.clipboard.writeText(value);
   } catch (error) {
-    fallbackCopy(replyBox);
-    showToast("Suggested reply copied.");
+    els.replyBox.focus();
+    els.replyBox.select();
+    document.execCommand("copy");
   }
-}
-
-function fallbackCopy(element) {
-  if (!element) return;
-  element.focus();
-  element.select();
-  document.execCommand("copy");
+  showToast("Recommended response copied.");
 }
 
 async function runAction(label, action) {
@@ -272,6 +321,7 @@ async function runAction(label, action) {
   try {
     await action();
   } catch (error) {
+    setSyncStatus("Ready");
     showToast(error.message || "Action failed.");
   }
 }
@@ -279,11 +329,20 @@ async function runAction(label, action) {
 async function fetchJson(url, options = {}) {
   const response = await fetch(url, options);
   const text = await response.text();
-  const data = text ? JSON.parse(text) : {};
+  let data = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch (error) {
+    data = { detail: text };
+  }
   if (!response.ok) {
     throw new Error(data.detail || `Request failed: ${response.status}`);
   }
   return data;
+}
+
+function setSyncStatus(value) {
+  els.syncStatus.textContent = value;
 }
 
 function showToast(message) {
@@ -293,6 +352,14 @@ function showToast(message) {
   showToast.timer = window.setTimeout(() => {
     els.toast.hidden = true;
   }, 4200);
+}
+
+function urgency(email) {
+  return Number(email.urgency_score || email.priority_rank || 2);
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 function formatDate(value) {

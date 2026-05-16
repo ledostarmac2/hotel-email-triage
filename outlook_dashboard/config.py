@@ -42,6 +42,10 @@ class Settings:
     openai_api_key: str
     openai_model: str
     database_path: Path
+    outlook_export_mailbox: str
+    outlook_export_folder: str
+    outlook_export_dir: Path
+    outlook_export_macro: str
     app_host: str
     app_port: int
     auto_seed_mock: bool
@@ -77,6 +81,10 @@ def get_settings() -> Settings:
     database_path = Path(os.getenv("SQLITE_DB_PATH", str(DATA_DIR / "hotel_email_triage.sqlite3")))
     if not database_path.is_absolute():
         database_path = ROOT_DIR / database_path
+    outlook_export_dir = Path(os.getenv("OUTLOOK_EXPORT_DIR", str(DATA_DIR / "outlook_exports")))
+    if not outlook_export_dir.is_absolute():
+        outlook_export_dir = ROOT_DIR / outlook_export_dir
+    outlook_export_dir.mkdir(parents=True, exist_ok=True)
     return Settings(
         microsoft_client_id=os.getenv("MICROSOFT_CLIENT_ID", "").strip(),
         microsoft_client_secret=os.getenv("MICROSOFT_CLIENT_SECRET", "").strip(),
@@ -88,6 +96,12 @@ def get_settings() -> Settings:
         openai_api_key=os.getenv("OPENAI_API_KEY", "").strip(),
         openai_model=os.getenv("OPENAI_MODEL", "gpt-4.1-mini").strip(),
         database_path=database_path,
+        outlook_export_mailbox=os.getenv("OUTLOOK_EXPORT_MAILBOX", "NYCWA_Reservations").strip(),
+        outlook_export_folder=os.getenv("OUTLOOK_EXPORT_FOLDER", "Inbox").strip(),
+        outlook_export_dir=outlook_export_dir,
+        outlook_export_macro=os.getenv(
+            "OUTLOOK_EXPORT_MACRO", "ExportNYCWAReservationsInboxOnly"
+        ).strip(),
         app_host=os.getenv("APP_HOST", "127.0.0.1").strip(),
         app_port=int(os.getenv("APP_PORT", "8000")),
         auto_seed_mock=_bool_env("AUTO_SEED_MOCK", True),

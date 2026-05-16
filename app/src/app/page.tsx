@@ -26,7 +26,7 @@ export default async function DashboardPage() {
     <main className="shell">
       <header className="topbar">
         <div className="brand">
-          <strong>Waldorf Reservations Triage</strong>
+          <strong>ReplyRight</strong>
           <span>Reservations@waldorfastoria.com</span>
         </div>
         <form action="/api/sync/unread" method="post">

@@ -1,0 +1,15 @@
+[project]
+name = "ReplyRight"
+default_branch = "main"
+
+[handoff]
+required_docs = [
+  "AGENTS.md",
+  "docs/ARCHITECTURE.md",
+  "docs/CURRENT_STATE.md",
+  "docs/HANDOFF.md",
+]
+
+[safety]
+read_only_outlook = true
+commit_secrets = false
