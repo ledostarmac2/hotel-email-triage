@@ -13,6 +13,7 @@ from outlook_dashboard.ai import (
     latest_message_text,
     triage_conversation,
 )
+from outlook_dashboard.auth import authenticate_user, ensure_admin
 from outlook_dashboard.database import (
     delete_emails_not_in_graph_ids,
     get_email,
@@ -194,6 +195,16 @@ class EmailDashboardTests(unittest.TestCase):
         self.assertEqual(corrections["corrected_urgency"], 3)
         self.assertEqual(corrections["corrected_owner"], "Reservations")
         self.assertEqual(corrections["corrected_category"], "General inquiry")
+
+    def test_ensure_admin_repairs_existing_password(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "test.sqlite3"
+            initialize_database(db_path)
+            ensure_admin("admin@example.com", "OldPassword123!", db_path)
+            self.assertIsNotNone(authenticate_user("admin@example.com", "OldPassword123!", db_path))
+            ensure_admin("admin@example.com", "NewPassword123!", db_path)
+            self.assertIsNone(authenticate_user("admin@example.com", "OldPassword123!", db_path))
+            self.assertIsNotNone(authenticate_user("admin@example.com", "NewPassword123!", db_path))
 
 
 if __name__ == "__main__":

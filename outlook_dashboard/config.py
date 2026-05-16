@@ -34,6 +34,8 @@ class Settings:
     shared_mailbox_email: str
     openai_api_key: str
     openai_model: str
+    anthropic_api_key: str
+    anthropic_model: str
     database_path: Path
     outlook_export_mailbox: str
     outlook_export_folder: str
@@ -41,6 +43,13 @@ class Settings:
     outlook_export_macro: str
     app_host: str
     app_port: int
+    smtp_host: str
+    smtp_port: int
+    smtp_user: str
+    smtp_password: str
+    smtp_from: str
+    replyright_admin_email: str
+    replyright_admin_password: str
 
     @property
     def graph_scopes(self) -> tuple[str, ...]:
@@ -49,6 +58,10 @@ class Settings:
     @property
     def graph_scope_string(self) -> str:
         return " ".join(self.graph_scopes)
+
+    @property
+    def smtp_configured(self) -> bool:
+        return bool(self.smtp_host and self.smtp_user and self.smtp_password)
 
     @property
     def graph_configured(self) -> bool:
@@ -64,6 +77,14 @@ class Settings:
     @property
     def openai_configured(self) -> bool:
         return bool(self.openai_api_key)
+
+    @property
+    def anthropic_configured(self) -> bool:
+        return bool(self.anthropic_api_key)
+
+    @property
+    def ai_configured(self) -> bool:
+        return self.anthropic_configured or self.openai_configured
 
 
 @lru_cache(maxsize=1)
@@ -86,7 +107,9 @@ def get_settings() -> Settings:
         ).strip(),
         shared_mailbox_email=os.getenv("SHARED_MAILBOX_EMAIL", "").strip(),
         openai_api_key=os.getenv("OPENAI_API_KEY", "").strip(),
-        openai_model=os.getenv("OPENAI_MODEL", "gpt-4.1-mini").strip(),
+        openai_model=os.getenv("OPENAI_MODEL", "gpt-4.1").strip(),
+        anthropic_api_key=os.getenv("ANTHROPIC_API_KEY", "").strip(),
+        anthropic_model=os.getenv("ANTHROPIC_MODEL", "claude-opus-4-7").strip(),
         database_path=database_path,
         outlook_export_mailbox=os.getenv("OUTLOOK_EXPORT_MAILBOX", "NYCWA_Reservations").strip(),
         outlook_export_folder=os.getenv("OUTLOOK_EXPORT_FOLDER", "Inbox").strip(),
@@ -96,4 +119,11 @@ def get_settings() -> Settings:
         ).strip(),
         app_host=os.getenv("APP_HOST", "127.0.0.1").strip(),
         app_port=int(os.getenv("APP_PORT", "8000")),
+        smtp_host=os.getenv("SMTP_HOST", "smtp.office365.com").strip(),
+        smtp_port=int(os.getenv("SMTP_PORT", "587")),
+        smtp_user=os.getenv("SMTP_USER", "").strip(),
+        smtp_password=os.getenv("SMTP_PASSWORD", "").strip(),
+        smtp_from=os.getenv("SMTP_FROM", "").strip(),
+        replyright_admin_email=os.getenv("REPLYRIGHT_ADMIN_EMAIL", "").strip(),
+        replyright_admin_password=os.getenv("REPLYRIGHT_ADMIN_PASSWORD", "").strip(),
     )

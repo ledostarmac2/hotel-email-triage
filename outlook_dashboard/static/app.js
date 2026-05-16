@@ -3,6 +3,7 @@ const state = {
   emails: [],
   selectedId: null,
   currentView: "inbox",
+  user: null,
   filters: {
     category: "",
     status: "",
@@ -13,6 +14,9 @@ const state = {
 
 const els = {
   mailboxLabel: document.getElementById("mailboxLabel"),
+  topbarTitle: document.querySelector(".topbar h1"),
+  topbarSubtitle: document.querySelector(".topbar p"),
+  workspace: document.querySelector(".workspace"),
   metrics: document.getElementById("metrics"),
   emailList: document.getElementById("emailList"),
   detailPanel: document.getElementById("detailPanel"),
@@ -31,7 +35,29 @@ const els = {
   copyReplyButton: document.getElementById("copyReplyButton"),
 };
 
+const INBOX_WORKSPACE_HTML = els.workspace ? els.workspace.innerHTML : "";
+
 async function boot() {
+  // Auth check — redirect to login if not authenticated
+  let me;
+  try {
+    me = await fetchJson("/api/auth/me");
+  } catch {
+    window.location.href = "/login";
+    return;
+  }
+  state.user = me.user;
+
+  // Show user email in sidebar
+  const userEmailEl = document.getElementById("currentUserEmail");
+  if (userEmailEl) userEmailEl.textContent = me.user.email;
+
+  // Show Admin nav for admins
+  if (me.user.role === "admin") {
+    const adminBtn = document.getElementById("adminNavBtn");
+    if (adminBtn) adminBtn.hidden = false;
+  }
+
   const [config, taxonomy] = await Promise.all([
     fetchJson("/api/config"),
     fetchJson("/api/taxonomy"),
@@ -39,20 +65,25 @@ async function boot() {
   state.taxonomy = taxonomy;
   els.mailboxLabel.textContent =
     config.outlook_desktop_export?.mailbox || config.shared_mailbox_email || "NYCWA_Reservations";
-  fillSelect(els.categoryFilter, "All categories", taxonomy.categories);
-  fillSelect(els.statusFilter, "All statuses", taxonomy.statuses);
-  fillSelect(els.riskFilter, "All risks", taxonomy.risk_flags);
+  cacheWorkspaceElements();
+  fillFilterSelects();
   bindEvents();
+  bindWorkspaceEvents();
   await loadEmails();
 }
 
 function bindEvents() {
-  els.refreshButton.addEventListener("click", () => runAction("Refreshing inbox", refreshInbox));
+  els.refreshButton?.addEventListener("click", () => runAction("Refreshing inbox", refreshInbox));
   els.closeReplyModal.addEventListener("click", closeReplyModal);
   els.replyModal.addEventListener("click", (event) => {
     if (event.target === els.replyModal) closeReplyModal();
   });
   els.copyReplyButton.addEventListener("click", copyReply);
+
+  document.getElementById("logoutBtn")?.addEventListener("click", async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    window.location.href = "/login";
+  });
 
   document.querySelectorAll(".nav-item[data-view]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -60,22 +91,33 @@ function bindEvents() {
       btn.classList.add("active");
       state.currentView = btn.dataset.view;
       state.selectedId = null;
-      renderEmailList();
-      renderEmptyDetail();
+      if (state.currentView === "admin") {
+        renderAdminView();
+      } else {
+        renderInboxShell();
+        renderMetrics();
+        renderEmailList();
+        renderEmptyDetail();
+      }
     });
   });
+}
 
+function bindWorkspaceEvents() {
   for (const [key, element] of [
     ["category", els.categoryFilter],
     ["status", els.statusFilter],
     ["risk", els.riskFilter],
   ]) {
+    if (!element || element.dataset.bound === "true") continue;
     element.addEventListener("change", () => {
       state.filters[key] = element.value;
       loadEmails();
     });
+    element.dataset.bound = "true";
   }
 
+  if (!els.searchInput || els.searchInput.dataset.bound === "true") return;
   els.searchInput.addEventListener(
     "input",
     debounce(() => {
@@ -83,6 +125,57 @@ function bindEvents() {
       loadEmails();
     }, 180),
   );
+  els.searchInput.dataset.bound = "true";
+}
+
+function cacheWorkspaceElements() {
+  els.emailList = document.getElementById("emailList");
+  els.detailPanel = document.getElementById("detailPanel");
+  els.queueCount = document.getElementById("queueCount");
+  els.syncStatus = document.getElementById("syncStatus");
+  els.categoryFilter = document.getElementById("categoryFilter");
+  els.statusFilter = document.getElementById("statusFilter");
+  els.riskFilter = document.getElementById("riskFilter");
+  els.searchInput = document.getElementById("searchInput");
+}
+
+function fillFilterSelects() {
+  if (!els.categoryFilter || !els.statusFilter || !els.riskFilter) return;
+  fillSelect(els.categoryFilter, "All categories", state.taxonomy.categories);
+  fillSelect(els.statusFilter, "All statuses", state.taxonomy.statuses);
+  fillSelect(els.riskFilter, "All risks", state.taxonomy.risk_flags);
+  els.categoryFilter.value = state.filters.category;
+  els.statusFilter.value = state.filters.status;
+  els.riskFilter.value = state.filters.risk;
+  if (els.searchInput) els.searchInput.value = state.filters.q;
+}
+
+function renderInboxShell() {
+  if (!els.workspace) return;
+  els.workspace.classList.remove("workspace--admin");
+  if (!document.getElementById("emailList")) {
+    els.workspace.innerHTML = INBOX_WORKSPACE_HTML;
+  }
+  cacheWorkspaceElements();
+  fillFilterSelects();
+  bindWorkspaceEvents();
+  if (els.topbarTitle) els.topbarTitle.textContent = "Inbox Triage";
+  if (els.topbarSubtitle) {
+    els.topbarSubtitle.textContent = "Ranked by urgency, ready for the right reservations response.";
+  }
+  if (els.refreshButton) els.refreshButton.hidden = false;
+  if (els.metrics) els.metrics.hidden = false;
+}
+
+function renderAdminShell() {
+  if (!els.workspace) return;
+  els.workspace.classList.add("workspace--admin");
+  if (els.topbarTitle) els.topbarTitle.textContent = "Admin";
+  if (els.topbarSubtitle) {
+    els.topbarSubtitle.textContent = "Review learning, users, confidence, and suggested rules.";
+  }
+  if (els.refreshButton) els.refreshButton.hidden = true;
+  if (els.metrics) els.metrics.hidden = true;
 }
 
 async function refreshInbox() {
@@ -128,6 +221,8 @@ async function loadEmails(options = {}) {
   params.set("limit", "500");
   const data = await fetchJson(`/api/emails?${params.toString()}`);
   state.emails = data.emails;
+  if (state.currentView === "admin") return;
+  renderInboxShell();
   renderMetrics();
   renderEmailList();
 
@@ -177,6 +272,7 @@ function viewEmails() {
 }
 
 function renderEmailList() {
+  if (!els.queueCount || !els.emailList) return;
   const visible = viewEmails();
   els.queueCount.textContent = `${visible.length} conversation${visible.length === 1 ? "" : "s"}`;
   if (!visible.length) {
@@ -217,6 +313,7 @@ function emailRow(email) {
 }
 
 async function selectEmail(id, rerenderList) {
+  if (state.currentView === "admin") return;
   state.selectedId = id;
   if (rerenderList) renderEmailList();
   const data = await fetchJson(`/api/emails/${id}`);
@@ -224,11 +321,12 @@ async function selectEmail(id, rerenderList) {
 }
 
 function renderDetail(email) {
+  if (!els.detailPanel || state.currentView === "admin") return;
   const risks = (email.risk_flags || []).map((risk) => `<span class="badge risk">${escapeHtml(risk)}</span>`).join("");
   els.detailPanel.innerHTML = `
     <header class="detail-header">
       <div class="detail-title">
-        <span class="detail-kicker">Urgency level ${urgency(email)} of 5</span>
+        <span class="detail-kicker">Urgency level ${urgency(email)} of 5${confidenceBadge(email)}</span>
         <h2>${escapeHtml(email.subject || "(No subject)")}</h2>
         <p>${escapeHtml(email.sender_name || email.sender_email || "Unknown sender")} · ${formatDate(email.received_datetime)}</p>
         <span class="pill-stack">
@@ -241,7 +339,7 @@ function renderDetail(email) {
         <select id="statusSelect">${state.taxonomy.statuses
           .map((status) => `<option value="${escapeHtml(status)}" ${status === email.status ? "selected" : ""}>${escapeHtml(status)}</option>`)
           .join("")}</select>
-        <button class="button primary" id="replyAiButton" type="button">AI Response</button>
+        <button class="button primary" id="replyAiButton" type="button">AI Suggestion</button>
       </div>
     </header>
     <div class="detail-body">
@@ -299,20 +397,56 @@ async function submitTriageFeedback(emailId) {
 }
 
 async function generateAiReply(emailId) {
-  openReplyModal("Generating response...", "The app is checking this email only.");
+  const btn = document.getElementById("replyAiButton");
+  if (btn) { btn.setAttribute("aria-busy", "true"); btn.textContent = "Drafting…"; }
+  openReplyModalLoading();
   try {
     const data = await fetchJson(`/api/emails/${emailId}/analyze`, { method: "POST" });
-    const reply = data.email.suggested_reply_draft || "No suggested response was returned.";
-    openReplyModal(reply, `${data.email.analysis_engine || "AI"} · ${data.email.model || "model"}`);
+    const engine = data.email.analysis_engine || "";
+    const isAi = engine === "claude" || engine === "openai";
+    const meta = `${engine || "AI"} · ${data.email.model || ""}`;
+    if (!isAi && data.email.analysis_error) {
+      openReplyModal(
+        `AI call failed — ${data.email.analysis_error}`,
+        "error",
+        "AI Unavailable",
+      );
+    } else {
+      const reply = data.email.suggested_reply_draft || "No suggested response was returned.";
+      openReplyModal(reply, meta, isAi ? "AI Recommended Response" : "Draft Response");
+    }
     await loadEmails({ preserveSelection: true });
   } catch (error) {
-    openReplyModal(error.message || "Could not generate a recommended response.", "AI response failed");
+    openReplyModal(error.message || "Could not generate a response.", "Error", "Error");
+  } finally {
+    if (btn) { btn.removeAttribute("aria-busy"); btn.textContent = "AI Suggestion"; }
   }
 }
 
+function openReplyModalLoading() {
+  const loading = document.getElementById("replyLoading");
+  const box = document.getElementById("replyBox");
+  const footer = document.querySelector(".modal-actions");
+  if (loading) loading.hidden = false;
+  if (box) box.hidden = true;
+  if (footer) footer.hidden = true;
+  els.replyModalMeta.textContent = "Claude Opus 4.7 · reading thread";
+  els.replyModal.hidden = false;
+}
+
 function renderEmptyDetail() {
+  if (!els.detailPanel) return;
   els.detailPanel.innerHTML = `<div class="empty-state">Select an email to review.</div>`;
 }
+
+function confidenceBadge(email) {
+  const score = Number(email.confidence_score || 0);
+  if (!score) return "";
+  const level = score >= 75 ? "high" : score >= 50 ? "medium" : "low";
+  const reason = email.confidence_reason ? ` · ${email.confidence_reason}` : "";
+  return ` <span class="confidence-badge confidence-${level}" title="${score}% confidence${reason}">${score}%</span>`;
+}
+
 
 function feedbackForm(email) {
   const owners = state.taxonomy.department_owners || [];
@@ -392,7 +526,14 @@ function fillSelect(element, label, values) {
     values.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join("");
 }
 
-function openReplyModal(value, meta) {
+function openReplyModal(value, meta, title) {
+  const loading = document.getElementById("replyLoading");
+  const box = document.getElementById("replyBox");
+  const footer = document.querySelector(".modal-actions");
+  if (loading) loading.hidden = true;
+  if (box) box.hidden = false;
+  if (footer) footer.hidden = false;
+  document.getElementById("replyModalTitle").textContent = title || "AI Recommended Response";
   els.replyModalMeta.textContent = meta || "";
   els.replyBox.value = value || "";
   els.replyModal.hidden = false;
@@ -420,7 +561,7 @@ async function runAction(label, action) {
     await action();
   } catch (error) {
     setSyncStatus("Ready");
-    showToast(error.message || "Action failed.");
+    showToast(error.message || "Action failed.", "error");
   }
 }
 
@@ -440,16 +581,29 @@ async function fetchJson(url, options = {}) {
 }
 
 function setSyncStatus(value) {
-  els.syncStatus.textContent = value;
+  if (els.syncStatus) els.syncStatus.textContent = value;
 }
 
-function showToast(message) {
-  els.toast.textContent = message;
-  els.toast.hidden = false;
+function showToast(message, type = "info") {
   window.clearTimeout(showToast.timer);
-  showToast.timer = window.setTimeout(() => {
-    els.toast.hidden = true;
-  }, 4200);
+  els.toast.className = `toast ${type === "error" ? "error" : ""}`.trim();
+  if (type === "error") {
+    els.toast.innerHTML = `
+      <span>${escapeHtml(message)}</span>
+      <button class="toast-close" type="button" aria-label="Clear message">&times;</button>
+    `;
+    els.toast.querySelector(".toast-close").addEventListener("click", () => {
+      els.toast.hidden = true;
+    });
+  } else {
+    els.toast.textContent = message;
+  }
+  els.toast.hidden = false;
+  if (type !== "error") {
+    showToast.timer = window.setTimeout(() => {
+      els.toast.hidden = true;
+    }, 4200);
+  }
 }
 
 function urgency(email) {
@@ -484,4 +638,156 @@ function debounce(fn, delay) {
   };
 }
 
-boot().catch((error) => showToast(error.message || "Dashboard failed to load."));
+// ── Admin Dashboard ───────────────────────────────────────────────────────────
+
+async function renderAdminView() {
+  if (state.currentView !== "admin") return;
+  renderAdminShell();
+  const workspace = els.workspace;
+  if (!workspace) return;
+  workspace.innerHTML = `<div class="admin-loading">Loading admin dashboard…</div>`;
+
+  let data, users;
+  try {
+    [data, users] = await Promise.all([
+      fetchJson("/api/admin/stats"),
+      fetchJson("/api/auth/users"),
+    ]);
+  } catch (err) {
+    if (state.currentView !== "admin") return;
+    workspace.innerHTML = `<div class="empty-state">Failed to load admin data: ${escapeHtml(err.message)}</div>`;
+    return;
+  }
+  if (state.currentView !== "admin") return;
+
+  const ov = data.overview;
+  const engineRows = (ov.engine_breakdown || []).map((r) =>
+    `<div class="admin-engine-row"><span>${escapeHtml(r.analysis_engine)}</span><strong>${r.cnt}</strong></div>`
+  ).join("");
+
+  const correctionRows = (data.corrections || []).map((r) =>
+    `<tr><td>${escapeHtml(r.type)}</td><td>${escapeHtml(r.label)}</td><td><strong>${r.count}</strong></td></tr>`
+  ).join("");
+
+  const lowConfRows = (data.low_confidence || []).map((r) =>
+    `<tr>
+      <td>${escapeHtml(r.subject || "(No subject)")}</td>
+      <td>${escapeHtml(r.sender_name || r.sender_email || "")}</td>
+      <td>${escapeHtml(r.category || "")}</td>
+      <td>${r.confidence_score ?? "—"}%</td>
+    </tr>`
+  ).join("");
+
+  const ruleRows = (data.rule_candidates || []).map((r) =>
+    `<tr>
+      <td>${escapeHtml(r.pattern)}</td>
+      <td>${escapeHtml(r.suggestion)}</td>
+      <td>${r.correction_count}</td>
+      <td>${r.confidence}%</td>
+    </tr>`
+  ).join("");
+
+  const userRows = (users.users || []).map((u) =>
+    `<tr>
+      <td>${escapeHtml(u.email)}</td>
+      <td><span class="badge ${u.role === "admin" ? "" : "status"}">${escapeHtml(u.role)}</span></td>
+      <td>${u.last_login ? formatDate(u.last_login) : "Never"}</td>
+      <td>${u.invited_by_email ? escapeHtml(u.invited_by_email) : "—"}</td>
+      <td>
+        ${u.role !== "admin" ? `
+          <button class="icon-button" onclick="adminResetPassword(${u.id}, '${escapeHtml(u.email)}')" title="Send reset link">🔑</button>
+          <button class="icon-button" onclick="adminDeleteUser(${u.id}, '${escapeHtml(u.email)}')" title="Remove user">✕</button>
+        ` : ""}
+      </td>
+    </tr>`
+  ).join("");
+
+  workspace.innerHTML = `
+    <div class="admin-shell">
+      <div class="admin-overview">
+        <article class="metric"><span>Total Emails</span><strong>${ov.total_emails}</strong><small>imported</small></article>
+        <article class="metric"><span>Feedback</span><strong>${ov.total_feedback}</strong><small>corrections</small></article>
+        <article class="metric"><span>Users</span><strong>${ov.total_users}</strong><small>accounts</small></article>
+        <article class="metric"><span>Low Confidence</span><strong>${ov.low_confidence_count}</strong><small>need review</small></article>
+      </div>
+
+      <div class="admin-grid">
+        <section class="admin-card">
+          <h3>Engine Performance</h3>
+          <div class="admin-engine">${engineRows || "<p class='muted'>No analysis data yet.</p>"}</div>
+        </section>
+
+        <section class="admin-card">
+          <h3>Most Corrected Classifications</h3>
+          ${correctionRows ? `<table class="admin-table"><thead><tr><th>Type</th><th>Correction</th><th>Count</th></tr></thead><tbody>${correctionRows}</tbody></table>` : "<p class='muted'>No corrections yet.</p>"}
+        </section>
+
+        <section class="admin-card admin-card--wide">
+          <h3>Low Confidence Analyses</h3>
+          ${lowConfRows ? `<table class="admin-table"><thead><tr><th>Subject</th><th>Sender</th><th>Category</th><th>Confidence</th></tr></thead><tbody>${lowConfRows}</tbody></table>` : "<p class='muted'>No low-confidence emails.</p>"}
+        </section>
+
+        <section class="admin-card admin-card--wide">
+          <h3>Suggested Rules</h3>
+          ${ruleRows ? `<table class="admin-table"><thead><tr><th>Pattern</th><th>Suggestion</th><th>Corrections</th><th>Confidence</th></tr></thead><tbody>${ruleRows}</tbody></table>` : "<p class='muted'>No rule candidates yet.</p>"}
+        </section>
+
+        <section class="admin-card admin-card--wide">
+          <h3>User Management</h3>
+          <div class="admin-invite-row">
+            <input type="email" id="inviteEmail" placeholder="New user email" />
+            <button class="button primary" onclick="adminInviteUser()">Send Invite</button>
+          </div>
+          <table class="admin-table">
+            <thead><tr><th>Email</th><th>Role</th><th>Last Login</th><th>Invited By</th><th>Actions</th></tr></thead>
+            <tbody>${userRows}</tbody>
+          </table>
+        </section>
+      </div>
+    </div>
+  `;
+}
+
+async function adminInviteUser() {
+  const email = document.getElementById("inviteEmail")?.value.trim();
+  if (!email) { showToast("Email is required."); return; }
+  try {
+    await fetchJson("/api/auth/invite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    showToast(`Invite sent to ${email} — they'll receive a link to set their password.`);
+    document.getElementById("inviteEmail").value = "";
+    renderAdminView();
+  } catch (err) {
+    showToast(err.message || "Invite failed.", "error");
+  }
+}
+
+async function adminDeleteUser(userId, email) {
+  if (!confirm(`Remove user ${email}? This cannot be undone.`)) return;
+  try {
+    await fetchJson(`/api/auth/users/${userId}`, { method: "DELETE" });
+    showToast(`Removed ${email}.`);
+    renderAdminView();
+  } catch (err) {
+    showToast(err.message || "Delete failed.", "error");
+  }
+}
+
+async function adminResetPassword(userId, email) {
+  if (!confirm(`Send a password reset link to ${email}?`)) return;
+  try {
+    await fetchJson("/api/auth/forgot-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    showToast(`Reset link sent to ${email}.`);
+  } catch (err) {
+    showToast(err.message || "Reset failed.", "error");
+  }
+}
+
+boot().catch((error) => showToast(error.message || "Dashboard failed to load.", "error"));

@@ -67,6 +67,12 @@ def _export_mailbox_with_pywin32(mailbox_name: str, folder_name: str, export_roo
 
         export_dir = export_root / _clean_file_name(mailbox_name) / _clean_file_name(folder_name)
         export_dir.mkdir(parents=True, exist_ok=True)
+
+        # Wipe stale .msg files before each import so the folder mirrors
+        # the current Outlook inbox exactly and never accumulates orphans.
+        for _old in export_dir.glob("*.msg"):
+            _old.unlink(missing_ok=True)
+
         messages, checked_count, saved_count, skipped_count = _read_mail_items(folder, export_dir)
 
         return {

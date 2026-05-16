@@ -32,6 +32,7 @@ $runtimePackages = @(
     "httpx",
     "python-dotenv",
     "openai",
+    "anthropic",
     "pywebview>=4.4,<6",
     "pythonnet",
     "pywin32"
@@ -44,9 +45,11 @@ if (-not (Test-Path $vendorPath)) {
     New-Item -ItemType Directory -Force -Path $vendorPath | Out-Null
     # Keep runtime dependencies in .vendor so the EXE can be rebuilt on a
     # machine that does not already have the same packages globally installed.
-    & $PYTHON -m pip install --no-cache-dir --target $vendorPath $runtimePackages
+    # Ignore pip resolver warnings about globally-installed packages (e.g. semantic-kernel)
+    # that are not part of this vendor install — they do not affect the EXE.
+    & $PYTHON -m pip install --no-cache-dir --target $vendorPath $runtimePackages 2>&1 | Where-Object { $_ -notmatch "^ERROR: pip" -and $_ -notmatch "dependency resolver" -and $_ -notmatch "behaviour is the source" -and $_ -notmatch "incompatible" } | Write-Host
 } elseif (-not (Test-Path (Join-Path $vendorPath "win32com"))) {
-    & $PYTHON -m pip install --no-cache-dir --upgrade --target $vendorPath pywin32
+    & $PYTHON -m pip install --no-cache-dir --upgrade --target $vendorPath pywin32 2>&1 | Write-Host
 }
 
 & $PYTHON -m PyInstaller `
@@ -69,6 +72,12 @@ if (-not (Test-Path $vendorPath)) {
     run_desktop.py
 
 $exePath = (Resolve-Path "dist\ReplyRight.exe").Path
+
+# Copy .env next to the EXE so it can load API keys at runtime
+if (Test-Path ".env") {
+    Copy-Item ".env" "dist\.env" -Force
+    Write-Host "Copied .env to dist\"
+}
 
 function New-ReplyRightShortcut {
     param(

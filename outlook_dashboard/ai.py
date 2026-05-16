@@ -440,22 +440,75 @@ def _normalize_year(year_text: str | None, today: date) -> int:
 
 def analyze_email(email: dict[str, Any], settings: Settings) -> dict[str, Any]:
     heuristic = heuristic_analysis(email, settings)
-    if not settings.openai_configured:
-        return heuristic
+    if settings.anthropic_configured:
+        try:
+            return _analyze_with_claude(email, settings)
+        except Exception as exc:
+            heuristic["analysis_error"] = str(exc)[:500]
+            return heuristic
+    if settings.openai_configured:
+        try:
+            return _analyze_with_openai(email, settings)
+        except Exception as exc:
+            heuristic["analysis_error"] = str(exc)[:500]
+            return heuristic
+    return heuristic
 
-    try:
-        return _analyze_with_openai(email, settings)
-    except Exception as exc:  # OpenAI should never block local triage usability.
-        heuristic["analysis_error"] = str(exc)[:500]
-        return heuristic
 
-
-def triage_email(email: dict[str, Any], settings: Settings | None = None) -> dict[str, Any]:
+def triage_email(
+    email: dict[str, Any],
+    settings: Settings | None = None,
+    feedback_entries: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    # Always use local heuristic for bulk import — AI is only called when the user
+    # explicitly clicks "AI Suggestion" to avoid burning API credits on every refresh.
     analysis = heuristic_analysis(email, settings)
+    # Apply community-sourced Supabase rules (domain→owner mappings, category corrections
+    # promoted automatically from 3+ user corrections across all installations).
+    sender_email = str(email.get("sender_email") or email.get("from_email") or "").lower()
+    _apply_shared_rules(analysis, sender_email)
+    # Apply local adaptive feedback from this installation's correction history.
+    if feedback_entries:
+        analysis = apply_adaptive_feedback(email, analysis, feedback_entries)
     analysis["suggested_reply_draft"] = ""
-    analysis["model"] = "local-rules"
-    analysis["analysis_engine"] = "local-triage"
+    if analysis.get("analysis_engine") in ("heuristic", "heuristic+rules"):
+        analysis["model"] = "local-rules"
     return analysis
+
+
+def _apply_shared_rules(analysis: dict[str, Any], sender_email: str) -> None:
+    """Mutate analysis in-place using downloaded Supabase classification rules."""
+    from .supabase_client import get_cached_rules
+    rules = get_cached_rules()
+    if not rules:
+        return
+    domain = (sender_email.split("@")[-1] if "@" in sender_email else "").lower()
+    for rule in rules:
+        rule_type = str(rule.get("rule_type") or "")
+        pattern = str(rule.get("pattern") or "")
+        action = str(rule.get("action") or "")
+        if rule_type == "owner_by_domain" and domain:
+            m = re.search(r"@([\w.\-]+)", pattern)
+            if m and m.group(1).lower() == domain:
+                for owner in DEPARTMENT_OWNERS:
+                    if owner.lower() in action.lower():
+                        analysis["recommended_department_owner"] = owner
+                        analysis["analysis_engine"] = "heuristic+rules"
+                        break
+        elif rule_type == "category_correction":
+            for cat in CATEGORIES:
+                if cat.lower() in action.lower():
+                    analysis["category"] = cat
+                    analysis["analysis_engine"] = "heuristic+rules"
+                    break
+        elif rule_type == "urgency_correction":
+            m = re.search(r"\b([1-5])\b", action)
+            if m:
+                try:
+                    analysis["urgency_override"] = int(m.group(1))
+                    analysis["analysis_engine"] = "heuristic+rules"
+                except ValueError:
+                    pass
 
 
 def urgency_score(email: dict[str, Any]) -> int:
@@ -507,6 +560,71 @@ def urgency_score(email: dict[str, Any]) -> int:
     return max(1, min(5, int(score)))
 
 
+def _confidence_for(
+    text: str,
+    category: str,
+    contact_type: str,
+    arrival_score: int | None,
+    sender_email: str,
+) -> tuple[int, str]:
+    """Return (score 10–95, reason) reflecting how many independent signals drove the classification."""
+    reasons: list[str] = []
+
+    # Category signal strength — max 40 pts
+    if category == "Urgent same-day arrival":
+        cat_pts = 40
+        reasons.append("same-day arrival confirmed")
+    elif category in {"Billing dispute", "Accessibility request"}:
+        cat_pts = 38
+        reasons.append(f"{category.lower()} keyword match")
+    elif category == "Complaint" and any(t in text for t in _STRONG_UPSET_TERMS):
+        cat_pts = 36
+        reasons.append("strong complaint language")
+    elif category in {"VIP pre-arrival", "Consortia / FHR / Virtuoso", "Complaint", "Amenity request"}:
+        cat_pts = 30
+        reasons.append(f"{category.lower()} keyword")
+    elif category in {
+        "Rate inquiry", "Cancellation / modification", "Rooming list / group",
+        "Duplicate follow-up", "Internal request",
+    }:
+        cat_pts = 26
+        reasons.append(f"pattern: {category.lower()}")
+    else:
+        cat_pts = 12  # General inquiry — no specific match
+
+    # Contact type clarity — max 30 pts
+    if contact_type == "Internal":
+        ct_pts = 30
+        reasons.append("Hilton domain")
+    elif contact_type == "Travel agency" and any(term in sender_email for term in TRAVEL_AGENCY_TERMS):
+        ct_pts = 28
+        reasons.append("agency sender domain")
+    elif contact_type == "Travel agency":
+        ct_pts = 18
+        reasons.append("agency keyword in body")
+    elif contact_type == "Group contact":
+        ct_pts = 22
+    else:
+        ct_pts = 10  # Direct guest — default
+
+    # Urgency signal clarity — max 30 pts
+    if arrival_score is not None and arrival_score >= 4:
+        urg_pts = 30
+        reasons.append("arrival date / urgency detected")
+    elif arrival_score is not None:
+        urg_pts = 22
+        reasons.append("arrival date parsed")
+    elif any(t in text for t in ("urgent", "immediately", "asap", "as soon as possible")):
+        urg_pts = 18
+        reasons.append("urgency keyword")
+    else:
+        urg_pts = 10
+
+    score = max(10, min(95, cat_pts + ct_pts + urg_pts))
+    reason = "; ".join(r for r in reasons if r) or "heuristic defaults"
+    return score, reason
+
+
 def heuristic_analysis(email: dict[str, Any], settings: Settings | None = None) -> dict[str, Any]:
     subject = email.get("subject") or "(No subject)"
     raw_body = email.get("body_text") or email.get("body_content") or email.get("body_preview") or ""
@@ -533,6 +651,8 @@ def heuristic_analysis(email: dict[str, Any], settings: Settings | None = None) 
     if _is_cca_context(text):
         summary = "Completed CCA form needs to be applied to the reservation and confirmed back to the sender."
     draft = _draft_reply(sender_name, sender_email, category, missing)
+    arrival_score = _arrival_urgency_score(text)
+    confidence, confidence_reason = _confidence_for(text, category, contact_type, arrival_score, sender_email)
 
     return {
         "ai_summary": summary,
@@ -545,11 +665,96 @@ def heuristic_analysis(email: dict[str, Any], settings: Settings | None = None) 
         "recommended_department_owner": owner,
         "contact_type": contact_type,
         "suggested_reply_draft": draft,
-        "model": settings.openai_model if settings else "heuristic",
+        "confidence_score": confidence,
+        "confidence_reason": confidence_reason,
+        "model": "local-rules",
         "analysis_engine": "heuristic",
         "analysis_error": "",
         "redaction_counts": {},
     }
+
+
+def _build_system_prompt(shared_rules: list[dict] | None = None) -> str:
+    rules_block = ""
+    if shared_rules:
+        lines = []
+        for r in shared_rules[:20]:
+            lines.append(f"- {r.get('pattern', '')} → {r.get('action', '')} ({r.get('correction_count', 0)} corrections)")
+        rules_block = "\n\nACTIVE SHARED LEARNING RULES (apply these when they match):\n" + "\n".join(lines)
+
+    categories = ", ".join(CATEGORIES)
+    owners = ", ".join(DEPARTMENT_OWNERS)
+    risks = ", ".join(RISK_FLAGS)
+    return (
+        "You are an expert email triage AI for the Waldorf Astoria New York luxury hotel. "
+        "Classify and draft replies for the reservations and operations shared Outlook inbox.\n\n"
+        f"ALLOWED CATEGORIES: {categories}\n"
+        f"ALLOWED DEPARTMENT OWNERS: {owners}\n"
+        f"ALLOWED RISK FLAGS: {risks}\n"
+        "ALLOWED PRIORITY LEVELS: Low, Normal, High, Immediate\n"
+        "ALLOWED CONTACT TYPES: Internal, Group contact, Travel agency, Direct guest\n\n"
+        "RULES:\n"
+        "- This app is read-only. Never instruct anyone to send, delete, archive, or modify Outlook messages.\n"
+        "- Reply drafts are for human review only — mark them as such if needed.\n"
+        "- Never guarantee upgrades, views, early check-in, late checkout, connecting rooms, amenities, or special requests unless already confirmed in the email. Use 'subject to availability'.\n"
+        "- Never admit fault unless confirmed. Never invent policies, rates, fees, or availability.\n"
+        "- Use polished, warm, precise luxury-hospitality language.\n"
+        "- Address external guests as Mr./Ms. [Last Name] when available. Address Hilton colleagues by first name.\n"
+        "- Department owner must never be 'Management' — use the allowed list only.\n"
+        f"{rules_block}\n\n"
+        "Return ONLY a valid JSON object with these exact keys (no markdown, no explanation, no code fences):\n"
+        '{"ai_summary": "...", "category": "...", "priority_level": "...", "guest_sentiment": "Positive|Neutral|Concerned|Upset", '
+        '"internal_next_steps": ["..."], "missing_information": ["..."], "risk_flags": ["..."], '
+        '"recommended_department_owner": "...", "contact_type": "...", "suggested_reply_draft": "..."}'
+    )
+
+
+def _extract_json(text: str) -> str:
+    """Strip markdown code fences if Claude wraps the JSON."""
+    text = text.strip()
+    if text.startswith("```"):
+        lines = text.splitlines()
+        text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
+    return text.strip()
+
+
+def _analyze_with_claude(email: dict[str, Any], settings: Settings) -> dict[str, Any]:
+    from anthropic import Anthropic
+    from .supabase_client import get_cached_rules
+
+    body = email.get("body_text") or email.get("body_content") or email.get("body_preview") or ""
+    redacted_body, redaction_counts = redact_sensitive_text(body)
+    payload = {
+        "subject": email.get("subject"),
+        "sender_name": email.get("sender_name"),
+        "sender_email": email.get("sender_email"),
+        "received_datetime": email.get("received_datetime"),
+        "body": redacted_body[:8000],
+        "importance": email.get("importance"),
+        "has_attachments": bool(email.get("has_attachments")),
+        "allowed_categories": CATEGORIES,
+        "allowed_priority_levels": PRIORITY_LEVELS,
+        "allowed_risk_flags": RISK_FLAGS,
+        "allowed_department_owners": DEPARTMENT_OWNERS,
+        "allowed_contact_types": CONTACT_TYPES,
+    }
+    client = Anthropic(api_key=settings.anthropic_api_key)
+    message = client.messages.create(
+        model=settings.anthropic_model,
+        max_tokens=1800,
+        system=_build_system_prompt(get_cached_rules()),
+        messages=[{"role": "user", "content": json.dumps(payload, ensure_ascii=True)}],
+    )
+    raw = _extract_json(message.content[0].text)
+    data = json.loads(raw)
+    normalized = _normalize_analysis(data)
+    normalized.update({
+        "model": settings.anthropic_model,
+        "analysis_engine": "claude",
+        "analysis_error": "",
+        "redaction_counts": redaction_counts,
+    })
+    return normalized
 
 
 def _analyze_with_openai(email: dict[str, Any], settings: Settings) -> dict[str, Any]:
@@ -1075,9 +1280,7 @@ def _salutation(sender_name: str, sender_email: str) -> str:
     if any(sender_email.endswith(domain) for domain in INTERNAL_DOMAINS):
         first_name = clean_name.split()[0] if clean_name else "there"
         return f"Hi {first_name},"
-    parts = clean_name.split()
-    if len(parts) >= 2:
-        return f"Dear Mr./Ms. {parts[-1]},"
-    if len(parts) == 1:
-        return f"Dear Mr./Ms. {parts[0]},"
+    if clean_name:
+        first_name = clean_name.split()[0]
+        return f"Dear {first_name},"
     return "Dear Guest,"

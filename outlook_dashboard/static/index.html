@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>ReplyRight</title>
     <link rel="icon" href="/static/replyright.ico" />
-    <link rel="stylesheet" href="/static/styles.css" />
+    <link rel="stylesheet" href="/static/styles.css?v=2" />
   </head>
   <body>
     <div class="desktop-shell">
@@ -22,10 +22,12 @@
           <button class="nav-item" type="button" data-view="urgent">Urgent</button>
           <button class="nav-item" type="button" data-view="vip">VIP</button>
           <button class="nav-item" type="button" data-view="missing">Missing Info</button>
+          <button class="nav-item nav-item--admin" type="button" data-view="admin" id="adminNavBtn" hidden>Admin</button>
         </nav>
         <div class="sidebar-footer">
           <span id="mailboxLabel">NYCWA_Reservations</span>
-          <small>Local read-only workflow</small>
+          <small id="currentUserEmail"></small>
+          <button class="logout-btn" type="button" id="logoutBtn">Sign out</button>
         </div>
       </aside>
 
@@ -76,6 +78,10 @@
           </div>
           <button class="icon-button" id="closeReplyModal" type="button" aria-label="Close">x</button>
         </header>
+        <div class="reply-loading" id="replyLoading" hidden>
+          <div class="reply-spinner"></div>
+          <p>Claude is reading the full thread and drafting your response…</p>
+        </div>
         <textarea class="reply-box" id="replyBox" readonly></textarea>
         <footer class="modal-actions">
           <button class="button secondary" id="copyReplyButton" type="button">Copy Reply</button>
@@ -83,6 +89,6 @@
       </section>
     </div>
     <div class="toast" id="toast" hidden></div>
-    <script src="/static/app.js"></script>
+    <script src="/static/app.js?v=2"></script>
   </body>
 </html>

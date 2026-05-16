@@ -1,5 +1,28 @@
 # AI Change Log
 
+## 2026-05-16 - Roadmap audit handoff
+
+- Recorded a seven-phase roadmap completion checklist in `docs/HANDOFF.md`.
+- Marked next implementation blanks: structured feedback controls, 1-5 quality ratings, Supabase durable sync/cache, hands-off rule auto-promotion, and staged OpenAI refresh classification.
+- Recorded Brian's decisions: OpenAI classifies all imported mail on refresh; Claude Opus is only for `AI Suggestion`; shared rules auto-promote; multi-property support is out of scope.
+- Updated `docs/CURRENT_STATE.md` so future agents begin with those gaps.
+
+## 2026-05-16 - Admin tab navigation restore
+
+- Fixed Admin view state so it no longer strands the app on the admin dashboard after clicking other sidebar tabs.
+- Added a restorable/re-bindable inbox workspace shell for the queue and detail panels.
+- Hid `Refresh Inbox` and inbox metrics while Admin is active, then restored them when returning to inbox views.
+- Replaced the admin CSS `:has()` dependency with an explicit `.workspace--admin` class.
+- Rebuilt `dist\ReplyRight.exe` and verified Admin -> Inbox -> Urgent with a headless Edge/Selenium pass.
+
+## 2026-05-16 - Login feedback and admin credential repair
+
+- Moved local admin credential seeding to `.env` variables and made startup repair stale admin password hashes.
+- Updated failed login handling so invalid credentials render a persistent dismissable error message and preserve the email field.
+- Updated dashboard failure toasts to persist until dismissed with an X.
+- Fixed the auth middleware skip list so `/api/auth/me` is protected and can receive `request.state.user`; this resolves the post-login dashboard boot loop.
+- Rebuilt the packaged EXE and verified bad/good login behavior against the packaged app.
+
 ## 2026-05-16 - Adaptive conversation triage and Supabase roadmap
 
 - Added conversation-level adaptive triage so queue urgency/labels come from the latest few messages instead of the highest stale score anywhere in the thread.

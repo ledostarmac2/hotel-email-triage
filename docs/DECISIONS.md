@@ -1,5 +1,29 @@
 # Decisions
 
+## 2026-05-16: OpenAI Refresh Classification, Claude Opus AI Suggestion
+
+Decision: Refresh Inbox should use OpenAI to assign all triage metadata for imported emails, including urgency, owner, category, contact type, sentiment, missing information, executive summary, and required actions. Future implementation must check current official OpenAI model/pricing docs and choose the best available free-tier or lowest-cost suitable OpenAI model. Claude Opus is reserved for explicit `AI Suggestion` response drafting/refinement only.
+
+Rationale: Brian wants refresh to classify the inbox automatically with AI, while reserving Claude Opus for the higher-value human-triggered response drafting experience.
+
+## 2026-05-16: Hands-Off Shared Rule Auto-Promotion
+
+Decision: Shared learning rules should auto-promote after repeated correction patterns. Admin UI should provide visibility and emergency override/rejection only; Brian should not need to monitor or approve routine learning.
+
+Rationale: The strategic goal is a hands-off adaptive system where corrections improve future behavior automatically.
+
+## 2026-05-16: Single-Hotel Scope
+
+Decision: Remove multi-property and cross-property support from the active roadmap. ReplyRight is scoped to Waldorf Astoria New York / `NYCWA_Reservations`.
+
+Rationale: Multi-property complexity is irrelevant for the user's current operational need and would distract from triage accuracy, feedback, and shared learning.
+
+## 2026-05-16: 1-5 Quality Ratings
+
+Decision: Summary quality and reply quality feedback should use 1-5 ratings.
+
+Rationale: A 1-5 scale gives more useful learning signal than a binary thumbs up/down control.
+
 ## 2026-05-16: Current Runtime Is Python/FastAPI
 
 Decision: Treat `outlook_dashboard/` and `run_desktop.py` as the active product path.
@@ -18,11 +42,11 @@ Decision: Keep the classic Outlook VBA macro available as a fallback for `NYCWA_
 
 Rationale: The ChatGPT Outlook connector was blocked by enterprise policy, and Entra app registration access was unavailable. The macro path is still a useful escape hatch, but direct read-only COM import is more reliable on the current machine.
 
-## 2026-05-16: Local Rules For Bulk Triage, OpenAI On Demand
+## 2026-05-16: Superseded - Local Rules For Bulk Triage, OpenAI On Demand
 
-Decision: Bulk refresh uses deterministic local triage. OpenAI is reserved for explicit per-email response generation.
+Decision: This was the earlier behavior: bulk refresh used deterministic local triage and OpenAI was reserved for explicit per-email response generation. This is superseded by the OpenAI Refresh Classification decision above.
 
-Rationale: This keeps refresh fast, cheaper, and more reliable while still allowing higher-quality response drafting when requested.
+Rationale: The old approach kept refresh fast and cheap during launch/debugging, but the target product now needs AI classification on refresh.
 
 ## 2026-05-16: SQLite Local Storage
 
@@ -78,17 +102,23 @@ Decision: Document Supabase as the target centralized learning repository in `do
 
 Rationale: Shared learning should improve all installations without storing raw email bodies, guest PII, reservation numbers, payment details, or attachments centrally.
 
+## 2026-05-16: Local Admin Credentials Come From Environment
+
+Decision: Configure the local ReplyRight admin account through `REPLYRIGHT_ADMIN_EMAIL` and `REPLYRIGHT_ADMIN_PASSWORD` in `.env`, and repair the existing admin hash on startup when the configured password changes.
+
+Rationale: A hard-coded startup password can leave existing local databases with stale hashes and makes credential rotation awkward. Environment-backed credentials keep secrets out of source and make the packaged app repairable without deleting the SQLite database.
+
 ## 2026-05-16: Add Semantic Kernel Orchestration Layer As Additive Package
 
 Decision: Implement the SK orchestration layer under `replyright_kernel/`, separate from `outlook_dashboard/`. The existing FastAPI dashboard is not modified.
 
 Rationale: Keeps the proven dashboard stable while building the next-generation orchestration foundation alongside it. Future integration work (wiring SK into the `/api/emails/{id}/analyze` path) can be done incrementally and reviewed before replacing the current OpenAI call.
 
-## 2026-05-16: Local-First Plugin Architecture For Token/Cost Control
+## 2026-05-16: Local Fallback Plugin Architecture For Token/Cost Control
 
-Decision: PriorityTriage, ExecutiveSummary, and AuditCompliance run locally (no LLM) on every email. Only the draft generation step sends a request to the LLM, and it receives only the cleaned, token-optimised payload plus local metadata.
+Decision: PriorityTriage, ExecutiveSummary, and AuditCompliance remain useful as local fallback/test components. The target refresh path should use OpenAI staged classification, while Claude Opus remains reserved for explicit `AI Suggestion`.
 
-Rationale: Consistent with the existing rule of "local rules for bulk refresh, OpenAI only on demand." This pattern extends naturally to the SK layer and keeps per-email LLM cost near zero for triage operations.
+Rationale: Local components keep tests deterministic and preserve offline fallback behavior, but they no longer define the primary refresh-classification strategy.
 
 ## 2026-05-16: Plugin Registry Extension Points Documented In Code
 

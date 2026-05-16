@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ReplyRight · Sign In</title>
+    <link rel="icon" href="/static/replyright.ico" />
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: #0f1117;
+        color: #e8e8e8;
+        min-height: 100vh;
+        display: flex;
+        align-items: stretch;
+      }
+
+      /* ── Left brand panel ── */
+      .brand-panel {
+        flex: 1;
+        background: #131722;
+        border-right: 1px solid #1e2130;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 48px 40px;
+        gap: 28px;
+      }
+
+      .brand-panel img {
+        width: 100%;
+        max-width: 320px;
+        height: auto;
+        object-fit: contain;
+      }
+
+      .brand-tagline {
+        text-align: center;
+        color: rgba(255,255,255,0.4);
+        font-size: 0.9rem;
+        letter-spacing: 0.03em;
+      }
+
+      .brand-divider {
+        width: 40px;
+        height: 2px;
+        background: #5b6af0;
+        border-radius: 2px;
+      }
+
+      .brand-desc {
+        text-align: center;
+        color: rgba(255,255,255,0.25);
+        font-size: 0.78rem;
+        line-height: 1.7;
+        max-width: 280px;
+      }
+
+      /* ── Right form panel ── */
+      .form-panel {
+        width: 420px;
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 48px 44px;
+        background: #1a1d27;
+      }
+
+      .form-inner { width: 100%; }
+
+      h1 {
+        font-size: 1.35rem;
+        font-weight: 700;
+        color: #fff;
+        margin-bottom: 6px;
+      }
+
+      .form-sub {
+        font-size: 0.83rem;
+        color: rgba(255,255,255,0.35);
+        margin-bottom: 32px;
+      }
+
+      .field { margin-bottom: 16px; }
+
+      label {
+        display: block;
+        font-size: 0.78rem;
+        color: rgba(255,255,255,0.45);
+        margin-bottom: 6px;
+        font-weight: 500;
+        letter-spacing: 0.02em;
+      }
+
+      input[type="email"], input[type="password"] {
+        width: 100%;
+        background: #0f1117;
+        border: 1px solid #2a2d3a;
+        border-radius: 7px;
+        padding: 11px 14px;
+        color: #e8e8e8;
+        font-size: 0.9rem;
+        outline: none;
+        transition: border-color 0.15s, box-shadow 0.15s;
+      }
+
+      input[type="email"]:focus, input[type="password"]:focus {
+        border-color: #5b6af0;
+        box-shadow: 0 0 0 3px rgba(91,106,240,0.15);
+      }
+
+      .remember-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 24px;
+        font-size: 0.82rem;
+      }
+
+      .remember-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: rgba(255,255,255,0.4);
+        cursor: pointer;
+      }
+
+      .remember-label input {
+        width: 15px;
+        height: 15px;
+        accent-color: #5b6af0;
+        cursor: pointer;
+      }
+
+      .forgot-link {
+        color: #5b6af0;
+        text-decoration: none;
+        font-size: 0.82rem;
+        transition: color 0.15s;
+      }
+
+      .forgot-link:hover { color: #7b89f4; }
+
+      .btn-primary {
+        width: 100%;
+        background: #5b6af0;
+        color: #fff;
+        border: none;
+        border-radius: 7px;
+        padding: 13px;
+        font-size: 0.92rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s, transform 0.1s;
+        letter-spacing: 0.02em;
+      }
+
+      .btn-primary:hover { background: #4a59df; }
+      .btn-primary:active { transform: scale(0.99); }
+      .btn-primary:disabled { background: #3a3d5a; cursor: not-allowed; transform: none; }
+
+      .error-msg {
+        background: rgba(220,50,50,0.12);
+        border: 1px solid rgba(220,50,50,0.3);
+        color: #ff8080;
+        border-radius: 7px;
+        padding: 10px 11px 10px 14px;
+        font-size: 0.83rem;
+        margin-bottom: 16px;
+        display: none;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        line-height: 1.45;
+      }
+
+      .error-msg.visible { display: flex; }
+
+      .error-msg button {
+        width: 24px;
+        height: 24px;
+        flex: 0 0 auto;
+        border: 0;
+        border-radius: 999px;
+        background: transparent;
+        color: #ffb0b0;
+        cursor: pointer;
+        font-size: 1.1rem;
+        line-height: 1;
+      }
+
+      .error-msg button:hover { background: rgba(255,255,255,0.08); }
+
+      .footer-note {
+        text-align: center;
+        margin-top: 32px;
+        font-size: 0.73rem;
+        color: rgba(255,255,255,0.18);
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      /* ── Forgot overlay ── */
+      .overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.75);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 100;
+      }
+
+      .overlay.open { display: flex; }
+
+      .overlay-card {
+        background: #1a1d27;
+        border: 1px solid #2a2d3a;
+        border-radius: 12px;
+        padding: 36px;
+        max-width: 360px;
+        width: 90%;
+        text-align: center;
+        box-shadow: 0 12px 48px rgba(0,0,0,0.6);
+      }
+
+      .overlay-card h2 { font-size: 1rem; color: #fff; margin-bottom: 14px; }
+
+      .overlay-card p {
+        font-size: 0.85rem;
+        color: rgba(255,255,255,0.45);
+        line-height: 1.7;
+        margin-bottom: 22px;
+      }
+
+      .overlay-card a { color: #5b6af0; }
+
+      .btn-secondary {
+        background: #2a2d3a;
+        color: #e8e8e8;
+        border: none;
+        border-radius: 7px;
+        padding: 10px 24px;
+        cursor: pointer;
+        font-size: 0.85rem;
+        transition: background 0.15s;
+      }
+
+      .btn-secondary:hover { background: #3a3d4a; }
+    </style>
+  </head>
+  <body>
+    <!-- Left: brand panel -->
+    <div class="brand-panel">
+      <img src="/static/replyright-logo.png" alt="ReplyRight" />
+      <div class="brand-divider"></div>
+      <p class="brand-tagline">The right response, every time.</p>
+      <p class="brand-desc">AI-powered email triage for the Waldorf Astoria New York reservations team.</p>
+    </div>
+
+    <!-- Right: login form -->
+    <div class="form-panel">
+      <div class="form-inner">
+        <h1>Welcome back</h1>
+        <p class="form-sub">Sign in to your ReplyRight account.</p>
+
+        <div class="error-msg" id="errorMsg" role="alert" aria-live="assertive" data-server-error="">
+          <span id="errorText"></span>
+          <button type="button" id="closeError" aria-label="Clear error">&times;</button>
+        </div>
+
+        <form id="loginForm" method="POST" action="/login">
+          <div class="field">
+            <label for="email">Email address</label>
+            <input type="email" id="email" name="email" autocomplete="email" required value="" data-server-email
+              placeholder="you@waldorfastoria.com" />
+          </div>
+          <div class="field">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" autocomplete="current-password" required
+              placeholder="••••••••" />
+          </div>
+          <div class="remember-row">
+            <label class="remember-label">
+              <input type="checkbox" id="rememberEmail" /> Remember my email
+            </label>
+            <a href="#" class="forgot-link" id="forgotLink">Forgot password?</a>
+          </div>
+          <button type="submit" class="btn-primary" id="submitBtn">Sign In</button>
+        </form>
+
+        <p class="footer-note">Waldorf Astoria New York &nbsp;·&nbsp; Reservations</p>
+      </div>
+    </div>
+
+    <!-- Forgot password overlay -->
+    <div class="overlay" id="forgotOverlay">
+      <div class="overlay-card">
+        <h2>Password Recovery</h2>
+        <p>Enter your account email and we'll send a reset link.</p>
+        <input type="email" id="forgotEmail" placeholder="you@waldorfastoria.com"
+          style="width:100%;background:#0f1117;border:1px solid #2a2d3a;border-radius:7px;padding:10px 14px;color:#e8e8e8;font-size:0.9rem;outline:none;margin-bottom:10px;" />
+        <p id="forgotMsg" style="font-size:0.82rem;min-height:1.2em;margin-bottom:12px;"></p>
+        <div style="display:flex;gap:8px;justify-content:center;">
+          <button class="btn-secondary" id="closeForgot">Cancel</button>
+          <button class="btn-primary" id="sendReset" style="width:auto;padding:10px 22px;">Send Reset Link</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const emailInput = document.getElementById("email");
+      const rememberCheckbox = document.getElementById("rememberEmail");
+      const errorMsg = document.getElementById("errorMsg");
+      const errorText = document.getElementById("errorText");
+      const closeError = document.getElementById("closeError");
+
+      function showLoginError(message) {
+        errorText.textContent = message;
+        errorMsg.classList.add("visible");
+      }
+
+      closeError.addEventListener("click", () => {
+        errorMsg.classList.remove("visible");
+        errorText.textContent = "";
+      });
+
+      // Pre-fill remembered email
+      const saved = localStorage.getItem("rr_remembered_email");
+      if (!emailInput.value && saved) { emailInput.value = saved; rememberCheckbox.checked = true; }
+
+      // Show server-side error from the response or legacy URL param.
+      const params = new URLSearchParams(window.location.search);
+      const serverError = errorMsg.dataset.serverError;
+      const err = serverError || params.get("error");
+      if (err) {
+        showLoginError(err === "invalid" ? "Invalid email or password." : err);
+        if (params.get("error")) {
+          window.history.replaceState({}, document.title, "/login");
+        }
+      }
+
+      // Save/clear remembered email before the form submits
+      document.getElementById("loginForm").addEventListener("submit", () => {
+        if (rememberCheckbox.checked) {
+          localStorage.setItem("rr_remembered_email", emailInput.value.trim());
+        } else {
+          localStorage.removeItem("rr_remembered_email");
+        }
+      });
+
+      // Forgot password overlay
+      document.getElementById("forgotLink").addEventListener("click", (e) => {
+        e.preventDefault();
+        document.getElementById("forgotEmail").value = emailInput.value.trim();
+        document.getElementById("forgotMsg").textContent = "";
+        document.getElementById("forgotOverlay").classList.add("open");
+      });
+      document.getElementById("closeForgot").addEventListener("click", () => {
+        document.getElementById("forgotOverlay").classList.remove("open");
+      });
+
+      document.getElementById("sendReset").addEventListener("click", async () => {
+        const email = document.getElementById("forgotEmail").value.trim();
+        const msg = document.getElementById("forgotMsg");
+        const btn = document.getElementById("sendReset");
+        if (!email) { msg.style.color = "#ff8080"; msg.textContent = "Please enter your email address."; return; }
+        btn.disabled = true; btn.textContent = "Sending…";
+        try {
+          const res = await fetch("/api/auth/forgot-password", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email }),
+          });
+          const data = await res.json();
+          if (res.ok) {
+            msg.style.color = "#80d080";
+            msg.textContent = "Reset link sent — check your inbox.";
+          } else {
+            msg.style.color = "#ff8080";
+            msg.textContent = data.detail || "Could not send reset email.";
+          }
+        } catch {
+          msg.style.color = "#ff8080";
+          msg.textContent = "Connection error. Please try again.";
+        } finally {
+          btn.disabled = false; btn.textContent = "Send Reset Link";
+        }
+      });
+    </script>
+  </body>
+</html>

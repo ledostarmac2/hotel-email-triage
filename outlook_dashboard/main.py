@@ -1,21 +1,41 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+import html as html_lib
 from pathlib import Path
 from typing import Literal
 
 import time
 
-from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi import FastAPI, Form, HTTPException, Query, Request
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from .ai import analyze_email, infer_feedback_corrections, triage_conversation, triage_email, urgency_score
+from .auth import (
+    authenticate_user,
+    create_reset_token,
+    create_session,
+    create_user,
+    delete_session,
+    delete_user,
+    ensure_admin,
+    get_session_user,
+    list_users,
+    reset_password,
+    send_invite_email,
+    send_reset_email,
+)
 from .config import DATA_DIR, get_settings
 from .database import (
+    admin_correction_stats,
+    admin_low_confidence_emails,
+    admin_overview_stats,
+    consume_reset_token,
     delete_emails_not_in_graph_ids,
+    detect_rule_candidates,
     emails_without_analysis,
     get_email,
     initialize_database,
@@ -40,11 +60,12 @@ from .graph import (
 from .outlook_desktop import OutlookDesktopExportError, export_mailbox_folder_to_msg
 from .runtime_log import configure as _configure_runtime_log
 from .runtime_log import get_logger
+from .supabase_client import download_approved_rules, promote_rule_candidates, upload_feedback_event
 from .taxonomy import CATEGORIES, CONTACT_TYPES, DEPARTMENT_OWNERS, PRIORITY_LEVELS, RISK_FLAGS, STATUSES
 
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
-
+_STATIC_VER = str(int(time.time()))
 
 _log = get_logger("app")
 
@@ -62,11 +83,46 @@ async def lifespan(_: FastAPI):
         settings.graph_configured,
     )
     initialize_database(settings.database_path)
+    if settings.replyright_admin_email and settings.replyright_admin_password:
+        ensure_admin(settings.replyright_admin_email, settings.replyright_admin_password, settings.database_path)
+    else:
+        _log.warning("Admin account seed skipped: REPLYRIGHT_ADMIN_EMAIL/PASSWORD are not configured.")
+    rules = download_approved_rules()
+    if rules:
+        _log.info("Supabase: loaded %s approved classification rules", len(rules))
     yield
     _log.info("Server shutdown.")
 
 
 _http_log = get_logger("http")
+
+
+_AUTH_SKIP = {
+    "/login",
+    "/api/health",
+    "/reset-password",
+    "/api/auth/login",
+    "/api/auth/logout",
+    "/api/auth/forgot-password",
+    "/api/auth/reset-password",
+}
+_AUTH_SKIP_PREFIX = ("/static/",)
+
+
+class _AuthMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+        if path in _AUTH_SKIP or any(path.startswith(p) for p in _AUTH_SKIP_PREFIX):
+            return await call_next(request)
+        session_id = request.cookies.get("rr_session", "")
+        settings = get_settings()
+        user = get_session_user(session_id, settings.database_path) if session_id else None
+        if not user:
+            if path.startswith("/api/"):
+                return JSONResponse({"detail": "Authentication required."}, status_code=401)
+            return RedirectResponse("/login")
+        request.state.user = user
+        return await call_next(request)
 
 
 class _RequestLogMiddleware(BaseHTTPMiddleware):
@@ -101,6 +157,7 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+app.add_middleware(_AuthMiddleware)
 app.add_middleware(_RequestLogMiddleware)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
@@ -141,9 +198,203 @@ class DesktopOutlookImport(BaseModel):
     messages: list[DesktopOutlookMessage] = Field(default_factory=list)
 
 
+@app.get("/login")
+def login_page() -> HTMLResponse:
+    return _login_response()
+
+
+@app.post("/login")
+def login_form(email: str = Form(...), password: str = Form(...)):
+    settings = get_settings()
+    user = authenticate_user(email, password, settings.database_path)
+    if not user:
+        return _login_response("Invalid email or password.", email, status_code=401)
+    session_id = create_session(user["id"], settings.database_path)
+    response = RedirectResponse("/", status_code=303)
+    response.set_cookie(
+        "rr_session", session_id,
+        httponly=True, samesite="lax", max_age=60 * 60 * 24 * 30, path="/",
+    )
+    return response
+
+
+def _login_response(error_message: str = "", email: str = "", status_code: int = 200) -> HTMLResponse:
+    html = (STATIC_DIR / "login.html").read_text(encoding="utf-8")
+    html = html.replace(
+        'data-server-error=""',
+        f'data-server-error="{html_lib.escape(error_message, quote=True)}"',
+    )
+    html = html.replace(
+        'value="" data-server-email',
+        f'value="{html_lib.escape(email.strip(), quote=True)}" data-server-email',
+    )
+    return HTMLResponse(content=html, status_code=status_code, headers={"Cache-Control": "no-store"})
+
+
+@app.get("/reset-password")
+def reset_password_page() -> HTMLResponse:
+    html = (STATIC_DIR / "reset_password.html").read_text(encoding="utf-8")
+    return HTMLResponse(content=html, headers={"Cache-Control": "no-store"})
+
+
 @app.get("/")
-def dashboard() -> FileResponse:
-    return FileResponse(STATIC_DIR / "index.html")
+def dashboard() -> HTMLResponse:
+    html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+    html = html.replace("/static/app.js?v=2", f"/static/app.js?v={_STATIC_VER}")
+    html = html.replace("/static/styles.css?v=2", f"/static/styles.css?v={_STATIC_VER}")
+    return HTMLResponse(content=html, headers={"Cache-Control": "no-store"})
+
+
+# ── Auth endpoints ────────────────────────────────────────────────────────────
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class InviteRequest(BaseModel):
+    email: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+
+class ResetPasswordConfirmRequest(BaseModel):
+    token: str
+    new_password: str = Field(min_length=8)
+
+
+class ResetPasswordRequest(BaseModel):
+    new_password: str = Field(min_length=8)
+
+
+@app.post("/api/auth/login")
+def api_login(payload: LoginRequest, request: Request):
+    settings = get_settings()
+    user = authenticate_user(payload.email, payload.password, settings.database_path)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid email or password.")
+    session_id = create_session(user["id"], settings.database_path)
+    response = JSONResponse({"ok": True, "role": user["role"], "email": user["email"]})
+    response.set_cookie(
+        "rr_session", session_id,
+        httponly=True, samesite="lax", max_age=60 * 60 * 24 * 30,
+    )
+    return response
+
+
+@app.post("/api/auth/logout")
+def api_logout(request: Request):
+    session_id = request.cookies.get("rr_session", "")
+    if session_id:
+        delete_session(session_id, get_settings().database_path)
+    response = JSONResponse({"ok": True})
+    response.delete_cookie("rr_session")
+    return response
+
+
+@app.get("/api/auth/me")
+def api_me(request: Request):
+    if not hasattr(request.state, "user"):
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    return {"user": request.state.user}
+
+
+@app.post("/api/auth/forgot-password")
+def api_forgot_password(payload: ForgotPasswordRequest):
+    settings = get_settings()
+    if not settings.smtp_configured:
+        raise HTTPException(status_code=503, detail="Email service not configured. Contact your admin.")
+    token = create_reset_token(payload.email.lower().strip(), settings.database_path)
+    if token:
+        base_url = f"http://{settings.app_host}:{settings.app_port}"
+        try:
+            send_reset_email(payload.email.lower().strip(), token, base_url, settings)
+        except Exception as exc:
+            _log.error("Reset email failed for %s: %s", payload.email, exc)
+            raise HTTPException(status_code=503, detail="Failed to send email. Contact your admin.") from exc
+    return {"ok": True}
+
+
+@app.post("/api/auth/reset-password")
+def api_reset_password_confirm(payload: ResetPasswordConfirmRequest):
+    settings = get_settings()
+    user_id = consume_reset_token(payload.token, settings.database_path)
+    if not user_id:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset link.")
+    reset_password(user_id, payload.new_password, settings.database_path)
+    return {"ok": True}
+
+
+@app.post("/api/auth/invite")
+def api_invite(payload: InviteRequest, request: Request):
+    if request.state.user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only.")
+    settings = get_settings()
+    if not settings.smtp_configured:
+        raise HTTPException(status_code=503, detail="Email service not configured. Add SMTP settings to .env.")
+    import secrets as _sec
+    try:
+        user_id = create_user(
+            payload.email,
+            _sec.token_hex(32),  # placeholder — user sets their own password via invite link
+            role="user",
+            invited_by_id=request.state.user["id"],
+            db_path=settings.database_path,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    token = create_reset_token(payload.email, settings.database_path, hours=24)
+    if not token:
+        raise HTTPException(status_code=500, detail="Could not generate invite token.")
+    base_url = f"http://{settings.app_host}:{settings.app_port}"
+    try:
+        send_invite_email(payload.email, token, base_url, settings)
+    except Exception as exc:
+        _log.error("Invite email failed for %s: %s", payload.email, exc)
+        raise HTTPException(status_code=503, detail="User created but invite email failed. Check SMTP settings.") from exc
+    return {"ok": True, "user_id": user_id}
+
+
+@app.get("/api/auth/users")
+def api_list_users(request: Request):
+    if request.state.user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only.")
+    return {"users": list_users(get_settings().database_path)}
+
+
+@app.delete("/api/auth/users/{user_id}")
+def api_delete_user(user_id: int, request: Request):
+    if request.state.user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only.")
+    if user_id == request.state.user["id"]:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account.")
+    delete_user(user_id, get_settings().database_path)
+    return {"ok": True}
+
+
+@app.post("/api/auth/users/{user_id}/reset-password")
+def api_reset_password(user_id: int, payload: ResetPasswordRequest, request: Request):
+    if request.state.user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only.")
+    reset_password(user_id, payload.new_password, get_settings().database_path)
+    return {"ok": True}
+
+
+# ── Admin analytics ───────────────────────────────────────────────────────────
+
+@app.get("/api/admin/stats")
+def api_admin_stats(request: Request):
+    if request.state.user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only.")
+    settings = get_settings()
+    return {
+        "overview": admin_overview_stats(settings.database_path),
+        "corrections": admin_correction_stats(settings.database_path),
+        "low_confidence": admin_low_confidence_emails(db_path=settings.database_path),
+        "rule_candidates": detect_rule_candidates(settings.database_path),
+    }
 
 
 @app.get("/api/health")
@@ -186,6 +437,12 @@ def taxonomy() -> dict[str, list[str]]:
         "contact_types": CONTACT_TYPES,
         "department_owners": DEPARTMENT_OWNERS,
     }
+
+
+@app.get("/api/rule-candidates")
+def rule_candidates() -> dict[str, object]:
+    candidates = detect_rule_candidates()
+    return {"rule_candidates": candidates, "count": len(candidates)}
 
 
 @app.get("/auth/login")
@@ -332,9 +589,10 @@ def sync_outlook(
 def process_pending(limit: int = Query(default=25, ge=1, le=100)) -> dict[str, int]:
     settings = get_settings()
     pending = emails_without_analysis(limit=limit, db_path=settings.database_path)
+    feedback_entries = list_recent_triage_feedback(limit=200, db_path=settings.database_path)
     analyzed = 0
     for email in pending:
-        save_analysis(email["id"], triage_email(email, settings), db_path=settings.database_path)
+        save_analysis(email["id"], triage_email(email, settings, feedback_entries=feedback_entries), db_path=settings.database_path)
         analyzed += 1
     return {"analyzed_count": analyzed}
 
@@ -447,6 +705,8 @@ def api_triage_feedback(email_id: int, payload: TriageFeedbackRequest) -> dict[s
         corrected_sentiment=corrections.get("corrected_sentiment"),
         db_path=settings.database_path,
     )
+    upload_feedback_event(_decorate_email(email), corrections, payload.feedback_text)
+    promote_rule_candidates(detect_rule_candidates())
 
     conversation_id = str(email.get("conversation_id") or "")
     raw_messages = (
@@ -572,6 +832,7 @@ def _store_and_optionally_analyze(messages, settings, analyze: bool) -> dict[str
     inserted = 0
     updated = 0
     analyzed = 0
+    feedback_entries = list_recent_triage_feedback(limit=200, db_path=settings.database_path) if analyze else []
     for message in messages:
         if not message.get("graph_message_id"):
             continue
@@ -581,6 +842,6 @@ def _store_and_optionally_analyze(messages, settings, analyze: bool) -> dict[str
         if analyze:
             email = get_email(email_id, db_path=settings.database_path)
             if email:
-                save_analysis(email_id, triage_email(email, settings), db_path=settings.database_path)
+                save_analysis(email_id, triage_email(email, settings, feedback_entries=feedback_entries), db_path=settings.database_path)
                 analyzed += 1
     return {"inserted_count": inserted, "updated_count": updated, "analyzed_count": analyzed}

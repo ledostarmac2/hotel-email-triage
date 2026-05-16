@@ -35,7 +35,7 @@ After meaningful work:
 - Keep `outlook_dashboard/` as the current runnable app unless the user explicitly asks to migrate to the Next.js scaffold in `app/`.
 - Prefer small, focused changes. Avoid broad refactors while launch/build/debugging work is still active.
 - Keep the VBA macro portable. It should not hardcode one workstation path.
-- Use local deterministic triage for bulk refreshes and reserve OpenAI calls for explicit user actions such as `AI Response`.
+- Target workflow: Refresh Inbox should use the OpenAI API to assign triage metadata for imported emails, choosing the best currently available free-tier or lowest-cost suitable OpenAI model after checking current official OpenAI model/pricing docs. Keep local deterministic triage as a fallback and for tests. Reserve Claude Opus for explicit user actions such as `AI Suggestion`.
 - Redact payment-like data before any AI call.
 
 ## Main Commands

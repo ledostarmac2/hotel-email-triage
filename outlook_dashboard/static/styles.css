@@ -49,7 +49,7 @@ textarea {
   height: 100vh;
   min-height: 0;
   display: grid;
-  grid-template-columns: 248px minmax(0, 1fr);
+  grid-template-columns: 200px minmax(0, 1fr);
   overflow: hidden;
 }
 
@@ -59,7 +59,7 @@ textarea {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  padding: 22px 16px;
+  padding: 18px 12px;
   background: var(--sidebar);
   color: #f7f9fc;
 }
@@ -73,8 +73,7 @@ textarea {
 }
 
 .brand-logo {
-  width: 168px;
-  max-width: 100%;
+  width: 100%;
   height: auto;
   display: block;
 }
@@ -284,11 +283,15 @@ textarea:focus-visible {
 
 .filters {
   display: grid;
-  grid-template-columns: minmax(180px, 1.35fr) repeat(3, minmax(112px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   padding: 12px;
   background: var(--surface-soft);
   border-bottom: 1px solid var(--line);
+}
+
+.filters #searchInput {
+  grid-column: 1 / -1;
 }
 
 input,
@@ -463,6 +466,64 @@ textarea {
   text-transform: uppercase;
 }
 
+.confidence-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 7px;
+  font-size: 11px;
+  font-weight: 700;
+  vertical-align: middle;
+  margin-left: 8px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.confidence-high {
+  background: #edf8f1;
+  color: var(--green);
+}
+
+.confidence-medium {
+  background: #fff3df;
+  color: var(--amber);
+}
+
+.confidence-low {
+  background: #fef3f2;
+  color: var(--red);
+}
+
+.rule-candidates-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #92400e;
+}
+
+.rule-candidates-banner strong {
+  color: #78350f;
+}
+
+.rule-candidates-icon {
+  flex-shrink: 0;
+}
+
+.rule-candidates-dismiss {
+  margin-left: auto;
+  flex-shrink: 0;
+  background: transparent;
+  border-color: #fde68a;
+  color: #92400e;
+  min-height: 28px;
+  width: 28px;
+}
+
 .detail-body {
   min-height: 0;
   flex: 1;
@@ -504,15 +565,121 @@ textarea {
 
 .feedback-controls {
   display: grid;
-  grid-template-columns: minmax(92px, 0.8fr) minmax(130px, 1fr) auto;
+  grid-template-columns: 1fr;
   gap: 8px;
-  align-items: stretch;
 }
 
 .section h3 {
   color: var(--muted);
   font-size: 12px;
   text-transform: uppercase;
+}
+
+/* ── Logout + admin nav ──────────────────────────────────────────────────────── */
+.logout-btn {
+  margin-top: 6px;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.12);
+  color: rgba(255,255,255,0.5);
+  border-radius: 5px;
+  padding: 5px 10px;
+  font-size: 11px;
+  cursor: pointer;
+  width: 100%;
+  transition: background 0.15s, color 0.15s;
+}
+.logout-btn:hover { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.85); }
+
+.nav-item--admin {
+  margin-top: auto;
+  border-top: 1px solid rgba(255,255,255,0.07);
+  padding-top: 8px;
+  color: #a78bfa;
+}
+.nav-item--admin:hover { background: rgba(167,139,250,0.1); }
+.nav-item--admin.active { background: rgba(167,139,250,0.15); color: #c4b5fd; }
+
+/* ── Admin dashboard ─────────────────────────────────────────────────────────── */
+.admin-shell { display: flex; flex-direction: column; gap: 20px; padding: 20px; overflow: auto; width: 100%; }
+.admin-loading { padding: 40px; text-align: center; color: var(--muted); }
+.admin-overview {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+.admin-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.admin-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 16px;
+  overflow: auto;
+}
+.admin-card h3 {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+.admin-card--wide { grid-column: span 2; }
+
+.admin-engine { display: flex; flex-direction: column; gap: 6px; }
+.admin-engine-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  padding: 6px 10px;
+  background: var(--surface-soft);
+  border-radius: 5px;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.admin-table th {
+  text-align: left;
+  padding: 6px 10px;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--line);
+}
+.admin-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+.admin-table tr:last-child td { border-bottom: none; }
+.admin-table tr:hover td { background: var(--surface-soft); }
+
+.admin-invite-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.admin-invite-row input {
+  flex: 1;
+  min-width: 160px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 13px;
+  background: var(--surface-soft);
+  color: var(--text);
+}
+
+.workspace.workspace--admin {
+  display: block;
+  overflow: auto;
 }
 
 .section p,
@@ -623,6 +790,37 @@ textarea {
   font-size: 13px;
 }
 
+.reply-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  min-height: 260px;
+  padding: 40px 24px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.reply-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: rr-spin 0.75s linear infinite;
+}
+
+@keyframes rr-spin {
+  to { transform: rotate(360deg); }
+}
+
+.button[aria-busy="true"] {
+  opacity: 0.6;
+  cursor: wait;
+  pointer-events: none;
+}
+
 .reply-box {
   display: block;
   width: calc(100% - 28px);
@@ -649,6 +847,37 @@ textarea {
   box-shadow: var(--shadow);
   font-size: 14px;
   z-index: 20;
+}
+
+.toast.error {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: #7f1d1d;
+  color: #fff7f7;
+}
+
+.toast.error span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
+}
+
+.toast-close {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #ffe0e0;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.toast-close:hover {
+  background: rgba(255, 255, 255, 0.14);
 }
 
 [hidden] {
@@ -700,10 +929,6 @@ textarea {
   .metrics,
   .filters,
   .field-grid,
-  .feedback-controls {
-    grid-template-columns: 1fr;
-  }
-
   .workspace {
     grid-template-columns: minmax(0, 1fr);
   }
