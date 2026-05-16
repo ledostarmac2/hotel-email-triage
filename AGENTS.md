@@ -13,6 +13,10 @@ Before making changes, read these files in order:
 
 Use `docs/CURRENT_STATE.md` as the latest truth. Treat older root-level planning docs as historical unless the current docs say otherwise.
 
+For broad architecture, adaptive learning, Supabase, staged AI pipeline, shared feedback, or admin dashboard work, also read:
+
+5. `docs/FUTURE_ROADMAP_SUPABASE_ADAPTIVE_LEARNING.md`
+
 ## Handoff Protocol
 
 After meaningful work:

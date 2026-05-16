@@ -71,6 +71,7 @@ def initialize_database(db_path: Path | None = None) -> None:
                 missing_information TEXT,
                 risk_flags TEXT,
                 recommended_department_owner TEXT,
+                contact_type TEXT,
                 suggested_reply_draft TEXT,
                 model TEXT,
                 analysis_engine TEXT,
@@ -112,8 +113,30 @@ def initialize_database(db_path: Path | None = None) -> None:
                 error TEXT,
                 created_at TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS triage_feedback (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                conversation_id TEXT,
+                email_id INTEGER,
+                feedback_text TEXT NOT NULL,
+                corrected_urgency INTEGER,
+                corrected_category TEXT,
+                corrected_owner TEXT,
+                corrected_contact_type TEXT,
+                corrected_sentiment TEXT,
+                applied_short_term INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(email_id) REFERENCES emails(id) ON DELETE SET NULL
+            );
             """
         )
+        _ensure_column(db, "email_analysis", "contact_type", "TEXT")
+
+
+def _ensure_column(db: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+    columns = {row["name"] for row in db.execute(f"PRAGMA table_info({table})").fetchall()}
+    if column not in columns:
+        db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
 
 def row_to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:
@@ -215,6 +238,7 @@ def save_analysis(email_id: int, analysis: dict[str, Any], db_path: Path | None 
         _encode_json(analysis.get("missing_information", [])),
         _encode_json(analysis.get("risk_flags", [])),
         analysis.get("recommended_department_owner", "Reservations"),
+        analysis.get("contact_type", "Direct guest"),
         analysis.get("suggested_reply_draft", ""),
         analysis.get("model", ""),
         analysis.get("analysis_engine", ""),
@@ -235,7 +259,8 @@ def save_analysis(email_id: int, analysis: dict[str, Any], db_path: Path | None 
                 SET ai_summary = ?, category = ?, priority_level = ?,
                     guest_sentiment = ?, internal_next_steps = ?,
                     missing_information = ?, risk_flags = ?,
-                    recommended_department_owner = ?, suggested_reply_draft = ?,
+                    recommended_department_owner = ?, contact_type = ?,
+                    suggested_reply_draft = ?,
                     model = ?, analysis_engine = ?, analysis_error = ?,
                     redaction_counts = ?, updated_at = ?
                 WHERE email_id = ?
@@ -248,10 +273,10 @@ def save_analysis(email_id: int, analysis: dict[str, Any], db_path: Path | None 
             INSERT INTO email_analysis (
                 email_id, ai_summary, category, priority_level, guest_sentiment,
                 internal_next_steps, missing_information, risk_flags,
-                recommended_department_owner, suggested_reply_draft, model,
+                recommended_department_owner, contact_type, suggested_reply_draft, model,
                 analysis_engine, analysis_error, redaction_counts, created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             values,
         )
@@ -263,7 +288,7 @@ def get_email(email_id: int, db_path: Path | None = None) -> dict[str, Any] | No
             """
             SELECT e.*, a.ai_summary, a.category, a.priority_level, a.guest_sentiment,
                    a.internal_next_steps, a.missing_information, a.risk_flags,
-                   a.recommended_department_owner, a.suggested_reply_draft,
+                   a.recommended_department_owner, a.contact_type, a.suggested_reply_draft,
                    a.model, a.analysis_engine, a.analysis_error, a.redaction_counts,
                    a.created_at AS analysis_created_at, a.updated_at AS analysis_updated_at
             FROM emails e
@@ -316,7 +341,8 @@ def list_emails(
                    e.source, e.mailbox_mode, e.status, a.ai_summary, a.category,
                    a.priority_level, a.guest_sentiment, a.internal_next_steps,
                    a.missing_information, a.risk_flags, a.recommended_department_owner,
-                   a.suggested_reply_draft, a.analysis_engine
+                   a.contact_type, a.suggested_reply_draft, a.analysis_engine,
+                   e.conversation_id
             FROM emails e
             LEFT JOIN email_analysis a ON a.email_id = e.id
             {where}
@@ -324,6 +350,126 @@ def list_emails(
             LIMIT ?
             """,
             params,
+        ).fetchall()
+    return [row_to_dict(row) or {} for row in rows]
+
+
+def list_conversation_emails(conversation_id: str, db_path: Path | None = None) -> list[dict[str, Any]]:
+    if not conversation_id:
+        return []
+    with managed_connect(db_path) as db:
+        rows = db.execute(
+            """
+            SELECT e.*, a.ai_summary, a.category, a.priority_level, a.guest_sentiment,
+                   a.internal_next_steps, a.missing_information, a.risk_flags,
+                   a.recommended_department_owner, a.contact_type, a.suggested_reply_draft,
+                   a.model, a.analysis_engine, a.analysis_error, a.redaction_counts,
+                   a.created_at AS analysis_created_at, a.updated_at AS analysis_updated_at
+            FROM emails e
+            LEFT JOIN email_analysis a ON a.email_id = e.id
+            WHERE e.conversation_id = ?
+            ORDER BY e.received_datetime DESC, e.id DESC
+            """,
+            (conversation_id,),
+        ).fetchall()
+    return [row_to_dict(row) or {} for row in rows]
+
+
+def delete_emails_not_in_graph_ids(
+    graph_message_ids: list[str],
+    db_path: Path | None = None,
+) -> int:
+    with managed_connect(db_path) as db:
+        if not graph_message_ids:
+            cursor = db.execute("DELETE FROM emails")
+            return int(cursor.rowcount)
+
+        db.execute("CREATE TEMP TABLE IF NOT EXISTS current_import_ids (graph_message_id TEXT PRIMARY KEY)")
+        db.execute("DELETE FROM current_import_ids")
+        db.executemany(
+            "INSERT OR IGNORE INTO current_import_ids (graph_message_id) VALUES (?)",
+            [(graph_message_id,) for graph_message_id in graph_message_ids],
+        )
+        cursor = db.execute(
+            """
+            DELETE FROM emails
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM current_import_ids current
+                WHERE current.graph_message_id = emails.graph_message_id
+            )
+            """
+        )
+        db.execute("DROP TABLE current_import_ids")
+        return int(cursor.rowcount)
+
+
+def save_triage_feedback(
+    *,
+    email_id: int,
+    conversation_id: str | None,
+    feedback_text: str,
+    corrected_urgency: int | None = None,
+    corrected_category: str | None = None,
+    corrected_owner: str | None = None,
+    corrected_contact_type: str | None = None,
+    corrected_sentiment: str | None = None,
+    db_path: Path | None = None,
+) -> int:
+    with managed_connect(db_path) as db:
+        cursor = db.execute(
+            """
+            INSERT INTO triage_feedback (
+                conversation_id, email_id, feedback_text, corrected_urgency,
+                corrected_category, corrected_owner, corrected_contact_type,
+                corrected_sentiment, applied_short_term, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+            """,
+            (
+                conversation_id,
+                email_id,
+                feedback_text.strip(),
+                corrected_urgency,
+                corrected_category,
+                corrected_owner,
+                corrected_contact_type,
+                corrected_sentiment,
+                utc_now_iso(),
+            ),
+        )
+        return int(cursor.lastrowid)
+
+
+def list_recent_triage_feedback(limit: int = 100, db_path: Path | None = None) -> list[dict[str, Any]]:
+    with managed_connect(db_path) as db:
+        rows = db.execute(
+            """
+            SELECT *
+            FROM triage_feedback
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?
+            """,
+            (max(1, min(limit, 500)),),
+        ).fetchall()
+    return [row_to_dict(row) or {} for row in rows]
+
+
+def list_feedback_for_conversation(
+    conversation_id: str,
+    db_path: Path | None = None,
+) -> list[dict[str, Any]]:
+    if not conversation_id:
+        return []
+    with managed_connect(db_path) as db:
+        rows = db.execute(
+            """
+            SELECT *
+            FROM triage_feedback
+            WHERE conversation_id = ?
+            ORDER BY created_at DESC, id DESC
+            """,
+            (conversation_id,),
         ).fetchall()
     return [row_to_dict(row) or {} for row in rows]
 

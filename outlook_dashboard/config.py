@@ -25,13 +25,6 @@ def _load_env() -> None:
         load_dotenv(ROOT_DIR / ".env")
 
 
-def _bool_env(name: str, default: bool) -> bool:
-    value = os.getenv(name)
-    if value is None:
-        return default
-    return value.strip().lower() in {"1", "true", "yes", "on"}
-
-
 @dataclass(frozen=True)
 class Settings:
     microsoft_client_id: str
@@ -48,7 +41,6 @@ class Settings:
     outlook_export_macro: str
     app_host: str
     app_port: int
-    auto_seed_mock: bool
 
     @property
     def graph_scopes(self) -> tuple[str, ...]:
@@ -104,5 +96,4 @@ def get_settings() -> Settings:
         ).strip(),
         app_host=os.getenv("APP_HOST", "127.0.0.1").strip(),
         app_port=int(os.getenv("APP_PORT", "8000")),
-        auto_seed_mock=_bool_env("AUTO_SEED_MOCK", True),
     )

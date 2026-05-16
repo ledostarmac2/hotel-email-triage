@@ -1,18 +1,27 @@
 from __future__ import annotations
 
-import base64
-import json
+import os
+import re
+import shutil
 import subprocess
 from pathlib import Path
 
-# Allow up to 3 minutes for the macro to scan the inbox, build JSON, and POST
-# back to the import endpoint.  30 s was too short for large inboxes because
-# Application.Run is synchronous — PowerShell waits for the entire VBA macro
-# to finish before returning.
-_MACRO_TIMEOUT_SECONDS = 180
+try:
+    import winreg
+except ImportError:  # pragma: no cover - Windows-only module
+    winreg = None
+
+
+_MAX_BODY_CHARS = 16000
+_OL_MAIL_ITEM = 43
+_OL_MSG = 3
 
 
 class OutlookDesktopExportError(RuntimeError):
+    pass
+
+
+class _PyWin32Unavailable(RuntimeError):
     pass
 
 
@@ -23,133 +32,181 @@ def export_mailbox_folder_to_msg(
     macro_name: str,
 ) -> dict[str, object]:
     export_root.mkdir(parents=True, exist_ok=True)
-    return _run_outlook_macro(macro_name)
+    try:
+        return _export_mailbox_with_pywin32(mailbox_name, folder_name, export_root)
+    except _PyWin32Unavailable as exc:
+        result = _start_outlook_autorun(
+            macro_name,
+            "pywin32 is unavailable, so ReplyRight started classic Outlook with /autorun.",
+        )
+        result["direct_import_error"] = str(exc)
+        return result
 
 
-def _run_outlook_macro(macro_name: str) -> dict[str, object]:
+def _export_mailbox_with_pywin32(mailbox_name: str, folder_name: str, export_root: Path) -> dict[str, object]:
+    try:
+        import pythoncom
+        import win32com.client
+    except ImportError as exc:
+        raise _PyWin32Unavailable("pywin32 is not installed in this environment.") from exc
+
+    pythoncom.CoInitialize()
+    try:
+        outlook = win32com.client.Dispatch("Outlook.Application")
+        namespace = outlook.GetNamespace("MAPI")
+        mailbox = _find_named_folder(namespace.Folders, mailbox_name)
+        if mailbox is None:
+            raise OutlookDesktopExportError(f"Could not find Outlook mailbox: {mailbox_name}")
+
+        try:
+            folder = mailbox.Folders.Item(folder_name)
+        except Exception as exc:
+            raise OutlookDesktopExportError(
+                f"Could not find Outlook folder '{folder_name}' in mailbox '{mailbox_name}'."
+            ) from exc
+
+        export_dir = export_root / _clean_file_name(mailbox_name) / _clean_file_name(folder_name)
+        export_dir.mkdir(parents=True, exist_ok=True)
+        messages, checked_count, saved_count, skipped_count = _read_mail_items(folder, export_dir)
+
+        return {
+            "mailbox": mailbox_name,
+            "folder": folder_name,
+            "export_dir": str(export_dir),
+            "checked_count": checked_count,
+            "exported_count": len(messages),
+            "saved_msg_count": saved_count,
+            "skipped_count": skipped_count,
+            "launched_macro": False,
+            "launch_method": "pywin32-com",
+            "messages": messages,
+            "stdout": f"Read {len(messages)} Outlook messages directly through read-only COM.",
+        }
+    except OutlookDesktopExportError:
+        raise
+    except Exception as exc:
+        raise OutlookDesktopExportError(f"Could not read Outlook through COM: {exc}") from exc
+    finally:
+        pythoncom.CoUninitialize()
+
+
+def _read_mail_items(folder, export_dir: Path) -> tuple[list[dict[str, object]], int, int, int]:
+    items = folder.Items
+    try:
+        items.Sort("[ReceivedTime]", True)
+    except Exception:
+        pass
+
+    checked_count = int(_com_get(items, "Count", 0) or 0)
+    messages: list[dict[str, object]] = []
+    saved_count = 0
+    skipped_count = 0
+
+    for index in range(1, checked_count + 1):
+        try:
+            item = items.Item(index)
+        except Exception:
+            skipped_count += 1
+            continue
+
+        if int(_com_get(item, "Class", 0) or 0) != _OL_MAIL_ITEM:
+            skipped_count += 1
+            continue
+
+        try:
+            message = _mail_item_to_payload(item)
+        except Exception:
+            skipped_count += 1
+            continue
+
+        if not message.get("graph_message_id"):
+            skipped_count += 1
+            continue
+
+        if _save_msg_copy(item, export_dir, index):
+            saved_count += 1
+        messages.append(message)
+
+    return messages, checked_count, saved_count, skipped_count
+
+
+def _mail_item_to_payload(item) -> dict[str, object]:
+    body = _limit(_com_str(item, "Body"), _MAX_BODY_CHARS)
+    received = _com_get(item, "ReceivedTime")
+    return {
+        "graph_message_id": _com_str(item, "EntryID"),
+        "subject": _com_str(item, "Subject"),
+        "sender_name": _com_str(item, "SenderName"),
+        "sender_email": _com_str(item, "SenderEmailAddress"),
+        "from_name": _com_str(item, "SenderName"),
+        "from_email": _com_str(item, "SenderEmailAddress"),
+        "received_datetime": _format_datetime(received),
+        "body_preview": _limit(_clean_preview(body), 240),
+        "body_content_type": "text",
+        "body_content": body,
+        "body_text": body,
+        "conversation_id": _com_str(item, "ConversationID"),
+        "importance": _importance_name(_com_get(item, "Importance", 1)),
+        "has_attachments": int(_com_get(_com_get(item, "Attachments"), "Count", 0) or 0) > 0,
+        "source": "outlook_desktop",
+        "mailbox_mode": "shared",
+    }
+
+
+def _save_msg_copy(item, export_dir: Path, index: int) -> bool:
+    received = _safe_file_datetime(_com_get(item, "ReceivedTime"))
+    subject = _clean_file_name(_com_str(item, "Subject")) or "No Subject"
+    file_path = _bounded_msg_path(export_dir, received, subject, index)
+    if file_path.exists():
+        return False
+    try:
+        item.SaveAs(str(file_path), _OL_MSG)
+    except Exception:
+        return False
+    return True
+
+
+def _bounded_msg_path(export_dir: Path, received: str, subject: str, index: int) -> Path:
+    subject = subject[:80]
+    file_path = export_dir / f"{received}_{subject}_{index}.msg"
+    while len(str(file_path)) > 245 and len(subject) > 12:
+        subject = subject[:-8].rstrip()
+        file_path = export_dir / f"{received}_{subject}_{index}.msg"
+    return file_path
+
+
+def _find_named_folder(folders, name: str):
+    target = name.casefold()
+    count = int(_com_get(folders, "Count", 0) or 0)
+    for index in range(1, count + 1):
+        try:
+            folder = folders.Item(index)
+        except Exception:
+            continue
+        if _com_str(folder, "Name").casefold() == target:
+            return folder
+    return None
+
+
+def _start_outlook_autorun(macro_name: str, reason: str) -> dict[str, object]:
     if not macro_name:
         raise OutlookDesktopExportError("Outlook macro name is not configured.")
 
-    macro_json = json.dumps(macro_name)
-
-    # The script does a thorough search for a running Outlook process first.
-    # If found: connects via COM and runs the macro on the existing instance
-    #   so no duplicate Outlook window is opened.
-    # If not found: discovers the outlook.exe path from the registry (three
-    #   locations checked) and starts it with /autorun to trigger the macro.
-    script = (
-        "$ErrorActionPreference = 'Stop'\n"
-        f"$macroName = {macro_json}\n"
-        r'''
-# ── Step 1: thorough search for a running Outlook process ────────────────────
-# Check both "OUTLOOK" and "outlook" (case-insensitive on Windows).
-$outlookProc = Get-Process -Name "OUTLOOK" -ErrorAction SilentlyContinue
-if (-not $outlookProc) {
-    $outlookProc = Get-Process | Where-Object { $_.Name -imatch '^outlook$' } | Select-Object -First 1
-}
-
-if ($outlookProc) {
-    # ── Outlook is already open — run macro via VBScript (true IDispatch / late-binding) ──
-    # PowerShell wraps the COM object as ApplicationClass which doesn't expose Run().
-    # VBScript's GetObject() uses pure IDispatch and Application.Run works correctly.
-    Write-Output "Outlook is running (PID $($outlookProc.Id)). Triggering macro via VBScript..."
-    $vbsContent = "Set ol = GetObject(,""Outlook.Application"")`nol.Run ""$macroName"""
-    $vbsPath = [System.IO.Path]::GetTempFileName() -replace '\.tmp$','.vbs'
-    try {
-        Set-Content -Path $vbsPath -Value $vbsContent -Encoding ASCII
-        $vbsResult = & cscript.exe //NoLogo $vbsPath 2>&1
-        if ($LASTEXITCODE -ne 0) {
-            $errMsg = ($vbsResult | Out-String).Trim()
-            $hint1 = "  1. Macro security may be blocking it: Outlook > File > Options > Trust Center > Macro Settings > enable macros."
-            $hint2 = "  2. The macro may not be installed: open Outlook VBA editor (Alt+F11) and import outlook_refresh_macro.bas."
-            $hint3 = "  3. If the macro is in a named module, set OUTLOOK_EXPORT_MACRO=Module1.ExportNYCWAReservationsInboxOnly in .env."
-            throw "VBScript macro call failed (exit $LASTEXITCODE): $errMsg`n$hint1`n$hint2`n$hint3"
-        }
-        Write-Output "Macro '$($macroName)' triggered on existing Outlook instance."
-    } finally {
-        Remove-Item $vbsPath -Force -ErrorAction SilentlyContinue
-    }
-} else {
-    # ── Outlook is not running — find it and start it with /autorun ──────────
-    Write-Output "No running Outlook found. Searching for outlook.exe..."
-
-    $outlookExe = $null
-
-    # Registry search — three locations covering Click-to-Run and MSI installs
-    $regPaths = @(
-        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\OUTLOOK.EXE",
-        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\OUTLOOK.EXE",
-        "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\App Paths\OUTLOOK.EXE"
-    )
-    foreach ($rp in $regPaths) {
-        if (-not $outlookExe) {
-            $entry = Get-ItemProperty -Path $rp -ErrorAction SilentlyContinue
-            if ($entry -and $entry.'(default)') {
-                $outlookExe = $entry.'(default)'
-            }
-        }
-    }
-
-    # PATH fallback
-    if (-not $outlookExe) {
-        $cmd = Get-Command "OUTLOOK.EXE" -ErrorAction SilentlyContinue
-        if ($cmd) { $outlookExe = $cmd.Source }
-    }
-
-    # Hard-coded Office install paths as a last resort
-    if (-not $outlookExe) {
-        $candidateDirs = @(
-            "$env:ProgramFiles\Microsoft Office\root\Office16",
-            "$env:ProgramFiles\Microsoft Office\root\Office15",
-            "${env:ProgramFiles(x86)}\Microsoft Office\root\Office16",
-            "${env:ProgramFiles(x86)}\Microsoft Office\Office16",
-            "${env:ProgramFiles(x86)}\Microsoft Office\Office15"
-        )
-        foreach ($d in $candidateDirs) {
-            $candidate = Join-Path $d "OUTLOOK.EXE"
-            if (-not $outlookExe -and (Test-Path $candidate)) {
-                $outlookExe = $candidate
-            }
-        }
-    }
-
-    if (-not $outlookExe) {
-        throw "Could not locate outlook.exe. Please ensure Microsoft Outlook is installed."
-    }
-
-    Write-Output "Found outlook.exe: $outlookExe"
-    Start-Process -FilePath $outlookExe -ArgumentList "/autorun", $macroName
-    Write-Output "Outlook started with macro: $($macroName)"
-}
-'''
-    )
-
-    encoded = base64.b64encode(script.encode("utf-16le")).decode("ascii")
-    try:
-        completed = subprocess.run(
-            [
-                "powershell.exe",
-                "-NoProfile",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-EncodedCommand",
-                encoded,
-            ],
-            capture_output=True,
-            text=True,
-            timeout=_MACRO_TIMEOUT_SECONDS,
-            check=False,
-        )
-    except subprocess.TimeoutExpired:
+    outlook_exe = _find_outlook_exe()
+    if not outlook_exe:
         raise OutlookDesktopExportError(
-            f"The Outlook macro did not complete within {_MACRO_TIMEOUT_SECONDS} seconds. "
-            "This can happen with a very large inbox. "
-            "Try again — if it keeps timing out, reduce the inbox size or increase _MACRO_TIMEOUT_SECONDS."
+            "Could not locate classic Outlook for Windows. "
+            "Open classic Outlook once, then try Refresh Inbox again."
         )
 
-    if completed.returncode != 0:
-        detail = (completed.stderr or completed.stdout or "Could not run Outlook macro.").strip()
-        raise OutlookDesktopExportError(detail)
+    try:
+        subprocess.Popen(
+            [outlook_exe, "/autorun", macro_name],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except OSError as exc:
+        raise OutlookDesktopExportError(f"Could not start Outlook: {exc}") from exc
 
     return {
         "mailbox": None,
@@ -159,6 +216,121 @@ if ($outlookProc) {
         "exported_count": None,
         "skipped_count": None,
         "launched_macro": True,
+        "launch_method": "outlook-autorun",
         "macro": macro_name,
-        "stdout": (completed.stdout or "").strip(),
+        "stdout": f"{reason} Path: {outlook_exe}",
     }
+
+
+def _find_outlook_exe() -> str | None:
+    candidates: list[str] = []
+    candidates.extend(_registry_outlook_paths())
+
+    command_path = shutil.which("OUTLOOK.EXE") or shutil.which("outlook.exe")
+    if command_path:
+        candidates.append(command_path)
+
+    for base in (os.environ.get("ProgramFiles"), os.environ.get("ProgramFiles(x86)")):
+        if not base:
+            continue
+        for relative in (
+            r"Microsoft Office\root\Office16\OUTLOOK.EXE",
+            r"Microsoft Office\root\Office15\OUTLOOK.EXE",
+            r"Microsoft Office\Office16\OUTLOOK.EXE",
+            r"Microsoft Office\Office15\OUTLOOK.EXE",
+        ):
+            candidates.append(str(Path(base) / relative))
+
+    seen: set[str] = set()
+    for candidate in candidates:
+        normalized = os.path.normcase(os.path.abspath(candidate))
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        if Path(candidate).exists():
+            return candidate
+    return None
+
+
+def _registry_outlook_paths() -> list[str]:
+    if winreg is None:
+        return []
+
+    key_paths = [
+        (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\OUTLOOK.EXE"),
+        (winreg.HKEY_CURRENT_USER, r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\OUTLOOK.EXE"),
+    ]
+    views = [0]
+    for flag_name in ("KEY_WOW64_64KEY", "KEY_WOW64_32KEY"):
+        flag = getattr(winreg, flag_name, None)
+        if flag is not None:
+            views.append(flag)
+
+    values: list[str] = []
+    for root, key_path in key_paths:
+        for view in views:
+            try:
+                with winreg.OpenKey(root, key_path, 0, winreg.KEY_READ | view) as key:
+                    value, _ = winreg.QueryValueEx(key, "")
+            except OSError:
+                continue
+            if value:
+                values.append(str(value))
+    return values
+
+
+def _com_get(obj, attr: str, default=None):
+    if obj is None:
+        return default
+    try:
+        return getattr(obj, attr)
+    except Exception:
+        return default
+
+
+def _com_str(obj, attr: str) -> str:
+    value = _com_get(obj, attr, "")
+    if value is None:
+        return ""
+    return str(value)
+
+
+def _importance_name(value) -> str:
+    try:
+        importance = int(value)
+    except (TypeError, ValueError):
+        importance = 1
+    if importance == 2:
+        return "high"
+    if importance == 0:
+        return "low"
+    return "normal"
+
+
+def _format_datetime(value) -> str:
+    if value is None:
+        return ""
+    if hasattr(value, "strftime"):
+        return value.strftime("%Y-%m-%dT%H:%M:%S")
+    return str(value)
+
+
+def _safe_file_datetime(value) -> str:
+    if value is None:
+        return "unknown-date"
+    if hasattr(value, "strftime"):
+        return value.strftime("%Y-%m-%d_%H-%M-%S")
+    return _clean_file_name(str(value)) or "unknown-date"
+
+
+def _clean_preview(value: str) -> str:
+    return " ".join(value.replace("\r", " ").replace("\n", " ").replace("\t", " ").split())
+
+
+def _clean_file_name(value: str) -> str:
+    cleaned = re.sub(r'[\\/:*?"<>|\r\n\t]', "_", value)
+    return cleaned.strip()
+
+
+def _limit(value: str, max_chars: int) -> str:
+    return value[:max_chars] if value else ""

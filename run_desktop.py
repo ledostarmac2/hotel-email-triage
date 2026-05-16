@@ -93,7 +93,7 @@ def _open_window(url: str) -> None:
         url=url,
         width=WINDOW_WIDTH,
         height=WINDOW_HEIGHT,
-        min_size=(900, 600),
+        min_size=(760, 520),
         resizable=True,
     )
     _log(f"Opening standalone WebView2 window: {url}")

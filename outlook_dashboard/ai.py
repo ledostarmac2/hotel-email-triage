@@ -2,20 +2,440 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import date, timedelta
 from typing import Any
 
 from .config import Settings
 from .redaction import redact_sensitive_text
-from .taxonomy import CATEGORIES, DEPARTMENT_OWNERS, PRIORITY_LEVELS, RISK_FLAGS
+from .taxonomy import CATEGORIES, CONTACT_TYPES, DEPARTMENT_OWNERS, PRIORITY_LEVELS, RISK_FLAGS
 
 
 INTERNAL_DOMAINS = ("waldorfastoria.com", "hilton.com")
+TRAVEL_AGENCY_TERMS = (
+    "travel",
+    "travels",
+    "agency",
+    "advisor",
+    "adviser",
+    "agent",
+    "virtuoso",
+    "fhr",
+    "fine hotels",
+    "amex",
+    "american express",
+    "consortia",
+    "signature",
+    "ensemble",
+    "internova",
+    "travel leaders",
+    "classic vacations",
+    "expedia",
+    "booking.com",
+    "concierge",
+)
+_UPSET_TERMS = (
+    "upset",
+    "angry",
+    "frustrated",
+    "furious",
+    "disappointed",
+    "unacceptable",
+    "not acceptable",
+    "poor experience",
+    "terrible",
+    "awful",
+    "complaint",
+    "complain",
+    "escalate",
+    "negative review",
+)
+_STRONG_UPSET_TERMS = (
+    "furious",
+    "unacceptable",
+    "not acceptable",
+    "terrible",
+    "awful",
+    "lawsuit",
+    "lawyer",
+    "attorney",
+    "chargeback",
+    "negative review",
+    "social media",
+)
+_CONCERN_TERMS = (
+    "concerned",
+    "confused",
+    "issue",
+    "problem",
+    "missing",
+    "incorrect",
+)
+_POSITIVE_TERMS = (
+    "thank you",
+    "thanks",
+    "appreciate",
+    "completed it",
+    "completed the form",
+    "filled out",
+    "all set",
+)
+_CCA_TERMS = (
+    "cca",
+    "credit card authorization",
+    "credit card authorisation",
+    "authorization form",
+    "authorisation form",
+    "payment authorization",
+    "payment authorisation",
+)
+_COMPLETION_TERMS = (
+    "completed it",
+    "completed the form",
+    "filled out",
+    "sent it back",
+    "submitted it",
+    "all set",
+)
+_MONTHS = {
+    "jan": 1,
+    "january": 1,
+    "feb": 2,
+    "february": 2,
+    "mar": 3,
+    "march": 3,
+    "apr": 4,
+    "april": 4,
+    "may": 5,
+    "jun": 6,
+    "june": 6,
+    "jul": 7,
+    "july": 7,
+    "aug": 8,
+    "august": 8,
+    "sep": 9,
+    "sept": 9,
+    "september": 9,
+    "oct": 10,
+    "october": 10,
+    "nov": 11,
+    "november": 11,
+    "dec": 12,
+    "december": 12,
+}
+_ARRIVAL_HINT = r"(?:arrival|arrive|arriving|check[ -]?in|checking in|stay|reservation)"
 PRIORITY_SCORE = {
     "Low": 1,
     "Normal": 2,
     "High": 4,
     "Immediate": 5,
 }
+_REPLY_BOUNDARY_PATTERNS = (
+    r"\n\s*On .{0,240}?wrote:\s*",
+    r"\n\s*-{2,}\s*Original Message\s*-{2,}.*",
+    r"\n\s*From:\s.+?\n\s*Sent:\s.+?\n\s*To:\s.+",
+    r"\n\s*De:\s.+?\n\s*Enviado:\s.+?\n\s*Para:\s.+",
+)
+_SIGNATURE_BOUNDARY_PATTERNS = (
+    r"\n\s*(?:kindest regards|kind regards|best regards|warm regards|regards|sincerely|many thanks|thank you|thanks),?\s*\n",
+    r"\n\s*--\s*\n",
+)
+_STOP_WORDS = {
+    "about",
+    "after",
+    "again",
+    "also",
+    "because",
+    "before",
+    "being",
+    "could",
+    "email",
+    "from",
+    "have",
+    "just",
+    "make",
+    "message",
+    "need",
+    "needs",
+    "only",
+    "please",
+    "really",
+    "reservation",
+    "right",
+    "should",
+    "that",
+    "their",
+    "there",
+    "this",
+    "thread",
+    "what",
+    "when",
+    "with",
+    "would",
+}
+
+
+def latest_message_text(text: str, max_chars: int = 6000) -> str:
+    """Return the latest human-authored portion of an Outlook message body."""
+    if not text:
+        return ""
+
+    clean = str(text).replace("\r\n", "\n").replace("\r", "\n")
+    clean = re.sub(r"<https?://[^>]+>", " ", clean)
+    clean = re.sub(r"https?://\S+", " ", clean)
+    clean = re.sub(r"(?im)^\s*(?:CAUTION|External Email):.*$", "", clean)
+    clean = re.sub(r"(?im)^\s*>.*$", "", clean)
+
+    for pattern in _REPLY_BOUNDARY_PATTERNS:
+        match = re.search(pattern, clean, re.IGNORECASE | re.DOTALL)
+        if match and match.start() > 0:
+            clean = clean[: match.start()]
+
+    for pattern in _SIGNATURE_BOUNDARY_PATTERNS:
+        match = re.search(pattern, clean, re.IGNORECASE)
+        if match and match.start() > 40:
+            clean = clean[: match.start()]
+
+    clean = re.sub(r"[ \t]+", " ", clean)
+    clean = re.sub(r"\n{3,}", "\n\n", clean)
+    return clean.strip()[:max_chars]
+
+
+def triage_conversation(
+    conversation: list[dict[str, Any]],
+    settings: Settings | None = None,
+    feedback_entries: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    if not conversation:
+        return triage_email({}, settings)
+
+    ordered = sorted(
+        conversation,
+        key=lambda email: (str(email.get("received_datetime") or ""), int(email.get("id") or 0)),
+        reverse=True,
+    )
+    latest = dict(ordered[0])
+    latest_fragments: list[str] = []
+    for message in ordered[:3]:
+        body = message.get("body_text") or message.get("body_content") or message.get("body_preview") or ""
+        fragment = latest_message_text(str(body))
+        if fragment:
+            latest_fragments.append(fragment)
+
+    latest_context = "\n\n".join(latest_fragments)
+    if latest_context:
+        latest["body_text"] = latest_context
+        latest["body_content"] = latest_context
+        latest["body_preview"] = latest_context[:300]
+
+    analysis = triage_email(latest, settings)
+    analysis["analysis_engine"] = "local-adaptive-triage"
+    analysis["model"] = "local-feedback-rules"
+    analysis["urgency_score"] = urgency_score({**latest, **analysis})
+    return apply_adaptive_feedback(latest, analysis, feedback_entries or [])
+
+
+def infer_feedback_corrections(
+    feedback_text: str,
+    email: dict[str, Any] | None = None,
+    analysis: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    text = (feedback_text or "").strip()
+    lower = text.lower()
+    corrections: dict[str, Any] = {}
+
+    score_match = re.search(r"\b(?:urgency|level|score)\s*(?:is|should be|=|to)?\s*([1-5])\b", lower)
+    if score_match:
+        corrections["corrected_urgency"] = int(score_match.group(1))
+    elif any(term in lower for term in ["not urgent", "low urgency", "lower urgency", "lower priority"]):
+        corrections["corrected_urgency"] = 2
+    elif any(term in lower for term in ["medium urgency", "normal urgency", "level three", "level 3"]):
+        corrections["corrected_urgency"] = 3
+
+    if any(term in lower for term in _CCA_TERMS):
+        corrections.setdefault("corrected_category", "General inquiry")
+        corrections.setdefault("corrected_owner", "Reservations")
+        corrections.setdefault("corrected_sentiment", "Neutral")
+        corrections.setdefault("corrected_urgency", 3)
+        corrections["learned_summary"] = (
+            "Completed CCA form needs to be applied to the reservation and confirmed back to the sender."
+        )
+        corrections["learned_next_steps"] = [
+            "Apply the completed CCA form to the reservation.",
+            "Reply to confirm the form has been applied.",
+        ]
+        corrections["clear_missing"] = True
+        corrections["remove_risks"] = ["VIP", "Reputation risk"]
+
+    if "not vip" in lower or "isn't vip" in lower or "not a vip" in lower:
+        corrections.setdefault("corrected_category", "General inquiry")
+        corrections.setdefault("remove_risks", []).append("VIP")
+
+    owner_terms = {
+        "front desk": "Front Desk",
+        "reservations": "Reservations",
+        "reservation": "Reservations",
+        "concierge": "Concierge",
+        "sales": "Sales",
+        "housekeeping": "Housekeeping",
+        "engineering": "Engineering",
+        "engineer": "Engineering",
+        "all departments": "All Departments",
+    }
+    for term, owner in owner_terms.items():
+        if term in lower:
+            corrections["corrected_owner"] = owner
+            break
+    if ("not concierge" in lower or "not for concierge" in lower) and corrections.get("corrected_owner") == "Concierge":
+        corrections["corrected_owner"] = "Reservations"
+
+    if "travel agency" in lower or "travel agent" in lower or "advisor" in lower:
+        corrections["corrected_contact_type"] = "Travel agency"
+    elif "group contact" in lower or "group block" in lower:
+        corrections["corrected_contact_type"] = "Group contact"
+    elif "internal" in lower or "hilton colleague" in lower:
+        corrections["corrected_contact_type"] = "Internal"
+    elif "direct guest" in lower or "guest directly" in lower:
+        corrections["corrected_contact_type"] = "Direct guest"
+
+    if "not upset" in lower or "isn't upset" in lower or "not angry" in lower:
+        corrections["corrected_sentiment"] = "Neutral"
+    elif any(term in lower for term in ["positive", "happy", "thankful", "friendly"]):
+        corrections["corrected_sentiment"] = "Positive"
+    elif any(term in lower for term in _UPSET_TERMS):
+        corrections["corrected_sentiment"] = "Upset"
+
+    return corrections
+
+
+def apply_adaptive_feedback(
+    email: dict[str, Any],
+    analysis: dict[str, Any],
+    feedback_entries: list[dict[str, Any]],
+) -> dict[str, Any]:
+    if not feedback_entries:
+        analysis.setdefault("feedback_applied", False)
+        analysis.setdefault("adaptive_explanation", "")
+        return analysis
+
+    conversation_id = str(email.get("conversation_id") or "")
+    email_id = int(email.get("id") or 0)
+    specific: list[dict[str, Any]] = []
+    general: list[dict[str, Any]] = []
+    for entry in feedback_entries:
+        if str(entry.get("conversation_id") or "") == conversation_id or int(entry.get("email_id") or 0) == email_id:
+            specific.append(entry)
+        elif _feedback_similarity(email, entry) >= 0.18:
+            general.append(entry)
+
+    applicable = specific or general[:1]
+    if not applicable:
+        analysis.setdefault("feedback_applied", False)
+        analysis.setdefault("adaptive_explanation", "")
+        return analysis
+
+    for entry in reversed(applicable):
+        corrections = infer_feedback_corrections(str(entry.get("feedback_text") or ""), email, analysis)
+        for source_key, correction_key in (
+            ("corrected_urgency", "corrected_urgency"),
+            ("corrected_category", "corrected_category"),
+            ("corrected_owner", "corrected_owner"),
+            ("corrected_contact_type", "corrected_contact_type"),
+            ("corrected_sentiment", "corrected_sentiment"),
+        ):
+            if entry.get(source_key) not in (None, ""):
+                corrections[correction_key] = entry[source_key]
+        _apply_feedback_corrections(analysis, corrections)
+
+    analysis["feedback_applied"] = True
+    analysis["adaptive_explanation"] = "Specific feedback" if specific else "Similar prior feedback"
+    analysis["analysis_engine"] = "local-adaptive-feedback"
+    return analysis
+
+
+def _arrival_urgency_score(text: str, today: date | None = None) -> int | None:
+    today = today or date.today()
+    text = text.lower()
+    if any(term in text for term in ("arriving today", "arrival today", "check in today", "checking in today", "tonight")):
+        return 5
+    if any(term in text for term in ("arriving tomorrow", "arrival tomorrow", "check in tomorrow", "checking in tomorrow")):
+        return 5
+
+    arrival = _arrival_date_for(text, today)
+    if arrival is None:
+        return None
+
+    days_until = (arrival - today).days
+    if 0 <= days_until <= 1:
+        return 5
+    if 2 <= days_until <= 7:
+        return 4
+    if arrival.year == today.year and arrival.month == today.month:
+        return 3
+    if arrival.year == today.year:
+        return 2
+    if arrival.year > today.year:
+        return 1
+    return None
+
+
+def _arrival_date_for(text: str, today: date) -> date | None:
+    patterns = [
+        rf"{_ARRIVAL_HINT}.{{0,50}}?\b(\d{{1,2}})[/-](\d{{1,2}})(?:[/-](\d{{2,4}}))?\b",
+        rf"{_ARRIVAL_HINT}.{{0,50}}?\b({'|'.join(_MONTHS)})\.?\s+(\d{{1,2}})(?:st|nd|rd|th)?(?:,?\s+(\d{{4}}))?\b",
+        rf"\b({'|'.join(_MONTHS)})\.?\s+(\d{{1,2}})(?:st|nd|rd|th)?\s*(?:-|to|through|/)\s*\d{{1,2}}(?:st|nd|rd|th)?(?:,?\s+(\d{{4}}))?\b",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            parsed = _date_from_match(match, today)
+            if parsed:
+                return parsed
+
+    if re.search(_ARRIVAL_HINT, text, re.IGNORECASE):
+        for pattern in (
+            r"\b(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?\b",
+            rf"\b({'|'.join(_MONTHS)})\.?\s+(\d{{1,2}})(?:st|nd|rd|th)?(?:,?\s+(\d{{4}}))?\b",
+        ):
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                parsed = _date_from_match(match, today)
+                if parsed:
+                    return parsed
+    return None
+
+
+def _date_from_match(match: re.Match[str], today: date) -> date | None:
+    first = match.group(1).lower()
+    if first in _MONTHS:
+        month = _MONTHS[first]
+        day = int(match.group(2))
+        year_text = match.group(3)
+    else:
+        month = int(match.group(1))
+        day = int(match.group(2))
+        year_text = match.group(3)
+
+    year = _normalize_year(year_text, today)
+    try:
+        parsed = date(year, month, day)
+    except ValueError:
+        return None
+
+    if year_text is None and parsed < today - timedelta(days=7):
+        try:
+            return date(today.year + 1, month, day)
+        except ValueError:
+            return None
+    return parsed
+
+
+def _normalize_year(year_text: str | None, today: date) -> int:
+    if not year_text:
+        return today.year
+    year = int(year_text)
+    if year < 100:
+        return 2000 + year
+    return year
 
 
 def analyze_email(email: dict[str, Any], settings: Settings) -> dict[str, Any]:
@@ -39,44 +459,79 @@ def triage_email(email: dict[str, Any], settings: Settings | None = None) -> dic
 
 
 def urgency_score(email: dict[str, Any]) -> int:
+    override = email.get("urgency_override") or email.get("adaptive_urgency_score")
+    if override not in (None, ""):
+        try:
+            return max(1, min(5, int(override)))
+        except (TypeError, ValueError):
+            pass
+
     score = PRIORITY_SCORE.get(str(email.get("priority_level") or ""), 2)
     category = email.get("category") or ""
-    text = " ".join(
-        str(email.get(key) or "")
-        for key in ("subject", "body_preview", "body_text", "body_content", "ai_summary")
-    ).lower()
+    body = email.get("body_text") or email.get("body_content") or email.get("body_preview") or ""
+    latest_body = latest_message_text(str(body))
+    text = f"{email.get('subject') or ''}\n{latest_body}".lower()
     risks = email.get("risk_flags") or []
     if isinstance(risks, str):
         risks = [risks]
+    sentiment = str(email.get("guest_sentiment") or "").lower()
 
-    if category in {"Urgent same-day arrival", "Complaint", "Billing dispute", "Accessibility request"}:
+    arrival_score = _arrival_urgency_score(text)
+    if arrival_score is not None:
+        score = arrival_score
+
+    if category == "Urgent same-day arrival":
+        score = max(score, 5)
+    if category in {"Complaint", "Billing dispute", "Accessibility request"}:
         score = max(score, 4)
-    if any(flag in risks for flag in ["Legal", "Medical", "Discrimination", "Chargeback", "Manager review required"]):
+    if any(flag in risks for flag in ["Legal", "Medical", "Discrimination", "Chargeback", "Leadership review required"]):
         score = 5
-    if any(term in text for term in ["urgent", "asap", "as soon as possible", "today", "tonight", "immediately"]):
+    if sentiment == "upset" or any(term in text for term in _UPSET_TERMS):
         score = max(score, 4)
+        if any(term in text for term in _STRONG_UPSET_TERMS):
+            score = 5
+    elif sentiment == "concerned":
+        score = max(score, 4)
+    if any(term in text for term in ["urgent", "asap", "as soon as possible", "immediately"]):
+        score = max(score, 5 if "immediately" in text else 4)
+    if any(term in text for term in ["arriving today", "arrival today", "check in today", "tonight"]):
+        score = max(score, 5)
     if any(term in text for term in ["fifa", "vip", "owner", "celebrity"]):
         score = max(score, 3)
     if email.get("importance") == "high":
         score = max(score, 3)
+    if arrival_score != 5 and _is_completion_update(text) and not _has_high_risk(risks):
+        score = min(score, 3)
+    if arrival_score != 5 and _is_cca_context(text) and sentiment != "upset" and not _has_high_risk(risks):
+        score = min(score, 3)
     return max(1, min(5, int(score)))
 
 
 def heuristic_analysis(email: dict[str, Any], settings: Settings | None = None) -> dict[str, Any]:
     subject = email.get("subject") or "(No subject)"
-    body = email.get("body_text") or email.get("body_content") or email.get("body_preview") or ""
+    raw_body = email.get("body_text") or email.get("body_content") or email.get("body_preview") or ""
+    body = latest_message_text(str(raw_body)) or str(raw_body)
     sender_name = email.get("sender_name") or email.get("from_name") or ""
     sender_email = (email.get("sender_email") or email.get("from_email") or "").lower()
     text = f"{subject}\n{body}".lower()
 
     category = _category_for(text, sender_email)
     risks = _risk_flags_for(text, category)
-    priority = _priority_for(text, category, risks, email.get("importance"))
     sentiment = _sentiment_for(text, category)
-    owner = _owner_for(category, risks)
+    contact_type = _contact_type_for(sender_email, sender_name, text, category)
+    priority = _priority_for(text, category, risks, sentiment, email.get("importance"))
+    owner = _owner_for(text, category, risks)
     missing = _missing_information_for(text, category)
     next_steps = _next_steps_for(category, risks, missing)
-    summary = _summary_for(subject, category, priority, missing)
+    if _is_cca_context(text):
+        next_steps = [
+            "Apply the completed CCA form to the reservation.",
+            "Reply to confirm the form has been applied.",
+        ]
+        missing = []
+    summary = _summary_for(subject, category, priority, contact_type, missing)
+    if _is_cca_context(text):
+        summary = "Completed CCA form needs to be applied to the reservation and confirmed back to the sender."
     draft = _draft_reply(sender_name, sender_email, category, missing)
 
     return {
@@ -88,6 +543,7 @@ def heuristic_analysis(email: dict[str, Any], settings: Settings | None = None) 
         "missing_information": missing,
         "risk_flags": risks,
         "recommended_department_owner": owner,
+        "contact_type": contact_type,
         "suggested_reply_draft": draft,
         "model": settings.openai_model if settings else "heuristic",
         "analysis_engine": "heuristic",
@@ -114,6 +570,7 @@ def _analyze_with_openai(email: dict[str, Any], settings: Settings) -> dict[str,
         "allowed_priority_levels": PRIORITY_LEVELS,
         "allowed_risk_flags": RISK_FLAGS,
         "allowed_department_owners": DEPARTMENT_OWNERS,
+        "allowed_contact_types": CONTACT_TYPES,
     }
     client = OpenAI(api_key=settings.openai_api_key)
     raw = _responses_json(client, settings.openai_model, payload)
@@ -143,6 +600,7 @@ def _responses_json(client: Any, model: str, payload: dict[str, Any]) -> str:
             "missing_information": {"type": "array", "items": {"type": "string"}},
             "risk_flags": {"type": "array", "items": {"type": "string", "enum": RISK_FLAGS}},
             "recommended_department_owner": {"type": "string", "enum": DEPARTMENT_OWNERS},
+            "contact_type": {"type": "string", "enum": CONTACT_TYPES},
             "suggested_reply_draft": {"type": "string"},
         },
         "required": [
@@ -154,6 +612,7 @@ def _responses_json(client: Any, model: str, payload: dict[str, Any]) -> str:
             "missing_information",
             "risk_flags",
             "recommended_department_owner",
+            "contact_type",
             "suggested_reply_draft",
         ],
     }
@@ -161,6 +620,8 @@ def _responses_json(client: Any, model: str, payload: dict[str, Any]) -> str:
         "You classify and draft replies for a luxury hotel shared Outlook inbox. "
         "The app is read-only: do not instruct the user to send, delete, archive, move, "
         "or modify Outlook messages. Drafts are for human review only. "
+        "Department owner must be one of the provided operating departments; do not use Management. "
+        "Classify contact_type as Internal, Group contact, Travel agency, or Direct guest. "
         "Use polished, calm, warm, precise, professional luxury-hospitality language. "
         "Do not guarantee upgrades, views, early check-in, late checkout, connecting rooms, "
         "amenities, or special requests unless explicitly confirmed in the email. "
@@ -214,6 +675,7 @@ def _normalize_analysis(data: dict[str, Any]) -> dict[str, Any]:
         else "Reservations"
     )
     risks = [flag for flag in _as_list(data.get("risk_flags")) if flag in RISK_FLAGS]
+    contact_type = data.get("contact_type") if data.get("contact_type") in CONTACT_TYPES else "Direct guest"
     return {
         "ai_summary": str(data.get("ai_summary") or ""),
         "category": category,
@@ -223,6 +685,7 @@ def _normalize_analysis(data: dict[str, Any]) -> dict[str, Any]:
         "missing_information": _as_list(data.get("missing_information")),
         "risk_flags": risks,
         "recommended_department_owner": owner,
+        "contact_type": contact_type,
         "suggested_reply_draft": str(data.get("suggested_reply_draft") or ""),
     }
 
@@ -237,11 +700,108 @@ def _as_list(value: Any) -> list[str]:
     return [str(value)]
 
 
+def _apply_feedback_corrections(analysis: dict[str, Any], corrections: dict[str, Any]) -> None:
+    category = corrections.get("corrected_category")
+    if category in CATEGORIES:
+        analysis["category"] = category
+
+    owner = corrections.get("corrected_owner")
+    if owner in DEPARTMENT_OWNERS:
+        analysis["recommended_department_owner"] = owner
+
+    contact_type = corrections.get("corrected_contact_type")
+    if contact_type in CONTACT_TYPES:
+        analysis["contact_type"] = contact_type
+
+    sentiment = corrections.get("corrected_sentiment")
+    if sentiment:
+        analysis["guest_sentiment"] = str(sentiment)
+
+    if corrections.get("learned_summary"):
+        analysis["ai_summary"] = str(corrections["learned_summary"])
+
+    if corrections.get("learned_next_steps"):
+        analysis["internal_next_steps"] = _as_list(corrections["learned_next_steps"])
+
+    if corrections.get("clear_missing"):
+        analysis["missing_information"] = []
+
+    remove_risks = set(_as_list(corrections.get("remove_risks")))
+    if remove_risks:
+        analysis["risk_flags"] = [flag for flag in _as_list(analysis.get("risk_flags")) if flag not in remove_risks]
+
+    urgency = corrections.get("corrected_urgency")
+    if urgency not in (None, ""):
+        try:
+            score = max(1, min(5, int(urgency)))
+        except (TypeError, ValueError):
+            return
+        analysis["urgency_score"] = score
+        analysis["urgency_override"] = score
+        analysis["priority_level"] = _priority_for_score(score)
+
+
+def _priority_for_score(score: int) -> str:
+    if score >= 5:
+        return "Immediate"
+    if score >= 4:
+        return "High"
+    if score <= 1:
+        return "Low"
+    return "Normal"
+
+
+def _feedback_similarity(email: dict[str, Any], entry: dict[str, Any]) -> float:
+    email_tokens = _significant_tokens(_feedback_match_text(email))
+    feedback_tokens = _significant_tokens(str(entry.get("feedback_text") or ""))
+    if not email_tokens or not feedback_tokens:
+        return 0.0
+    overlap = email_tokens & feedback_tokens
+    if len(overlap) < 2:
+        return 0.0
+    return len(overlap) / max(1, min(len(email_tokens), len(feedback_tokens)))
+
+
+def _feedback_match_text(email: dict[str, Any]) -> str:
+    body = email.get("body_text") or email.get("body_content") or email.get("body_preview") or ""
+    return " ".join(
+        [
+            str(email.get("subject") or ""),
+            str(email.get("sender_name") or ""),
+            str(email.get("sender_email") or ""),
+            latest_message_text(str(body)),
+        ]
+    )
+
+
+def _significant_tokens(text: str) -> set[str]:
+    tokens = set(re.findall(r"[a-z0-9]{3,}", text.lower()))
+    return {
+        token
+        for token in tokens
+        if token not in _STOP_WORDS and (len(token) >= 4 or token in {"ada", "cca", "fhr", "vip"})
+    }
+
+
+def _is_cca_context(text: str) -> bool:
+    return any(term in text for term in _CCA_TERMS)
+
+
+def _is_completion_update(text: str) -> bool:
+    return any(term in text for term in _COMPLETION_TERMS)
+
+
+def _has_high_risk(risks: list[str]) -> bool:
+    return any(flag in risks for flag in ["Legal", "Medical", "Discrimination", "Chargeback", "Leadership review required"])
+
+
 def _category_for(text: str, sender_email: str) -> str:
     if any(domain in sender_email for domain in INTERNAL_DOMAINS):
         if "rooming list" in text or "group" in text or "block" in text:
             return "Rooming list / group"
         return "Internal request"
+    if _is_cca_context(text):
+        return "General inquiry"
     if "same-day" in text or ("arrival" in text and any(term in text for term in ["today", "tonight"])):
         return "Urgent same-day arrival"
     if "vip" in text or "owner" in text or "celebrity" in text:
@@ -252,7 +812,9 @@ def _category_for(text: str, sender_email: str) -> str:
         return "Accessibility request"
     if any(term in text for term in ["virtuoso", "fhr", "fine hotels", "consortia", "amex"]):
         return "Consortia / FHR / Virtuoso"
-    if any(term in text for term in ["complaint", "disappointed", "unacceptable", "manager", "poor experience"]):
+    if any(term in text for term in _STRONG_UPSET_TERMS) or (
+        any(term in text for term in _UPSET_TERMS) and not _is_completion_update(text)
+    ):
         return "Complaint"
     if any(term in text for term in ["amenity", "champagne", "flowers", "cake", "birthday", "anniversary"]):
         return "Amenity request"
@@ -283,54 +845,91 @@ def _risk_flags_for(text: str, category: str) -> list[str]:
         risks.append("Discrimination")
     if category == "VIP pre-arrival" or "vip" in text:
         risks.append("VIP")
-    if category == "Complaint" or any(
-        term in text for term in ["social media", "negative review", "online review", "tripadvisor"]
-    ):
+    if category == "Complaint" or any(term in text for term in ["social media", "negative review", "online review", "tripadvisor"]):
         risks.append("Reputation risk")
     if any(flag in risks for flag in ["Legal", "Medical", "ADA / accessibility", "Discrimination", "Chargeback"]):
-        risks.append("Manager review required")
+        risks.append("Leadership review required")
     return list(dict.fromkeys(risks))
 
 
-def _priority_for(text: str, category: str, risks: list[str], importance: str | None) -> str:
+def _priority_for(text: str, category: str, risks: list[str], sentiment: str, importance: str | None) -> str:
+    arrival_score = _arrival_urgency_score(text)
+    if arrival_score == 5:
+        return "Immediate"
+    if arrival_score == 4:
+        if _is_completion_update(text) and not _has_high_risk(risks):
+            return "Normal"
+        return "High"
     if category == "Urgent same-day arrival" or any(
         term in text for term in ["immediately", "urgent", "as soon as possible", "tonight"]
     ):
         return "Immediate"
     if any(flag in risks for flag in ["Legal", "Medical", "Discrimination", "Chargeback"]):
         return "Immediate"
+    if sentiment == "Upset":
+        return "High"
+    if sentiment == "Concerned":
+        return "High"
     if category in {"VIP pre-arrival", "Billing dispute", "Complaint", "Accessibility request"}:
         return "High"
     if importance == "high":
         return "High"
-    if category in {"Duplicate follow-up", "Internal request"}:
+    if arrival_score in {1, 2} or category in {"Duplicate follow-up", "Internal request"}:
         return "Low"
     return "Normal"
 
 
 def _sentiment_for(text: str, category: str) -> str:
-    if category == "Complaint" or any(term in text for term in ["disappointed", "unacceptable", "angry"]):
+    if _is_completion_update(text) and any(term in text for term in _POSITIVE_TERMS):
+        return "Positive"
+    if category == "Complaint" or any(term in text for term in _UPSET_TERMS):
         return "Upset"
     if category in {"Billing dispute", "Accessibility request"}:
         return "Concerned"
-    if any(term in text for term in ["thank you", "appreciate", "warmly"]):
+    if any(term in text for term in _CONCERN_TERMS):
+        return "Concerned"
+    if any(term in text for term in _POSITIVE_TERMS):
         return "Positive"
     return "Neutral"
 
 
-def _owner_for(category: str, risks: list[str]) -> str:
-    if "Manager review required" in risks:
-        return "Management"
+def _contact_type_for(sender_email: str, sender_name: str, text: str, category: str) -> str:
+    sender_combined = f"{sender_email} {sender_name}".lower()
+    combined = f"{sender_combined} {text}".lower()
+    if any(domain in sender_email for domain in INTERNAL_DOMAINS):
+        return "Internal"
+    if category == "Rooming list / group" or any(term in combined for term in ["group contact", "rooming list", "group block"]):
+        return "Group contact"
+    agency_body_terms = tuple(term for term in TRAVEL_AGENCY_TERMS if term != "concierge")
+    if (
+        category == "Consortia / FHR / Virtuoso"
+        or any(term in sender_combined for term in TRAVEL_AGENCY_TERMS)
+        or any(term in text for term in agency_body_terms)
+    ):
+        return "Travel agency"
+    return "Direct guest"
+
+
+def _owner_for(text: str, category: str, risks: list[str]) -> str:
+    if _is_cca_context(text):
+        return "Reservations"
+    if any(term in text for term in ["engineering", "engineer", "maintenance", "air conditioning", "a/c", "ac not", "plumbing", "leak", "toilet", "shower not", "lights", "thermostat"]):
+        return "Engineering"
+    if any(term in text for term in ["housekeeping", "clean", "cleaning", "linen", "towels", "amenities missing", "turn down", "turndown"]):
+        return "Housekeeping"
+    if any(term in text for term in ["restaurant", "dinner", "lunch", "car service", "transportation", "spa", "flowers", "cake", "champagne", "amenity", "concierge"]):
+        return "Concierge"
     return {
-        "Billing dispute": "Finance",
         "Consortia / FHR / Virtuoso": "Reservations",
-        "Complaint": "Guest Relations",
+        "Complaint": "Front Desk",
         "Amenity request": "Concierge",
-        "Accessibility request": "Accessibility Coordinator",
+        "Accessibility request": "Reservations",
         "Rooming list / group": "Sales",
-        "Rate inquiry": "Revenue Management",
-        "Urgent same-day arrival": "Front Office",
-        "VIP pre-arrival": "Guest Relations",
+        "Rate inquiry": "Reservations",
+        "Urgent same-day arrival": "Front Desk",
+        "VIP pre-arrival": "Reservations",
+        "Internal request": "Reservations",
+        "Billing dispute": "Reservations",
     }.get(category, "Reservations")
 
 
@@ -359,7 +958,7 @@ def _next_steps_for(category: str, risks: list[str], missing: list[str]) -> list
         {
             "VIP pre-arrival": [
                 "Verify reservation notes, VIP profile, arrival time, and confirmed amenities.",
-                "Coordinate any confirmed recognition with Guest Relations and Front Office.",
+                "Coordinate any confirmed recognition with Reservations and Front Desk.",
             ],
             "Rate inquiry": [
                 "Check available rates and package inclusions before quoting.",
@@ -374,7 +973,7 @@ def _next_steps_for(category: str, risks: list[str], missing: list[str]) -> list
                 "Avoid promising upgrade or amenity fulfillment beyond confirmed program terms.",
             ],
             "Complaint": [
-                "Escalate to Guest Relations or a manager for service recovery review.",
+                "Route to Front Desk leadership for service recovery review when needed.",
                 "Acknowledge concern without admitting fault until details are verified.",
             ],
             "Amenity request": [
@@ -390,21 +989,21 @@ def _next_steps_for(category: str, risks: list[str], missing: list[str]) -> list
                 "Confirm missing names, room types, and billing instructions with Sales.",
             ],
             "Urgent same-day arrival": [
-                "Prioritize reservation verification and alert Front Office if action is needed today.",
+                "Prioritize reservation verification and alert Front Desk if action is needed today.",
                 "Confirm only arrangements already visible as approved or available.",
             ],
         }.get(category, ["Review the reservation context and respond with confirmed information only."])
     )
-    if "Manager review required" in risks:
-        steps.append("Route to a manager before final response.")
+    if "Leadership review required" in risks:
+        steps.append("Route to the appropriate department leader before final response.")
     return steps
 
 
-def _summary_for(subject: str, category: str, priority: str, missing: list[str]) -> str:
+def _summary_for(subject: str, category: str, priority: str, contact_type: str, missing: list[str]) -> str:
     suffix = ""
     if missing:
         suffix = f" Missing: {', '.join(missing)}."
-    return f"{priority} {category.lower()} email about: {subject}.{suffix}"
+    return f"{priority} {contact_type.lower()} {category.lower()} email about: {subject}.{suffix}"
 
 
 def _draft_reply(sender_name: str, sender_email: str, category: str, missing: list[str]) -> str:

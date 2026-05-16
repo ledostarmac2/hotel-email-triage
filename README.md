@@ -2,7 +2,7 @@
 
 Read-only Outlook email intelligence dashboard for a luxury hotel shared inbox.
 
-This version connects to Microsoft 365 through Microsoft Graph, imports emails into local SQLite, summarizes and classifies them, identifies follow-up work, flags risk, and prepares suggested luxury-hospitality reply drafts for human review.
+This version primarily reads classic Outlook for Windows through local read-only `pywin32` COM import, imports emails into local SQLite, summarizes and classifies them, identifies follow-up work, flags risk, and prepares suggested luxury-hospitality reply drafts for human review. Microsoft Graph remains available as an optional read-only path when tenant credentials are configured.
 
 It does not send, delete, archive, move, mark read, categorize, or otherwise modify Outlook messages.
 
@@ -18,7 +18,8 @@ It serves a simple browser dashboard from FastAPI, so there is no separate React
 
 ## Features
 
-- Microsoft Graph OAuth sign-in with Microsoft Entra ID
+- Direct read-only classic Outlook import from `NYCWA_Reservations > Inbox`
+- Optional Microsoft Graph OAuth sign-in with Microsoft Entra ID
 - Personal mailbox mode: `GET /me/messages`
 - Shared mailbox mode: `GET /users/{SHARED_MAILBOX_EMAIL}/mailFolders/Inbox/messages`
 - Graph field selection limited to:
@@ -33,8 +34,8 @@ It serves a simple browser dashboard from FastAPI, so there is no separate React
   - `importance`
   - `hasAttachments`
 - SQLite email storage with duplicate prevention by Graph message ID
-- Mock email data for local use before credentials are configured
 - Local triage summary, category, urgency score 1-5, sentiment, next steps, missing information, risk flags, and owner
+- Conversation-level adaptive feedback for urgency and labeling corrections
 - Dashboard filters for category, status, and risk flag
 - On-demand AI recommended response modal for the selected email only
 - Local-only workflow status: `New`, `Reviewed`, `Drafted`, `Completed`, `Escalated`
@@ -72,7 +73,7 @@ Dashboard:
 http://127.0.0.1:8000
 ```
 
-The app seeds mock emails automatically when the SQLite database is empty. You can also click `Load Mock`.
+The app does not seed mock/demo messages in the active dashboard path. Refresh Inbox treats Outlook as the source of truth and removes local email rows not present in the current Outlook import.
 
 ## Microsoft Entra App Registration
 
@@ -98,7 +99,7 @@ For shared mailbox sync, the signed-in Microsoft 365 user must have access to th
 
 ## Outlook Sync
 
-The primary desktop workflow uses classic Outlook for Windows and the local VBA macro in:
+The primary desktop workflow uses classic Outlook for Windows through direct read-only `pywin32` COM import. The local VBA macro remains a fallback only if the direct import path is unavailable:
 
 ```text
 outlook_dashboard/static/outlook_refresh_macro.bas
@@ -110,13 +111,13 @@ Paste that macro into Outlook VBA with the name:
 ExportNYCWAReservationsInboxOnly
 ```
 
-The dashboard `Refresh Inbox` button starts that macro. The macro reads only:
+The dashboard `Refresh Inbox` button reads only:
 
 ```text
 NYCWA_Reservations > Inbox
 ```
 
-It saves local `.msg` copies under `data/outlook_exports`, posts the inbox data to the local app, and the app performs fast local triage without calling OpenAI.
+It saves local `.msg` copies under `data/outlook_exports`, imports the inbox data to local SQLite, deletes stale local rows that are no longer in Outlook, and performs fast local triage without calling OpenAI.
 
 Microsoft Graph sync is still available if credentials are configured. Use `Connect Microsoft` first, then call the Graph sync route:
 
@@ -153,7 +154,6 @@ GET  /api/config
 GET  /api/taxonomy
 GET  /auth/login?mode=shared
 GET  /auth/callback
-POST /api/mock/seed
 POST /api/outlook-desktop/export-inbox
 POST /api/outlook-desktop/import-json
 POST /api/sync/outlook?mode=shared&top=25&analyze=true
@@ -161,6 +161,7 @@ POST /api/ai/process-pending?limit=25
 GET  /api/emails
 GET  /api/emails/{email_id}
 POST /api/emails/{email_id}/analyze
+POST /api/emails/{email_id}/feedback
 PATCH /api/emails/{email_id}/status
 ```
 

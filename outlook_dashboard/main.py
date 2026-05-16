@@ -12,16 +12,20 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from .ai import analyze_email, triage_email, urgency_score
+from .ai import analyze_email, infer_feedback_corrections, triage_conversation, triage_email, urgency_score
 from .config import DATA_DIR, get_settings
 from .database import (
-    email_count,
+    delete_emails_not_in_graph_ids,
     emails_without_analysis,
     get_email,
     initialize_database,
     list_emails,
+    list_conversation_emails,
+    list_feedback_for_conversation,
+    list_recent_triage_feedback,
     record_sync_run,
     save_analysis,
+    save_triage_feedback,
     update_status,
     upsert_email,
 )
@@ -33,11 +37,10 @@ from .graph import (
     exchange_callback_code,
     fetch_recent_messages,
 )
-from .mock_data import build_mock_emails
 from .outlook_desktop import OutlookDesktopExportError, export_mailbox_folder_to_msg
 from .runtime_log import configure as _configure_runtime_log
 from .runtime_log import get_logger
-from .taxonomy import CATEGORIES, PRIORITY_LEVELS, RISK_FLAGS, STATUSES
+from .taxonomy import CATEGORIES, CONTACT_TYPES, DEPARTMENT_OWNERS, PRIORITY_LEVELS, RISK_FLAGS, STATUSES
 
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -59,8 +62,6 @@ async def lifespan(_: FastAPI):
         settings.graph_configured,
     )
     initialize_database(settings.database_path)
-    if settings.auto_seed_mock and email_count(settings.database_path) == 0:
-        _seed_mock(settings, analyze=True)
     yield
     _log.info("Server shutdown.")
 
@@ -106,6 +107,15 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 class StatusUpdate(BaseModel):
     status: str
+
+
+class TriageFeedbackRequest(BaseModel):
+    feedback_text: str = Field(min_length=2, max_length=4000)
+    corrected_urgency: int | None = Field(default=None, ge=1, le=5)
+    corrected_category: str | None = None
+    corrected_owner: str | None = None
+    corrected_contact_type: str | None = None
+    corrected_sentiment: str | None = None
 
 
 class DesktopOutlookMessage(BaseModel):
@@ -173,6 +183,8 @@ def taxonomy() -> dict[str, list[str]]:
         "priorities": PRIORITY_LEVELS,
         "risk_flags": RISK_FLAGS,
         "statuses": STATUSES,
+        "contact_types": CONTACT_TYPES,
+        "department_owners": DEPARTMENT_OWNERS,
     }
 
 
@@ -199,12 +211,6 @@ def auth_callback(code: str | None = None, state: str | None = None, error: str 
     return RedirectResponse("/")
 
 
-@app.post("/api/mock/seed")
-def seed_mock() -> dict[str, object]:
-    settings = get_settings()
-    return _seed_mock(settings, analyze=True)
-
-
 @app.post("/api/outlook-desktop/export-inbox")
 def export_outlook_desktop_inbox() -> dict[str, object]:
     settings = get_settings()
@@ -221,6 +227,37 @@ def export_outlook_desktop_inbox() -> dict[str, object]:
             settings.outlook_export_dir,
             settings.outlook_export_macro,
         )
+        messages = result.pop("messages", None)
+        if messages is not None:
+            stored = _store_and_optionally_analyze(messages, settings, analyze=True)
+            imported_ids = [str(message["graph_message_id"]) for message in messages if message.get("graph_message_id")]
+            deleted_count = delete_emails_not_in_graph_ids(imported_ids, db_path=settings.database_path)
+            record_sync_run(
+                source="outlook_desktop",
+                mailbox_mode="shared",
+                fetched_count=len(messages),
+                inserted_count=stored["inserted_count"],
+                updated_count=stored["updated_count"],
+                analyzed_count=stored["analyzed_count"],
+                db_path=settings.database_path,
+            )
+            _log.info(
+                "Outlook direct import completed: fetched=%s inserted=%s updated=%s analyzed=%s deleted=%s",
+                len(messages),
+                stored["inserted_count"],
+                stored["updated_count"],
+                stored["analyzed_count"],
+                deleted_count,
+            )
+            return {
+                "source": "outlook_desktop",
+                "fetched_count": len(messages),
+                "deleted_count": deleted_count,
+                "read_only_outlook": True,
+                **result,
+                **stored,
+            }
+
         _log.info("Outlook export launched macro successfully: %s", settings.outlook_export_macro)
         return {"source": "outlook_desktop", **result}
     except OutlookDesktopExportError as exc:
@@ -321,7 +358,12 @@ def api_list_emails(
         limit=limit,
         db_path=settings.database_path,
     )
-    emails = [_decorate_email(email) for email in emails]
+    feedback_entries = list_recent_triage_feedback(limit=150, db_path=settings.database_path)
+    emails = _group_conversation_rows(
+        [_decorate_email(email) for email in emails],
+        settings=settings,
+        feedback_entries=feedback_entries,
+    )
     emails.sort(key=lambda email: (email["urgency_score"], email.get("received_datetime") or ""), reverse=True)
     return {"emails": emails, "count": len(emails)}
 
@@ -332,7 +374,21 @@ def api_get_email(email_id: int) -> dict[str, object]:
     email = get_email(email_id, db_path=settings.database_path)
     if not email:
         raise HTTPException(status_code=404, detail="Email not found.")
-    return {"email": _decorate_email(email)}
+    decorated = _decorate_email(email)
+    conversation_id = decorated.get("conversation_id")
+    if conversation_id:
+        raw_messages = list_conversation_emails(str(conversation_id), db_path=settings.database_path)
+        feedback_entries = list_recent_triage_feedback(limit=150, db_path=settings.database_path)
+        messages = [_decorate_email(row) for row in raw_messages]
+        decorated = _apply_conversation_triage(decorated, raw_messages, settings, feedback_entries)
+        decorated["feedback_count"] = len(
+            list_feedback_for_conversation(str(conversation_id), db_path=settings.database_path)
+        )
+    else:
+        messages = [decorated]
+    decorated["conversation_messages"] = messages
+    decorated["conversation_email_count"] = len(messages)
+    return {"email": decorated}
 
 
 @app.post("/api/emails/{email_id}/analyze")
@@ -358,6 +414,52 @@ def api_analyze_email(email_id: int) -> dict[str, object]:
     save_analysis(email_id, analysis, db_path=settings.database_path)
     refreshed = get_email(email_id, db_path=settings.database_path)
     return {"email": _decorate_email(refreshed or {})}
+
+
+@app.post("/api/emails/{email_id}/feedback")
+def api_triage_feedback(email_id: int, payload: TriageFeedbackRequest) -> dict[str, object]:
+    settings = get_settings()
+    email = get_email(email_id, db_path=settings.database_path)
+    if not email:
+        raise HTTPException(status_code=404, detail="Email not found.")
+
+    corrections = infer_feedback_corrections(payload.feedback_text, email)
+    explicit = {
+        "corrected_urgency": payload.corrected_urgency,
+        "corrected_category": payload.corrected_category,
+        "corrected_owner": payload.corrected_owner,
+        "corrected_contact_type": payload.corrected_contact_type,
+        "corrected_sentiment": payload.corrected_sentiment,
+    }
+    for key, value in explicit.items():
+        if value not in (None, ""):
+            corrections[key] = value
+
+    _validate_feedback_corrections(corrections)
+    feedback_id = save_triage_feedback(
+        email_id=email_id,
+        conversation_id=str(email.get("conversation_id") or ""),
+        feedback_text=payload.feedback_text,
+        corrected_urgency=corrections.get("corrected_urgency"),
+        corrected_category=corrections.get("corrected_category"),
+        corrected_owner=corrections.get("corrected_owner"),
+        corrected_contact_type=corrections.get("corrected_contact_type"),
+        corrected_sentiment=corrections.get("corrected_sentiment"),
+        db_path=settings.database_path,
+    )
+
+    conversation_id = str(email.get("conversation_id") or "")
+    raw_messages = (
+        list_conversation_emails(conversation_id, db_path=settings.database_path)
+        if conversation_id
+        else [email]
+    )
+    feedback_entries = list_recent_triage_feedback(limit=150, db_path=settings.database_path)
+    decorated = _apply_conversation_triage(_decorate_email(email), raw_messages, settings, feedback_entries)
+    decorated["conversation_messages"] = [_decorate_email(row) for row in raw_messages]
+    decorated["conversation_email_count"] = len(raw_messages)
+    decorated["feedback_count"] = len(list_feedback_for_conversation(conversation_id, db_path=settings.database_path))
+    return {"email": decorated, "feedback_id": feedback_id, "corrections": corrections}
 
 
 @app.patch("/api/emails/{email_id}/status")
@@ -390,6 +492,22 @@ def _desktop_message_to_email(message: DesktopOutlookMessage, mailbox: str, fold
     }
 
 
+def _validate_feedback_corrections(corrections: dict[str, object]) -> None:
+    if corrections.get("corrected_category") and corrections["corrected_category"] not in CATEGORIES:
+        raise HTTPException(status_code=400, detail="Unsupported category correction.")
+    if corrections.get("corrected_owner") and corrections["corrected_owner"] not in DEPARTMENT_OWNERS:
+        raise HTTPException(status_code=400, detail="Unsupported owner correction.")
+    if corrections.get("corrected_contact_type") and corrections["corrected_contact_type"] not in CONTACT_TYPES:
+        raise HTTPException(status_code=400, detail="Unsupported contact correction.")
+    if corrections.get("corrected_urgency") not in (None, ""):
+        try:
+            score = int(corrections["corrected_urgency"])
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail="Unsupported urgency correction.") from exc
+        if score < 1 or score > 5:
+            raise HTTPException(status_code=400, detail="Unsupported urgency correction.")
+
+
 def _decorate_email(email: dict[str, object]) -> dict[str, object]:
     decorated = dict(email)
     decorated["urgency_score"] = urgency_score(decorated)
@@ -397,19 +515,57 @@ def _decorate_email(email: dict[str, object]) -> dict[str, object]:
     return decorated
 
 
-def _seed_mock(settings, analyze: bool) -> dict[str, object]:
-    messages = build_mock_emails()
-    result = _store_and_optionally_analyze(messages, settings, analyze=analyze)
-    record_sync_run(
-        source="mock",
-        mailbox_mode="mock",
-        fetched_count=len(messages),
-        inserted_count=result["inserted_count"],
-        updated_count=result["updated_count"],
-        analyzed_count=result["analyzed_count"],
-        db_path=settings.database_path,
-    )
-    return {"source": "mock", "fetched_count": len(messages), **result}
+def _apply_conversation_triage(
+    row: dict[str, object],
+    conversation: list[dict[str, object]],
+    settings,
+    feedback_entries: list[dict[str, object]],
+) -> dict[str, object]:
+    analysis = triage_conversation(conversation, settings=settings, feedback_entries=feedback_entries)
+    merged = dict(row)
+    for key in (
+        "ai_summary",
+        "category",
+        "priority_level",
+        "guest_sentiment",
+        "internal_next_steps",
+        "missing_information",
+        "risk_flags",
+        "recommended_department_owner",
+        "contact_type",
+        "analysis_engine",
+        "model",
+        "feedback_applied",
+        "adaptive_explanation",
+    ):
+        if key in analysis:
+            merged[key] = analysis[key]
+    if analysis.get("urgency_score") not in (None, ""):
+        merged["urgency_override"] = analysis["urgency_score"]
+    return _decorate_email(merged)
+
+
+def _group_conversation_rows(
+    emails: list[dict[str, object]],
+    *,
+    settings,
+    feedback_entries: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    grouped: dict[str, list[dict[str, object]]] = {}
+    for email in emails:
+        key = str(email.get("conversation_id") or email.get("graph_message_id") or email.get("id"))
+        grouped.setdefault(key, []).append(email)
+
+    rows: list[dict[str, object]] = []
+    for key, conversation in grouped.items():
+        conversation.sort(key=lambda email: (str(email.get("received_datetime") or ""), int(email.get("id") or 0)), reverse=True)
+        row = dict(conversation[0])
+        row["conversation_id"] = row.get("conversation_id") or key
+        row["conversation_email_count"] = len(conversation)
+        row = _apply_conversation_triage(row, conversation, settings, feedback_entries)
+        row["conversation_email_count"] = len(conversation)
+        rows.append(row)
+    return rows
 
 
 def _store_and_optionally_analyze(messages, settings, analyze: bool) -> dict[str, int]:

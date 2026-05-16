@@ -12,11 +12,11 @@ Decision: ReplyRight may read/import Outlook mail and update local review status
 
 Rationale: Hotel reservations email is operationally sensitive. Sending, moving, deleting, marking read, or categorizing Outlook messages needs separate user approval and a safer workflow.
 
-## 2026-05-16: Use VBA Macro As Primary Outlook Ingestion
+## 2026-05-16: Keep VBA Macro As Fallback Outlook Ingestion
 
-Decision: Use classic Outlook VBA to export/import `NYCWA_Reservations > Inbox`.
+Decision: Keep the classic Outlook VBA macro available as a fallback for `NYCWA_Reservations > Inbox` ingestion, but do not treat it as the primary path after the direct `pywin32` import was verified.
 
-Rationale: The ChatGPT Outlook connector was blocked by enterprise policy, and Entra app registration access was unavailable. The macro path works with the user's existing desktop Outlook access.
+Rationale: The ChatGPT Outlook connector was blocked by enterprise policy, and Entra app registration access was unavailable. The macro path is still a useful escape hatch, but direct read-only COM import is more reliable on the current machine.
 
 ## 2026-05-16: Local Rules For Bulk Triage, OpenAI On Demand
 
@@ -42,11 +42,41 @@ Decision: Replace the `msedge.exe --app` subprocess with `pywebview` using the `
 
 Rationale: Edge app mode opens through the user's existing Edge browser process, causing process-handoff (immediate exit, server shutdown) and no visual separation from the browser. pywebview with WebView2 creates a truly standalone embedded window — own taskbar entry, own process, no address bar, no tabs, no browser chrome. This is the same model VS Code uses (Electron/Chromium embedded). WebView2 Runtime is pre-installed on Windows 10 21H1+ and all Windows 11 machines.
 
-## 2026-05-16: Outlook Launch — COM-First, Start-Process Fallback
+## 2026-05-16: Outlook Refresh - Direct Read-Only COM Import
 
-Decision: Before starting a new Outlook instance for the macro trigger, perform a thorough process search (`Get-Process OUTLOOK`). If Outlook is running, connect via COM (`GetActiveObject("Outlook.Application")`) and call `.Run(macroName)` on the existing instance. Only start a new Outlook process if none is found.
+Decision: Make `pywin32` read-only Outlook COM import the primary Refresh Inbox path. ReplyRight connects to classic Outlook, reads only `NYCWA_Reservations > Inbox`, saves local `.msg` copies, normalizes messages in-process, and upserts them into SQLite. Keep `outlook.exe /autorun macroName` as a fallback only when `pywin32` is unavailable.
 
-Rationale: The previous approach always called `Start-Process outlook.exe /autorun MacroName`, which on most systems opens a duplicate Outlook window rather than reusing the already-open one. The COM approach triggers the macro in-place with no UI disruption.
+Rationale: Outlook's COM `Application` object on this machine does not expose `Run`, even through VBScript (`438 Object doesn't support this property or method`). Direct read-only COM avoids macro security prompts and the noisy PowerShell/CLIXML failure path while preserving the approved read/import-only Outlook posture.
+
+## 2026-05-16: Outlook Refresh Is Local Source Of Truth
+
+Decision: After a successful Outlook refresh, delete any local email row whose message id was not in the current Outlook import.
+
+Rationale: The active dashboard should reflect the real shared Outlook inbox, not historical mock/demo rows or stale local imports. This deletes only ReplyRight's local SQLite copies and does not mutate Outlook.
+
+## 2026-05-16: Conversation Groups Are The Inbox Unit
+
+Decision: The inbox API groups email rows by Outlook `conversation_id` before rendering the queue. The selected conversation detail includes the thread messages for that conversation.
+
+Rationale: Reservations work happens at the conversation/thread level. Grouping prevents duplicate queue rows and lets the user review the latest state of a thread in one place.
+
+## 2026-05-16: Hotel-Specific Urgency And Routing
+
+Decision: Urgency score is driven first by parsed arrival/check-in date: same day/next day = 5, same week = 4, same month = 3, later this year = 2, next year/future = 1. Upset guest or travel-agent sentiment can raise urgency. Department owners are limited to Front Desk, Reservations, Concierge, Sales, Housekeeping, Engineering, and All Departments.
+
+Rationale: Arrival date is the most operationally important signal for reservations triage, but sentiment still matters for recovery and service risk. Owner labels must match actual hotel operating departments.
+
+## 2026-05-16: Conversation-Level Adaptive Feedback
+
+Decision: Queue urgency and labels are computed at the conversation level from the latest few messages, with quoted Outlook history treated as context rather than the primary sentiment source. User feedback is stored locally in `triage_feedback` and can immediately override or guide urgency, owner, category, contact type, and sentiment.
+
+Rationale: Reservations work is thread-based, and the latest reply often changes the required action. Local feedback gives the user short-term correction power now and creates a migration path for long-term shared learning.
+
+## 2026-05-16: Supabase Shared-Learning Roadmap
+
+Decision: Document Supabase as the target centralized learning repository in `docs/FUTURE_ROADMAP_SUPABASE_ADAPTIVE_LEARNING.md`. GitHub remains for source, prompts, release notes, and approved config snapshots; Supabase is the future live feedback/rule database.
+
+Rationale: Shared learning should improve all installations without storing raw email bodies, guest PII, reservation numbers, payment details, or attachments centrally.
 
 ## 2026-05-16: Add Semantic Kernel Orchestration Layer As Additive Package
 

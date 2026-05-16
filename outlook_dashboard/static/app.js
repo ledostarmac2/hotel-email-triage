@@ -1,5 +1,5 @@
 const state = {
-  taxonomy: { categories: [], risk_flags: [], statuses: [] },
+  taxonomy: { categories: [], risk_flags: [], statuses: [], department_owners: [], contact_types: [] },
   emails: [],
   selectedId: null,
   currentView: "inbox",
@@ -89,26 +89,34 @@ async function refreshInbox() {
   setSyncStatus("Starting Outlook refresh");
   const result = await fetchJson("/api/outlook-desktop/export-inbox", { method: "POST" });
   if (result.launched_macro) {
+    if (result.launch_method === "vbscript-com") {
+      showToast("Inbox refreshed from Outlook.");
+      await loadEmails();
+      setSyncStatus("Ready");
+      return;
+    }
     showToast("Outlook refresh started. The queue will update when the macro finishes.");
-    await pollInboxImport();
+    await pollInboxImport({ maxAttempts: 30 });
     return;
   }
-  showToast(`Inbox refreshed. ${result.exported_count || 0} saved.`);
+  showToast(`Inbox refreshed. ${result.fetched_count || result.exported_count || 0} messages loaded.`);
   await loadEmails();
 }
 
-async function pollInboxImport() {
+async function pollInboxImport(options = {}) {
+  const maxAttempts = options.maxAttempts || 15;
   const originalCount = state.emails.length;
-  for (let attempt = 1; attempt <= 15; attempt += 1) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     await sleep(2000);
-    setSyncStatus(`Refreshing ${attempt}/15`);
+    setSyncStatus(`Refreshing ${attempt}/${maxAttempts}`);
     await loadEmails({ preserveSelection: true, quiet: true });
-    if (state.emails.length !== originalCount || attempt >= 4) {
+    if (state.emails.length !== originalCount) {
       setSyncStatus("Ready");
       return;
     }
   }
   setSyncStatus("Ready");
+  await loadEmails({ preserveSelection: true, quiet: true });
 }
 
 
@@ -137,13 +145,13 @@ function renderMetrics() {
   const urgent = state.emails.filter((email) => urgency(email) >= 4).length;
   const immediate = state.emails.filter((email) => urgency(email) === 5).length;
   const missing = state.emails.filter((email) => (email.missing_information || []).length > 0).length;
-  const manager = state.emails.filter((email) => (email.risk_flags || []).includes("Manager review required")).length;
+  const escalations = state.emails.filter((email) => (email.risk_flags || []).includes("Leadership review required")).length;
   const metrics = [
-    ["Open inbox", state.emails.length, "active messages"],
+    ["Open inbox", state.emails.length, "conversations"],
     ["Urgency 4-5", urgent, "work first"],
     ["Level 5", immediate, "immediate"],
     ["Missing info", missing, "needs reply"],
-    ["Manager review", manager, "escalate"],
+    ["Escalations", escalations, "review"],
   ];
   els.metrics.innerHTML = metrics
     .map(
@@ -162,7 +170,7 @@ function viewEmails() {
   const all = state.emails;
   switch (state.currentView) {
     case "urgent": return all.filter((e) => urgency(e) >= 4);
-    case "vip":    return all.filter((e) => (e.importance || "").toLowerCase() === "high");
+    case "vip":    return all.filter((e) => (e.importance || "").toLowerCase() === "high" || (e.risk_flags || []).includes("VIP"));
     case "missing": return all.filter((e) => (e.missing_information || []).length > 0);
     default:       return all;
   }
@@ -170,7 +178,7 @@ function viewEmails() {
 
 function renderEmailList() {
   const visible = viewEmails();
-  els.queueCount.textContent = `${visible.length} email${visible.length === 1 ? "" : "s"}`;
+  els.queueCount.textContent = `${visible.length} conversation${visible.length === 1 ? "" : "s"}`;
   if (!visible.length) {
     els.emailList.innerHTML = `<div class="empty-state">No emails match the current filters.</div>`;
     return;
@@ -188,15 +196,19 @@ function emailRow(email) {
     .slice(0, 2)
     .map((risk) => `<span class="badge risk">${escapeHtml(risk)}</span>`)
     .join("");
+  const count = Number(email.conversation_email_count || 1);
+  const countLabel = count > 1 ? ` - ${count} emails` : "";
   return `
     <button class="email-row${active}" type="button" data-id="${email.id}">
       <span class="urgency-badge urgency-${score}">${score}</span>
       <span class="queue-copy">
         <span class="email-subject">${escapeHtml(email.subject || "(No subject)")}</span>
         <span class="queue-meta">${escapeHtml(email.sender_name || email.sender_email || "Unknown")} · ${formatDate(email.received_datetime)}</span>
+        ${countLabel ? `<span class="queue-meta">${escapeHtml(countLabel.slice(3))}</span>` : ""}
         <span class="email-preview">${escapeHtml(email.ai_summary || email.body_preview || "")}</span>
         <span class="pill-stack">
           ${badge(email.category || "Unclassified")}
+          ${badge(email.contact_type || "Direct guest", "status")}
           ${risks}
         </span>
       </span>
@@ -237,20 +249,23 @@ function renderDetail(email) {
         ${section("Email Chain Summary", `<p>${escapeHtml(email.ai_summary || "Run local triage to summarize this email chain.")}</p>`)}
         ${section("Reservations Steps", actionList(email.internal_next_steps))}
         ${section("Missing Information", actionList(email.missing_information, "None noted."))}
+        ${feedbackForm(email)}
       </section>
       <section class="source-panel">
         <div class="field-grid">
           ${field("Owner", email.recommended_department_owner || "Reservations")}
+          ${field("Contact", email.contact_type || "Direct guest")}
           ${field("Sentiment", email.guest_sentiment || "Neutral")}
           ${field("Importance", email.importance || "normal")}
           ${field("Attachments", email.has_attachments ? "Yes" : "No")}
         </div>
-        ${section("Original Email", `<div class="email-body">${escapeHtml(email.body_text || email.body_content || email.body_preview || "")}</div>`)}
+        ${section("Conversation", conversationMessages(email))}
       </section>
     </div>
   `;
 
   document.getElementById("replyAiButton").addEventListener("click", () => generateAiReply(email.id));
+  document.getElementById("triageFeedbackButton").addEventListener("click", () => submitTriageFeedback(email.id));
   document.getElementById("statusSelect").addEventListener("change", async (event) => {
     await fetchJson(`/api/emails/${email.id}/status`, {
       method: "PATCH",
@@ -260,6 +275,27 @@ function renderDetail(email) {
     showToast("Local status updated.");
     await loadEmails({ preserveSelection: true });
   });
+  resetDetailScroll();
+}
+
+async function submitTriageFeedback(emailId) {
+  const text = document.getElementById("triageFeedbackText").value.trim();
+  const urgencyValue = document.getElementById("feedbackUrgency").value;
+  const ownerValue = document.getElementById("feedbackOwner").value;
+  if (!text) {
+    showToast("Add a correction note first.");
+    return;
+  }
+  const payload = { feedback_text: text };
+  if (urgencyValue) payload.corrected_urgency = Number(urgencyValue);
+  if (ownerValue) payload.corrected_owner = ownerValue;
+  await fetchJson(`/api/emails/${emailId}/feedback`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  showToast("Triage feedback applied.");
+  await loadEmails({ preserveSelection: true });
 }
 
 async function generateAiReply(emailId) {
@@ -278,6 +314,37 @@ function renderEmptyDetail() {
   els.detailPanel.innerHTML = `<div class="empty-state">Select an email to review.</div>`;
 }
 
+function feedbackForm(email) {
+  const owners = state.taxonomy.department_owners || [];
+  const urgencyOptions = [1, 2, 3, 4, 5]
+    .map((score) => `<option value="${score}">Urgency ${score}</option>`)
+    .join("");
+  const ownerOptions = owners
+    .map((owner) => `<option value="${escapeHtml(owner)}">${escapeHtml(owner)}</option>`)
+    .join("");
+  const applied = email.feedback_applied
+    ? `<p class="muted">Learning applied: ${escapeHtml(email.adaptive_explanation || "Feedback")}</p>`
+    : "";
+  return `
+    <section class="feedback-box">
+      <h3>Triage Feedback</h3>
+      ${applied}
+      <textarea id="triageFeedbackText" rows="4" placeholder="Correction notes"></textarea>
+      <div class="feedback-controls">
+        <select id="feedbackUrgency">
+          <option value="">Keep urgency</option>
+          ${urgencyOptions}
+        </select>
+        <select id="feedbackOwner">
+          <option value="">Keep owner</option>
+          ${ownerOptions}
+        </select>
+        <button class="button primary" id="triageFeedbackButton" type="button">Apply Feedback</button>
+      </div>
+    </section>
+  `;
+}
+
 function section(title, content) {
   return `<section class="section"><h3>${escapeHtml(title)}</h3>${content}</section>`;
 }
@@ -290,6 +357,29 @@ function actionList(items, emptyLabel = "No steps available.") {
   const values = Array.isArray(items) ? items : [];
   if (!values.length) return `<p class="muted">${escapeHtml(emptyLabel)}</p>`;
   return `<ol>${values.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ol>`;
+}
+
+function conversationMessages(email) {
+  const messages = Array.isArray(email.conversation_messages) && email.conversation_messages.length
+    ? email.conversation_messages
+    : [email];
+  return messages
+    .map((message, index) => `
+      <article class="thread-message">
+        <div class="thread-meta">
+          <strong>${escapeHtml(message.sender_name || message.sender_email || "Unknown sender")}</strong>
+          <span>${escapeHtml(formatDate(message.received_datetime))}${index === 0 ? " - latest" : ""}</span>
+        </div>
+        <div class="email-body">${escapeHtml(message.body_text || message.body_content || message.body_preview || "")}</div>
+      </article>
+    `)
+    .join("");
+}
+
+function resetDetailScroll() {
+  els.detailPanel.querySelectorAll(".insight-panel, .source-panel, .detail-body").forEach((panel) => {
+    panel.scrollTop = 0;
+  });
 }
 
 function badge(text, extraClass = "") {

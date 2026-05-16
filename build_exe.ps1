@@ -26,17 +26,27 @@ if (Test-Path $oldExe) {
 }
 
 $vendorPath = Join-Path (Get-Location) ".vendor"
+$runtimePackages = @(
+    "fastapi",
+    "uvicorn[standard]",
+    "httpx",
+    "python-dotenv",
+    "openai",
+    "pywebview>=4.4,<6",
+    "pythonnet",
+    "pywin32"
+)
 
 if (-not (Test-Path $vendorPath)) {
     $env:TEMP = Join-Path (Get-Location) ".build-tmp"
     $env:TMP = $env:TEMP
     New-Item -ItemType Directory -Force -Path $env:TEMP | Out-Null
     New-Item -ItemType Directory -Force -Path $vendorPath | Out-Null
-    # pythonnet is a pure-Python wheel so no C compiler needed; it must be
-    # listed explicitly so pip doesn't skip it as "no binary available".
-    & $PYTHON -m pip install --no-cache-dir --target $vendorPath `
-        fastapi "uvicorn[standard]" httpx python-dotenv openai `
-        "pywebview>=4.4,<6" pythonnet
+    # Keep runtime dependencies in .vendor so the EXE can be rebuilt on a
+    # machine that does not already have the same packages globally installed.
+    & $PYTHON -m pip install --no-cache-dir --target $vendorPath $runtimePackages
+} elseif (-not (Test-Path (Join-Path $vendorPath "win32com"))) {
+    & $PYTHON -m pip install --no-cache-dir --upgrade --target $vendorPath pywin32
 }
 
 & $PYTHON -m PyInstaller `
@@ -49,9 +59,13 @@ if (-not (Test-Path $vendorPath)) {
     --collect-all webview `
     --collect-all pythonnet `
     --collect-all outlook_dashboard `
+    --collect-submodules win32com `
     --hidden-import webview.platforms.edgechromium `
     --hidden-import webview.platforms.winforms `
     --hidden-import clr `
+    --hidden-import pythoncom `
+    --hidden-import pywintypes `
+    --hidden-import win32com.client `
     run_desktop.py
 
 $exePath = (Resolve-Path "dist\ReplyRight.exe").Path

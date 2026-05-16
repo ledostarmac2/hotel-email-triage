@@ -27,21 +27,24 @@ RISK_FLAGS = [
     "VIP",
     "Chargeback",
     "Reputation risk",
-    "Manager review required",
+    "Leadership review required",
 ]
 
 STATUSES = ["New", "Reviewed", "Drafted", "Completed", "Escalated"]
 
 DEPARTMENT_OWNERS = [
+    "Front Desk",
     "Reservations",
-    "Front Office",
-    "Guest Relations",
-    "Finance",
-    "Revenue Management",
+    "Concierge",
     "Sales",
     "Housekeeping",
     "Engineering",
-    "Accessibility Coordinator",
-    "Concierge",
-    "Management",
+    "All Departments",
+]
+
+CONTACT_TYPES = [
+    "Internal",
+    "Group contact",
+    "Travel agency",
+    "Direct guest",
 ]
