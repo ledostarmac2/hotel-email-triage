@@ -5,11 +5,13 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QMainWindow,
     QSplitter,
+    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
 
 from replyright_qt.api_client import ApiClient, ApiWorker
+from replyright_qt.widgets.admin_panel import AdminPanel
 from replyright_qt.widgets.conversation_detail import ConversationDetailWidget
 from replyright_qt.widgets.conversation_list import ConversationListWidget
 from replyright_qt.widgets.filter_bar import FilterBar
@@ -76,8 +78,16 @@ class MainWindow(QMainWindow):
         splitter.setStretchFactor(1, 2)
         splitter.setSizes([380, 760])
 
+        # Admin panel (swapped in when Admin queue is active)
+        self._admin_panel = AdminPanel(self._client)
+
+        # Stack: page 0 = email list+detail, page 1 = admin panel
+        self._stack = QStackedWidget()
+        self._stack.addWidget(splitter)
+        self._stack.addWidget(self._admin_panel)
+
         root_layout.addWidget(self._sidebar)
-        root_layout.addWidget(splitter)
+        root_layout.addWidget(self._stack)
 
         self.setCentralWidget(root)
 
@@ -106,8 +116,13 @@ class MainWindow(QMainWindow):
 
     def _on_queue_changed(self, queue: str) -> None:
         self._current_queue = queue
-        self._detail.clear()
-        self._load_emails()
+        if queue == "admin":
+            self._stack.setCurrentIndex(1)
+            self._admin_panel.load()
+        else:
+            self._stack.setCurrentIndex(0)
+            self._detail.clear()
+            self._load_emails()
 
     def _on_filters_changed(self, filters: dict) -> None:
         self._current_filters = filters

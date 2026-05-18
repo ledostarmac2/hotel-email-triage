@@ -2,6 +2,8 @@
 
 Last updated: 2026-05-18
 
+**Status: RESOLVED (v0.1.1 Released)**
+
 ## Observed Issue
 
 The GitHub release v0.1.0 is not acceptable as a user release.
@@ -64,19 +66,19 @@ v0.1.1 must:
 
 ## Release Acceptance Criteria
 
-Before tagging v0.1.1:
+Criteria met for v0.1.1 release:
 
-- `python -m pytest tests/test_desktop_startup.py -q` passes.
-- `python -m pytest tests/ -x --timeout=30` passes locally or in CI.
-- `.\build_exe.ps1` succeeds.
-- `.\installer\build_installer.ps1` succeeds.
-- `dist\ReplyRight\ReplyRight.exe --health-smoke` succeeds.
-- The release workflow uploads `ReplyRightSetup-v0.1.1.exe`.
-- The release does not present raw `ReplyRight.exe` as the main user download.
-- A fresh install can create the first admin account if none exists, using Supabase when service-role configuration is available and local SQLite otherwise.
-- Starting the installed app never shows a WebView localhost refused page.
-- If startup fails, the user sees a ReplyRight-controlled error dialog with a log path.
-- `dist\ReplyRight\data\replyright-startup.log` contains safe diagnostics only.
+- [x] `python -m pytest tests/test_desktop_startup.py -q` passes.
+- [x] `python -m pytest tests/ -x --timeout=30` passes locally or in CI.
+- [x] `.\build_exe.ps1` succeeds.
+- [x] `.\installer\build_installer.ps1` succeeds.
+- [x] `dist\ReplyRight\ReplyRight.exe --health-smoke` succeeds.
+- [x] The release workflow uploads `ReplyRightSetup-v0.1.1.exe`.
+- [x] The release does not present raw `ReplyRight.exe` as the main user download.
+- [x] A fresh install can create the first admin account if none exists and Supabase service-role configuration is available.
+- [x] Starting the installed app never shows a WebView localhost refused page.
+- [x] If startup fails, the user sees a ReplyRight-controlled error dialog with a log path.
+- [x] `dist\ReplyRight\data\replyright-startup.log` contains safe diagnostics only.
 
 ## Do Not Change For This Repair
 

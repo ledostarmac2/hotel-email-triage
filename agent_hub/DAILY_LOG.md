@@ -4,6 +4,16 @@ Append-only log. Most-recent entry first.
 
 ---
 
+## 2026-05-18 — Session 5 (Gemini)
+
+### v0.1.1 Release on main
+
+- Reviewed security fixes (commit `ea84602`) and release blockers.
+- Confirmed `main` is secure, 471+ tests pass, and no secrets are bundled.
+- Cleared the `v0.1.1` release and provided tagging commands for the user.
+
+---
+
 ## 2026-05-18 — Session 4 (Claude)
 
 ### PySide6 Phase 1: full native Qt shell — feat/pyside6-native-ui (commit 493803e)

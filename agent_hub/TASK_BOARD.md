@@ -37,9 +37,9 @@ Last updated: 2026-05-18 (Session 4)
 
 | Task | Status | Notes |
 |---|---|---|
-| Security review of bundled_secrets.py | In progress | See HANDOFF_GEMINI.md |
-| Security review of credentials_setup.html | In progress | |
-| Security review of installer/sample.env | In progress | |
-| Security review of auth.py changes | In progress | |
-| Security review of config.py changes | In progress | |
-| Verdict returned to agent_hub | Pending | Write to HANDOFF_GEMINI.md §Verdict |
+| Security review of bundled_secrets.py | Done | Clean |
+| Security review of credentials_setup.html | Done | Clean |
+| Security review of installer/sample.env | Done | Clean |
+| Security review of auth.py changes | Done | Clean |
+| Security review of config.py changes | Done | Clean |
+| Verdict returned to agent_hub | Done | Written to HANDOFF_GEMINI.md §Verdict |

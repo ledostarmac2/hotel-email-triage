@@ -43,8 +43,8 @@ in `dist/ReplyRight/.env` — unrelated to this branch).
 - Build `replyright_qt/widgets/admin_panel.py` using `/api/admin/stats` endpoint
 - Show: correction count, misclassification table, training queue, model health
 
-**Priority 3: Merge to main after Gemini/Codex clear v0.1.1**
-- Do not merge `feat/pyside6-native-ui` into main until v0.1.1 is tagged and released
+**Priority 3: Merge PySide6 into main**
+- **Update:** Gemini has cleared the v0.1.1 release on `main`. You are now unblocked to merge `feat/pyside6-native-ui` into `main`.
 - After merge: delete pywebview/WebView2 references from all docs
 
 **Priority 4: Remove dist/ReplyRight/.env leak**
