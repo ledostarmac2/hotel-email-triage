@@ -1,5 +1,7 @@
 #define MyAppName "ReplyRight"
-#define MyAppVersion "0.1.1"
+#ifndef MyAppVersion
+  #define MyAppVersion "0.1.1"
+#endif
 #define MyAppPublisher "Waldorf Astoria New York"
 #define MyAppExeName "ReplyRight.exe"
 #define WebView2Url "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
@@ -31,8 +33,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription: "Additional shortcuts:"; Flags: checkedonce
 
 [Files]
-Source: "..\dist\ReplyRight.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\dist\.env"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "..\dist\ReplyRight\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "data\*,*.sqlite3,*.sqlite,*.db,*.log"
 
 [Icons]
 Name: "{group}\ReplyRight"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"

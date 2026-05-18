@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ReplyRight Setup</title>
+    <link rel="icon" href="/static/replyright.ico" />
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        min-height: 100vh;
+        display: grid;
+        grid-template-columns: minmax(320px, 1fr) 420px;
+        background: #0f1117;
+        color: #e8e8e8;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      }
+      .brand-panel {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 28px;
+        padding: 48px 40px;
+        background: #131722;
+        border-right: 1px solid #1e2130;
+      }
+      .brand-panel img { width: 100%; max-width: 320px; height: auto; object-fit: contain; }
+      .brand-divider { width: 40px; height: 2px; background: #5b6af0; border-radius: 2px; }
+      .brand-tagline { color: rgba(255,255,255,0.42); font-size: 0.9rem; letter-spacing: 0.03em; }
+      .form-panel {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 48px 44px;
+        background: #1a1d27;
+      }
+      .form-inner { width: 100%; }
+      h1 { font-size: 1.35rem; font-weight: 700; color: #fff; margin-bottom: 6px; }
+      .form-sub { font-size: 0.83rem; color: rgba(255,255,255,0.38); margin-bottom: 28px; line-height: 1.55; }
+      .field { margin-bottom: 16px; }
+      label {
+        display: block;
+        font-size: 0.78rem;
+        color: rgba(255,255,255,0.48);
+        margin-bottom: 6px;
+        font-weight: 500;
+      }
+      input {
+        width: 100%;
+        background: #0f1117;
+        border: 1px solid #2a2d3a;
+        border-radius: 7px;
+        padding: 11px 14px;
+        color: #e8e8e8;
+        font-size: 0.9rem;
+        outline: none;
+      }
+      input:focus {
+        border-color: #5b6af0;
+        box-shadow: 0 0 0 3px rgba(91,106,240,0.15);
+      }
+      .btn-primary {
+        width: 100%;
+        margin-top: 8px;
+        background: #5b6af0;
+        color: #fff;
+        border: none;
+        border-radius: 7px;
+        padding: 13px;
+        font-size: 0.92rem;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .btn-primary:hover { background: #4a59df; }
+      .error-msg {
+        display: none;
+        background: rgba(220,50,50,0.12);
+        border: 1px solid rgba(220,50,50,0.3);
+        color: #ff9090;
+        border-radius: 7px;
+        padding: 10px 12px;
+        font-size: 0.83rem;
+        line-height: 1.45;
+        margin-bottom: 16px;
+      }
+      .error-msg.visible { display: block; }
+      .footer-note {
+        text-align: center;
+        margin-top: 32px;
+        font-size: 0.73rem;
+        color: rgba(255,255,255,0.2);
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      @media (max-width: 820px) {
+        body { grid-template-columns: 1fr; }
+        .brand-panel { min-height: 38vh; border-right: 0; border-bottom: 1px solid #1e2130; }
+        .form-panel { min-height: 62vh; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="brand-panel">
+      <img src="/static/replyright-logo.png" alt="ReplyRight" />
+      <div class="brand-divider"></div>
+      <p class="brand-tagline">The right response, every time.</p>
+    </div>
+    <div class="form-panel">
+      <div class="form-inner">
+        <h1>Create admin account</h1>
+        <p class="form-sub">Set up the first ReplyRight administrator for this installation.</p>
+        <div class="error-msg" id="errorMsg" role="alert" data-server-error=""></div>
+        <form method="POST" action="/setup">
+          <div class="field">
+            <label for="email">Admin email</label>
+            <input type="email" id="email" name="email" autocomplete="email" required value="" data-server-email placeholder="you@waldorfastoria.com" />
+          </div>
+          <div class="field">
+            <label for="password">Admin password</label>
+            <input type="password" id="password" name="password" autocomplete="new-password" minlength="8" required placeholder="Minimum 8 characters" />
+          </div>
+          <button type="submit" class="btn-primary">Create Admin</button>
+        </form>
+        <p class="footer-note">Waldorf Astoria New York &nbsp;&middot;&nbsp; Reservations</p>
+      </div>
+    </div>
+    <script>
+      const errorMsg = document.getElementById("errorMsg");
+      const serverError = errorMsg.dataset.serverError;
+      if (serverError) {
+        errorMsg.textContent = serverError;
+        errorMsg.classList.add("visible");
+      }
+    </script>
+  </body>
+</html>

@@ -16,7 +16,10 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from .ai import analyze_email, infer_feedback_corrections, triage_conversation, triage_email, urgency_score
 from .auth import (
+    admin_setup_available,
+    admin_user_exists,
     authenticate_user,
+    create_first_admin,
     create_reset_token,
     create_user,
     delete_session,
@@ -130,10 +133,12 @@ _http_log = get_logger("http")
 
 _AUTH_SKIP = {
     "/login",
+    "/setup",
     "/healthz",
     "/api/health",
     "/reset-password",
     "/api/auth/login",
+    "/api/auth/setup",
     "/api/auth/logout",
     "/api/auth/forgot-password",
     "/api/auth/reset-password",
@@ -141,7 +146,9 @@ _AUTH_SKIP = {
 _AUTH_SKIP_PREFIX = ("/static/",)
 _RATE_LIMIT_PATHS = {
     "/login",
+    "/setup",
     "/api/auth/login",
+    "/api/auth/setup",
     "/api/auth/forgot-password",
     "/api/auth/reset-password",
 }
@@ -293,13 +300,19 @@ class DesktopOutlookImport(BaseModel):
     messages: list[DesktopOutlookMessage] = Field(default_factory=list)
 
 
-@app.get("/login")
-def login_page() -> HTMLResponse:
+@app.get("/login", response_model=None)
+def login_page() -> HTMLResponse | RedirectResponse:
+    if admin_setup_available() and not admin_user_exists():
+        return RedirectResponse("/setup", status_code=303)
     return _login_response()
 
 
-@app.post("/login")
-def login_form(email: str = Form(...), password: str = Form(...), remember_email: str | None = Form(None)):
+@app.post("/login", response_model=None)
+def login_form(
+    email: str = Form(...), password: str = Form(...), remember_email: str | None = Form(None)
+) -> HTMLResponse | RedirectResponse:
+    if admin_setup_available() and not admin_user_exists():
+        return RedirectResponse("/setup", status_code=303)
     settings = get_settings()
     user = authenticate_user(email, password, settings.database_path)
     if not user:
@@ -320,6 +333,57 @@ def login_form(email: str = Form(...), password: str = Form(...), remember_email
         path="/",
     )
     _apply_remembered_email(response, email, bool(remember_email))
+    return response
+
+
+@app.get("/setup", response_model=None)
+def setup_page() -> HTMLResponse | RedirectResponse:
+    if admin_setup_available() and admin_user_exists():
+        return RedirectResponse("/login", status_code=303)
+    message = "" if admin_setup_available() else "First-run setup is unavailable because Supabase is not configured."
+    return _setup_response(error_message=message)
+
+
+@app.post("/setup", response_model=None)
+def setup_form(email: str = Form(...), password: str = Form(...)) -> HTMLResponse | RedirectResponse:
+    settings = get_settings()
+    if len(password) < 8:
+        return _setup_response(error_message="Password must be at least 8 characters.", email=email, status_code=400)
+    if not admin_setup_available():
+        return _setup_response(
+            error_message="First-run setup is unavailable because Supabase service-role configuration is missing.",
+            email=email,
+            status_code=503,
+        )
+    if admin_user_exists():
+        return RedirectResponse("/login", status_code=303)
+    try:
+        user_id = create_first_admin(email, password, settings.database_path)
+    except Exception as exc:
+        return _setup_response(error_message=str(exc), email=email, status_code=400)
+    record_audit_event(
+        action="auth.first_admin_setup",
+        actor_user_id=None,
+        actor_email=email.lower().strip(),
+        entity_type="user",
+        entity_id=user_id,
+        metadata={"role": "admin"},
+        db_path=settings.database_path,
+    )
+    user = authenticate_user(email, password, settings.database_path)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    access_token = user.pop("_access_token", "")
+    refresh_token = user.pop("_refresh_token", "")
+    response = RedirectResponse("/", status_code=303)
+    response.set_cookie(
+        "rr_session",
+        encode_session(access_token, refresh_token),
+        httponly=True,
+        samesite="lax",
+        max_age=60 * 60 * 24 * 30,
+        path="/",
+    )
     return response
 
 
@@ -349,6 +413,19 @@ def _login_response(
             if checked
             else '<input type="checkbox" id="rememberEmail" name="remember_email" value="1" />'
         ),
+    )
+    return HTMLResponse(content=html, status_code=status_code, headers={"Cache-Control": "no-store"})
+
+
+def _setup_response(error_message: str = "", email: str = "", status_code: int = 200) -> HTMLResponse:
+    html = (STATIC_DIR / "setup.html").read_text(encoding="utf-8")
+    html = html.replace(
+        'data-server-error=""',
+        f'data-server-error="{html_lib.escape(error_message, quote=True)}"',
+    )
+    html = html.replace(
+        'value="" data-server-email',
+        f'value="{html_lib.escape(email.strip(), quote=True)}" data-server-email',
     )
     return HTMLResponse(content=html, status_code=status_code, headers={"Cache-Control": "no-store"})
 
@@ -383,6 +460,11 @@ def dashboard() -> HTMLResponse:
 class LoginRequest(BaseModel):
     email: str
     password: str
+
+
+class SetupAdminRequest(BaseModel):
+    email: str
+    password: str = Field(min_length=8)
 
 
 class InviteRequest(BaseModel):
@@ -427,6 +509,41 @@ def api_login(payload: LoginRequest, request: Request):
         samesite="lax",
         max_age=60 * 60 * 24 * 30,
     )
+    return response
+
+
+@app.post("/api/auth/setup")
+def api_setup_admin(payload: SetupAdminRequest, request: Request):
+    settings = get_settings()
+    if not admin_setup_available():
+        raise HTTPException(status_code=503, detail="Supabase service-role configuration is required for setup.")
+    if admin_user_exists():
+        raise HTTPException(status_code=409, detail="An admin account already exists.")
+    try:
+        user_id = create_first_admin(payload.email, payload.password, settings.database_path)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    record_audit_event(
+        action="auth.first_admin_setup",
+        actor_user_id=None,
+        actor_email=payload.email.lower().strip(),
+        entity_type="user",
+        entity_id=user_id,
+        metadata={"role": "admin"},
+        db_path=settings.database_path,
+    )
+    user = authenticate_user(payload.email, payload.password, settings.database_path)
+    response = JSONResponse({"ok": True, "email": payload.email.lower().strip(), "role": "admin"})
+    if user:
+        access_token = user.pop("_access_token", "")
+        refresh_token = user.pop("_refresh_token", "")
+        response.set_cookie(
+            "rr_session",
+            encode_session(access_token, refresh_token),
+            httponly=True,
+            samesite="lax",
+            max_age=60 * 60 * 24 * 30,
+        )
     return response
 
 

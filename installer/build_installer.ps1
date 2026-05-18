@@ -21,6 +21,7 @@ function Find-Iscc {
 }
 
 function Install-InnoSetup {
+    # Try winget first (works on modern Windows desktops).
     $winget = Get-Command "winget.exe" -ErrorAction SilentlyContinue
     if ($winget) {
         try {
@@ -32,6 +33,19 @@ function Install-InnoSetup {
         }
     }
 
+    # Try Chocolatey second (reliable on GitHub Actions windows-latest runners).
+    $choco = Get-Command "choco.exe" -ErrorAction SilentlyContinue
+    if ($choco) {
+        try {
+            & $choco.Source install innosetup -y --no-progress
+            $found = Find-Iscc
+            if ($found) { return $found }
+        } catch {
+            Write-Warning "Chocolatey Inno Setup install failed: $($_.Exception.Message)"
+        }
+    }
+
+    # Fall back to downloading the bootstrapper directly.
     $installerPath = Join-Path $env:TEMP "innosetup.exe"
     $url = "https://jrsoftware.org/download.php/is.exe"
     Invoke-WebRequest -Uri $url -OutFile $installerPath
@@ -44,9 +58,15 @@ function Install-InnoSetup {
     return $found
 }
 
-if (-not (Test-Path -LiteralPath (Join-Path $repoRoot "dist\ReplyRight.exe"))) {
-    throw "dist\ReplyRight.exe was not found. Run .\build_exe.ps1 first."
+$appExe = Join-Path $repoRoot "dist\ReplyRight\ReplyRight.exe"
+if (-not (Test-Path -LiteralPath $appExe)) {
+    throw "dist\ReplyRight\ReplyRight.exe was not found. Run .\build_exe.ps1 first."
 }
+
+# Read version from __init__.py so the installer name stays in sync with the code.
+$initContent = Get-Content (Join-Path $repoRoot "outlook_dashboard\__init__.py") -Raw -ErrorAction SilentlyContinue
+$appVersion = if ($initContent -match '"(\d+\.\d+\.\d+[^"]*)"') { $Matches[1] } else { "0.1.1" }
+Write-Host "App version: $appVersion"
 
 $iscc = Find-Iscc
 if (-not $iscc) {
@@ -55,7 +75,7 @@ if (-not $iscc) {
 }
 
 Write-Host "Using ISCC: $iscc"
-& $iscc $issPath
+& $iscc /DMyAppVersion=$appVersion $issPath
 if ($LASTEXITCODE -ne 0) {
     throw "Inno Setup failed with exit code $LASTEXITCODE"
 }
