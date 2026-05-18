@@ -58,11 +58,14 @@ jobs:
       - name: Build EXE
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -File .\build_exe.ps1
-      - name: Upload EXE artifact
+      - name: Build Installer
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File .\installer\build_installer.ps1
+      - name: Upload Installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ReplyRight-${{ github.sha }}.exe
-          path: dist/ReplyRight.exe
+          name: ReplyRightSetup-${{ github.sha }}.exe
+          path: installer/output/ReplyRightSetup.exe
           if-no-files-found: error
 
   docker-build:
@@ -121,6 +124,12 @@ jobs:
       - name: Build EXE
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -File .\build_exe.ps1
+      - name: Build Installer
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File .\installer\build_installer.ps1
+      - name: Rename Installer
+        shell: pwsh
+        run: Rename-Item .\installer\output\ReplyRightSetup.exe "ReplyRightSetup-${{ github.ref_name }}.exe"
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -131,11 +140,11 @@ jobs:
             Waldorf Astoria New York — Reservations Intelligence Dashboard
 
             ### Install
-            1. Download `ReplyRight.exe` below
-            2. Run it — no other software required (except Outlook Classic for live inbox sync)
+            1. Download `ReplyRightSetup-${{ github.ref_name }}.exe` below
+            2. Run the installer — no other software required (except Outlook Classic for live inbox sync)
 
             ### What's New
             See [CHANGELOG](https://github.com/ledostarmac2/hotel-email-triage/blob/main/docs/CHANGELOG_AI.md) for details.
-          files: dist/ReplyRight.exe
+          files: installer/output/ReplyRightSetup-${{ github.ref_name }}.exe
           draft: false
           prerelease: false

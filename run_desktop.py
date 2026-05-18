@@ -39,51 +39,73 @@ def _show_error(message: str) -> None:
     try:
         ctypes.windll.user32.MessageBoxW(None, message, WINDOW_TITLE, 0x10)
     except Exception:
-        print(message)
+        _log(message)
 
 
-def _show_info(message: str) -> None:
+def _startup_error_message(reason: str) -> str:
+    return (
+        "ReplyRight could not start.\n\n"
+        f"{reason}\n\n"
+        "No browser window was opened. Please close any existing ReplyRight "
+        "windows and try again.\n\n"
+        f"Diagnostics log:\n{LOG_PATH}"
+    )
+
+
+def _is_port_available(host: str, port: int) -> bool:
+    bind_host = host or "127.0.0.1"
     try:
-        ctypes.windll.user32.MessageBoxW(None, message, WINDOW_TITLE, 0x40)
-    except Exception:
-        print(message)
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.bind((bind_host, port))
+        return True
+    except OSError as exc:
+        _log(f"Port check failed for {bind_host}:{port}: {exc}")
+        return False
 
 
-def _wait_for_server(url: str, timeout_seconds: float = 15.0) -> None:
-    _log(f"Waiting for server at {url}")
+def _choose_app_port(host: str, preferred_port: int) -> int:
+    if _is_port_available(host, preferred_port):
+        return preferred_port
+    bind_host = host or "127.0.0.1"
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind((bind_host, 0))
+        port = int(sock.getsockname()[1])
+    _log(f"Preferred port {bind_host}:{preferred_port} is occupied; selected {port}")
+    return port
+
+
+def _wait_for_server_health(
+    base_url: str,
+    timeout_seconds: float = STARTUP_TIMEOUT_SECONDS,
+    interval_seconds: float = 0.25,
+    opener=urllib.request.urlopen,
+) -> None:
+    health_url = f"{base_url.rstrip('/')}{HEALTH_PATH}"
+    _log(f"Waiting for server health at {health_url}")
     deadline = time.time() + timeout_seconds
     last_error = ""
     while time.time() < deadline:
         try:
-            with urllib.request.urlopen(f"{url}/api/health", timeout=1.0):
+            with opener(health_url, timeout=1.0) as response:
+                status = int(getattr(response, "status", 200) or 200)
+                if status < 200 or status >= 300:
+                    last_error = f"HTTP {status}"
+                    time.sleep(interval_seconds)
+                    continue
                 _log("Server health check succeeded")
                 return
         except (urllib.error.URLError, TimeoutError) as exc:
             last_error = repr(exc)
-            time.sleep(0.25)
+            time.sleep(interval_seconds)
     raise RuntimeError(
-        f"The local application server did not start in time. Last error: {last_error}"
+        f"The local application server did not become healthy in {timeout_seconds:.0f} seconds. "
+        f"Last error: {last_error or 'no response'}"
     )
 
 
-def _open_browser_fallback(url: str, reason: str) -> None:
-    _log(f"Opening system browser fallback: {reason}")
-    webbrowser.open(url)
-    message = (
-        f"ReplyRight is running in your system browser at {url}.\n\n"
-        f"Reason: {reason}\n\n"
-        "Close this message when you are ready to stop the local ReplyRight server."
-    )
-    if sys.platform.startswith("win"):
-        _show_info(message)
-        return
-    print(message)
-    print("Press Ctrl+C in this terminal to stop ReplyRight.")
-    try:
-        while True:
-            time.sleep(3600)
-    except KeyboardInterrupt:
-        _log("Browser fallback stopped by keyboard interrupt")
+def _wait_for_server(url: str, timeout_seconds: float = STARTUP_TIMEOUT_SECONDS) -> None:
+    _wait_for_server_health(url, timeout_seconds=timeout_seconds)
 
 
 def _open_window(url: str) -> None:
@@ -168,8 +190,15 @@ def main() -> None:
 
     _log("Application modules imported")
     settings = get_settings()
-    url = f"http://{settings.app_host}:{settings.app_port}"
-    _log(f"Settings loaded: host={settings.app_host} port={settings.app_port} db={settings.database_path}")
+
+    # Dynamically allocate a free port to avoid conflicts
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind((settings.app_host, 0))
+        app_port = s.getsockname()[1]
+
+    url = f"http://{settings.app_host}:{app_port}"
+    _log(f"Settings loaded: host={settings.app_host} port={app_port} db={settings.database_path}")
     logging.basicConfig(level=logging.WARNING)
 
     server_error: list[str] = []
@@ -178,7 +207,7 @@ def main() -> None:
         uvicorn.Config(
             app,
             host=settings.app_host,
-            port=settings.app_port,
+            port=app_port,
             reload=False,
             log_level="warning",
             access_log=False,
