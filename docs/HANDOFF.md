@@ -1,5 +1,93 @@
 # Handoff Log
 
+## 2026-05-18 — Test fix, HANDOFF catch-up, ready for Codex handoff
+
+Summary:
+
+- Pulled 7 unpushed remote commits (Phases 7 work) onto local branch after rate-limit interruption.
+- Installed missing dev dependencies (`pytest`, `semantic-kernel`, `dateparser`, `scikit-learn`, `beautifulsoup4`, `fastapi`) into system Python so tests run locally.
+- Fixed one time-of-day brittle assertion in `tests/test_hotel_entities.py::test_extract_arrival_window`: date-only strings parse to midnight, so window = 48h minus current hour; widened lower bound to 0.
+- Wrote missing HANDOFF entries for the three undocumented Phase 7 commits (`c8157a1`, `a44abe2`, `fe3cb74`).
+
+Verification:
+
+- `python -m pytest tests/` — **232 passed, 1 warning, 35 subtests** (0 failures).
+
+Phase status:
+
+- Phases 1–7 infrastructure: **Complete and green**.
+- Ready for Codex handoff.
+
+---
+
+## 2026-05-17 — Phase 7 Continued: hotel entities, prompt management, enriched heuristics (fe3cb74)
+
+Summary:
+
+- Added `outlook_dashboard/hotel_entities.py` (301 lines): pure-Python regex + dateparser extractor for Waldorf-specific entities — confirmation numbers (Hilton/OnQ patterns), arrival/departure dates, nights, room category (Presidential/Royal/Astoria/Tower/Junior Suite, Towers floor, Premier, Deluxe), rate codes, guest counts, arrival window in hours. No LLM cost; runs on every email inline.
+- Added `scripts/seed_prompt_versions.py`: one-shot script to push the hardcoded `_build_system_prompt()` output to Supabase `prompt_versions` so it can be tuned from the Admin dashboard without a code deploy. Requires `SUPABASE_SERVICE_ROLE_KEY`.
+- Added Admin endpoints `GET /api/admin/prompts` and `PATCH /api/admin/prompts/{prompt_id}` so admins can view and edit active prompt versions and the local cache refreshes immediately.
+- Massively expanded `_build_system_prompt()` in `ai.py` with Waldorf-specific protocol sections: VIP detection terms (suites, titles, Hilton Honors Diamond, long-stay), upset/strong-upset/concern term expansions, travel agency partner list expansion (Brownell, Protravel, Altour, Leading Hotels, Preferred Hotels, Virtuoso, FHR/Amex Centurion), NYC peak-period calendar, category-specific protocols (VIP pre-arrival, billing dispute, accessibility, same-day arrival, CCA, group/event, cancellation), missing-information detection by category, brand voice guide (never guarantee, "subject to availability", prohibited phrases), risk flag triggers (billing, legal, medical, ADA, VIP, chargeback, reputation), and absolute constraints block.
+- Added `Furious` as a valid `guest_sentiment` value in the JSON output schema.
+- Added `tests/test_hotel_entities.py`: 22 tests covering all extractor functions.
+
+Files changed:
+
+- `outlook_dashboard/hotel_entities.py` (new)
+- `outlook_dashboard/ai.py`
+- `outlook_dashboard/main.py`
+- `scripts/seed_prompt_versions.py` (new)
+- `tests/test_hotel_entities.py` (new)
+
+Verification:
+
+- Committed at 2026-05-17 23:59. HANDOFF not written before rate-limit cut-off.
+- Tests: 232 passed after fix to `test_extract_arrival_window` (date-only midnight offset).
+
+---
+
+## 2026-05-17 — Phase 7: prompt routing, confidence skip, human review queue, local classifier (a44abe2)
+
+Summary:
+
+- Added `outlook_dashboard/local_classifier.py` (219 lines): scikit-learn TF-IDF + LogisticRegression multi-output classifier. Trains from Supabase `training_examples`; predicts category, owner, urgency, and sentiment. Wired into `triage_email()` as the first-pass step before the heuristic engine.
+- `triage_email()` now skips OpenAI and Google AI classification when heuristic confidence ≥ 78% (saves API cost and latency on clear-cut emails).
+- `_analyze_with_claude()` now checks Supabase `prompt_versions` for key `claude_analyze_system` first; falls back to hardcoded `_build_system_prompt()` if Supabase is unconfigured or the key is absent. Allows prompt tuning without a code deploy.
+- Added Admin endpoints: `POST /api/admin/classifier/train` (trains local classifiers from Supabase examples), `GET /api/admin/training/examples` (returns examples with review status), `PATCH /api/admin/training/examples/{id}/review` (marks an example reviewed).
+- Admin UI: "Train Classifier" button, Human Review Queue table, per-row "Mark Reviewed" action.
+
+Files changed:
+
+- `outlook_dashboard/local_classifier.py` (new)
+- `outlook_dashboard/ai.py`
+- `outlook_dashboard/main.py`
+- `outlook_dashboard/static/app.js`
+- `requirements.txt`
+
+---
+
+## 2026-05-17 — Phase 7: training data pipeline (c8157a1)
+
+Summary:
+
+- Added `outlook_dashboard/training_pipeline.py` (266 lines): redacts PII from completed emails, maps existing triage labels to training records (zero LLM cost), optionally re-labels with Claude when `refine=True` (admin-explicit, warned in UI before use). Uploads redacted+labelled records to Supabase `training_examples` (service-role key only; table not readable by anon key).
+- Added `training_pipeline_log` table in SQLite to track per-email upload status and avoid re-processing on repeat runs.
+- Added Supabase `training_examples` table to `docs/supabase_schema.sql`.
+- Added Admin endpoints: `POST /api/admin/training/run` (starts pipeline batch), `GET /api/admin/training/status` (returns per-email log).
+- Admin UI card: batch-size input, refine toggle with warning, live result display.
+- Added `tests/test_training_pipeline.py`: 20 tests covering redaction, label mapping, skip/upload/failure/idempotency.
+
+Files changed:
+
+- `outlook_dashboard/training_pipeline.py` (new)
+- `outlook_dashboard/database.py`
+- `outlook_dashboard/main.py`
+- `outlook_dashboard/static/app.js`
+- `docs/supabase_schema.sql`
+- `tests/test_training_pipeline.py` (new)
+
+---
+
 ## 2026-05-17 — v0.1.0 code optimization pass
 
 Summary:
