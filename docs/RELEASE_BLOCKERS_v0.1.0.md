@@ -40,7 +40,9 @@ v0.1.1 must:
 7. Include the safe startup log path in the error dialog.
 8. Use an available localhost port when the preferred port is occupied, or fail gracefully with a controlled error.
 9. Publish a setup installer as the primary release asset.
-10. Keep Outlook read-only and preserve all human review gates.
+10. Build the app as a PyInstaller onedir bundle so the installer carries the full application folder.
+11. Provide first-run admin setup when no admin exists, without requiring a local `.env`.
+12. Keep Outlook read-only and preserve all human review gates.
 
 ## Code Changes Applied For v0.1.1
 
@@ -52,6 +54,10 @@ v0.1.1 must:
 - Changed launcher port selection to prefer configured `APP_PORT`, then choose an available dynamic port only when needed.
 - Updated updater asset selection to prefer `ReplyRightSetup-*.exe`.
 - Changed updater installation flow to run the installer instead of replacing the EXE directly.
+- Switched PyInstaller packaging to `--onedir`.
+- Changed the Inno Setup script to bundle `dist\ReplyRight\*` while excluding `.env`, runtime data, databases, and logs.
+- Added a packaged `--health-smoke` mode so CI can verify backend startup without opening a desktop window.
+- Added first-run admin setup at `/setup` and `/api/auth/setup`.
 - Bumped source version to `0.1.1`.
 
 ## Release Acceptance Criteria
@@ -62,11 +68,13 @@ Before tagging v0.1.1:
 - `python -m pytest tests/ -x --timeout=30` passes locally or in CI.
 - `.\build_exe.ps1` succeeds.
 - `.\installer\build_installer.ps1` succeeds.
+- `dist\ReplyRight\ReplyRight.exe --health-smoke` succeeds.
 - The release workflow uploads `ReplyRightSetup-v0.1.1.exe`.
 - The release does not present raw `ReplyRight.exe` as the main user download.
+- A fresh install can create the first admin account if none exists and Supabase service-role configuration is available.
 - Starting the installed app never shows a WebView localhost refused page.
 - If startup fails, the user sees a ReplyRight-controlled error dialog with a log path.
-- `dist\data\replyright-startup.log` contains safe diagnostics only.
+- `dist\ReplyRight\data\replyright-startup.log` contains safe diagnostics only.
 
 ## Do Not Change For This Repair
 

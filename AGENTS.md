@@ -26,10 +26,11 @@ For broad architecture, adaptive learning, Supabase, staged AI pipeline, shared 
 ## Source Of Truth
 
 - The active runnable app is `outlook_dashboard/` plus `run_desktop.py`.
-- The Windows executable is built by `build_exe.ps1` and outputs `dist\ReplyRight.exe`.
-- User-facing releases are installer-first. The primary GitHub Release asset must be `ReplyRightSetup-v{version}.exe`; raw `dist\ReplyRight.exe` is an internal build input, not the default download.
+- The Windows executable is built by `build_exe.ps1` and outputs the onedir app `dist\ReplyRight\ReplyRight.exe`.
+- User-facing releases are installer-first. The primary GitHub Release asset must be `ReplyRightSetup-v{version}.exe`; raw `dist\ReplyRight\ReplyRight.exe` is an internal build input, not the default download.
 - The `app/` directory is an inactive Next.js scaffold. Do not migrate logic there unless Brian explicitly asks.
 - `replyright_kernel/` is experimental and additive. It is not the active desktop app path.
+- `replyright_core/` and `replyright_qt/` are migration scaffolds for the future PySide6 native UI. They are not production-wired yet.
 - The active UI is the FastAPI-served static dashboard under `outlook_dashboard/static/`.
 
 ## Handoff Protocol
@@ -49,7 +50,7 @@ After meaningful work:
 - Do not add automatic reply sending.
 - Do not remove human review gates for AI drafts, risky classifications, model promotion, rule approval, or future sending workflows.
 - Do not log raw email bodies.
-- Do not commit `.env`, `dist\.env`, local SQLite databases, `.msg` exports, build folders, virtual environments, vendored dependencies, startup logs, or packaged EXE binaries.
+- Do not commit `.env`, `dist\ReplyRight\.env`, local SQLite databases, `.msg` exports, build folders, virtual environments, vendored dependencies, startup logs, or packaged EXE binaries.
 - Redact payment-like data and other sensitive identifiers before any external AI call or training export.
 - Do not weaken PII redaction.
 - Do not print secrets, service-role keys, session cookies, mailbox contents, or raw guest data in logs or final responses.
@@ -69,6 +70,7 @@ After meaningful work:
   - `sender_intelligence.py`
 - Preserve Windows and PyInstaller compatibility.
 - Preserve installer-first release behavior and the health-gated desktop startup. Users must not see a WebView/Edge localhost refused-to-connect page.
+- The native UI migration target is PySide6 without `QWebEngineView`, Electron, Tauri, or another browser/WebView shell.
 - Keep the VBA macro portable. It must not hardcode one workstation path.
 
 ## AI Usage Rules

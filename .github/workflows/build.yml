@@ -58,6 +58,9 @@ jobs:
       - name: Build EXE
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -File .\build_exe.ps1
+      - name: Packaged health smoke
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -Command "& '.\dist\ReplyRight\ReplyRight.exe' --health-smoke"
       - name: Build Installer
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -File .\installer\build_installer.ps1
@@ -124,6 +127,9 @@ jobs:
       - name: Build EXE
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -File .\build_exe.ps1
+      - name: Packaged health smoke
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -Command "& '.\dist\ReplyRight\ReplyRight.exe' --health-smoke"
       - name: Build Installer
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -File .\installer\build_installer.ps1

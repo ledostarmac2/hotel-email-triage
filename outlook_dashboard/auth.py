@@ -18,15 +18,15 @@ _log = logging.getLogger(__name__)
 
 
 def _supabase_url() -> str:
-    return os.getenv("SUPABASE_URL", "").rstrip("/")
+    return os.getenv("SUPABASE_URL", "").strip().rstrip("/")
 
 
 def _anon_key() -> str:
-    return os.getenv("SUPABASE_KEY", "")
+    return os.getenv("SUPABASE_KEY", "").strip()
 
 
 def _service_key() -> str:
-    return os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+    return os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
 
 
 def _auth_url(path: str = "") -> str:
@@ -184,6 +184,36 @@ def ensure_admin(email: str, password: str, db_path: Path | None = None) -> None
     else:
         _create_user(normalized, password, role="admin")
         _log.info("Supabase: admin account created for %s", normalized)
+
+
+def admin_setup_available() -> bool:
+    """Return whether ReplyRight can create the first Supabase admin user."""
+    return bool(_supabase_url() and _service_key())
+
+
+def admin_user_exists() -> bool:
+    """Return True when at least one Supabase user has the ReplyRight admin role."""
+    if not admin_setup_available():
+        return False
+    try:
+        resp = _req(_auth_url("/admin/users?per_page=1000"), _admin_headers())
+        for user in resp.get("users") or []:
+            meta = user.get("app_metadata") or {}
+            if (meta.get("role") or "").lower() == "admin":
+                return True
+        return False
+    except Exception as exc:
+        _log.warning("admin_user_exists failed: %s", exc)
+        return False
+
+
+def create_first_admin(email: str, password: str, db_path: Path | None = None) -> str:
+    """Create the first ReplyRight admin user, refusing to run once an admin exists."""
+    if not admin_setup_available():
+        raise RuntimeError("Supabase service-role configuration is required for first-run setup.")
+    if admin_user_exists():
+        raise RuntimeError("An admin account already exists.")
+    return _create_user(email.lower().strip(), password, role="admin")
 
 
 def create_user(

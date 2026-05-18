@@ -33,7 +33,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription: "Additional shortcuts:"; Flags: checkedonce
 
 [Files]
-Source: "..\dist\ReplyRight\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "data\*,*.sqlite3,*.sqlite,*.db,*.log"
+Source: "..\dist\ReplyRight\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: ".env,*.env,data\*,*.sqlite3,*.sqlite,*.db,*.log"
 
 [Icons]
 Name: "{group}\ReplyRight"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"

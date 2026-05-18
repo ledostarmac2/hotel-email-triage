@@ -210,6 +210,9 @@ Required outcomes:
 - Never show a WebView/Edge localhost refused-to-connect page.
 - Remove external browser fallback from the desktop launcher.
 - Show a controlled ReplyRight startup error dialog with a safe log path when startup fails.
+- Build with PyInstaller `--onedir` and package the full `dist\ReplyRight\*` folder through Inno Setup.
+- Support first-run admin setup when no admin exists, without requiring a local `.env`.
+- Run packaged `--health-smoke` in CI before installer creation/release.
 - Keep Outlook read-only, keep AI drafts human-reviewed, and do not wire `replyright_kernel/` into production.
 
 Recommended target for v0.2.0:
@@ -217,6 +220,7 @@ Recommended target for v0.2.0:
 - Begin PySide6 native UI migration for the main inbox workflow.
 - Do not use `QWebEngineView` as the primary UI.
 - Preserve the Python intelligence modules and extract service boundaries from FastAPI route handlers.
+- Use the scaffold in `replyright_core/`, `replyright_qt/`, and `docs/PYSIDE6_MIGRATION_PLAN.md` as the starting point.
 
 Reference docs:
 
@@ -230,7 +234,7 @@ Goal: keep the packaged EXE aligned with the current intelligence layer.
 
 Status on 2026-05-18:
 
-- `dist\ReplyRight.exe` was rebuilt with PyInstaller collection flags for scikit-learn, dateparser, joblib, and threadpoolctl.
+- `dist\ReplyRight\ReplyRight.exe` is built with PyInstaller collection flags for scikit-learn, dateparser, joblib, and threadpoolctl.
 - Packaged `/api/health` returned `ok=true`.
 - Packaged SQLite contains `training_pipeline_log`.
 - The training pipeline endpoint executed successfully.

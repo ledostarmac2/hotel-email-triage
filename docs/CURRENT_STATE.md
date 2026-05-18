@@ -1,6 +1,6 @@
 # Current State
 
-Last updated: 2026-05-18 (v0.1.1 emergency release repair in progress)
+Last updated: 2026-05-18 (v0.1.1 emergency release repair finalized in source)
 
 ## Status
 
@@ -12,12 +12,23 @@ Last updated: 2026-05-18 (v0.1.1 emergency release repair in progress)
   - `run_desktop.py` waits up to 30 seconds for backend health before creating the window.
   - Browser fallback was removed; startup failure now shows a controlled ReplyRight error dialog with `replyright-startup.log`.
   - The launcher prefers configured `APP_PORT` and chooses a dynamic available port only if the preferred port is occupied.
+  - `run_desktop.py --health-smoke` starts the packaged backend, verifies `/healthz`, and exits without opening WebView2.
+  - `build_exe.ps1` now uses PyInstaller `--onedir` and outputs `dist\ReplyRight\ReplyRight.exe`.
+  - The Inno Setup installer bundles the full `dist\ReplyRight\*` folder and excludes `.env`, runtime data, DBs, and logs.
+  - First-run setup exists at `/setup` and `/api/auth/setup`; if no admin user exists and Supabase service-role config is available, the user can create the first admin without a local `.env`.
   - GitHub release workflow and updater now prefer `ReplyRightSetup-v{version}.exe` installer assets.
   - Source version is bumped to `0.1.1`.
+- Local validation after the final v0.1.1 repair pass:
+  - `.\build_exe.ps1` built `dist\ReplyRight\ReplyRight.exe`.
+  - `dist\ReplyRight\ReplyRight.exe --health-smoke` exited successfully.
+  - `.\installer\build_installer.ps1` built `installer\output\ReplyRightSetup-v0.1.1.exe`.
+  - Full test suite passed with 445 tests, 1 existing warning, and 35 subtests.
 - New release docs:
   - `docs/RELEASE_BLOCKERS_v0.1.0.md`
   - `docs/INSTALLER_STRATEGY.md`
   - `docs/NATIVE_UI_MIGRATION.md`
+  - `docs/PYSIDE6_MIGRATION_PLAN.md`
+- PySide6 migration scaffolds now exist in `replyright_core/` and `replyright_qt/`. They are not production-wired. Do not use `QWebEngineView`, Electron, Tauri, or any browser/WebView shell as the native UI.
 - CI hardening pass completed after GitHub Actions failures on run #14:
   - `build_exe.ps1` now captures pip vendor-install output under non-terminating PowerShell error handling and checks the real native exit code, preventing successful pip installs with dependency-warning stderr from aborting clean CI builds.
   - `.github/workflows/build.yml` now gives pytest a 60-second per-test timeout to reduce Windows runner flakiness.
@@ -29,13 +40,13 @@ Last updated: 2026-05-18 (v0.1.1 emergency release repair in progress)
   - `outlook_dashboard/urgency_engine.py` exposes `compute_urgency(...)` for arrival-window-aware urgency scoring from extracted entities and detected program metadata.
   - `new_dependencies.txt` records `dateparser`; `requirements.txt` was not edited because another agent owns it in the parallel branch.
 - Multilingual hotel workflow coverage now exercises Spanish, French, Portuguese, Italian, and German reservation patterns. Entity extraction recognizes localized confirmation/reservation, arrival/departure, night-count, guest-count, and presidential-suite terms; redaction recognizes localized confirmation-number labels; urgency scoring recognizes common localized billing, complaint, cancellation, thank-you, accessibility, allergy, and actionable-request terms.
-- `dist\ReplyRight.exe` was rebuilt from latest source on 2026-05-18 with PyInstaller collection flags for scikit-learn/dateparser/joblib/threadpoolctl. Packaged verification passed: `/api/health` returned `ok=true`, `training_pipeline_log` exists in packaged SQLite, `POST /api/admin/training/run?batch_size=50` returned successfully with no failures, and Supabase `training_examples` returned 5 rows through a service-role REST check.
+- Previous onefile builds were rebuilt on 2026-05-18 with PyInstaller collection flags for scikit-learn/dateparser/joblib/threadpoolctl. Current source builds the onedir app at `dist\ReplyRight\ReplyRight.exe`.
 - The UI has ReplyRight branding, provided logo/icon assets, an urgency-ranked conversation queue, summary/steps panels, local status changes, and an on-demand AI response modal.
 - Outlook refresh is designed around classic Outlook for Windows and now uses read-only `pywin32` COM import as the primary path. The legacy `ExportNYCWAReservationsInboxOnly` VBA macro remains a fallback when direct import dependencies are unavailable.
 - Refresh Inbox now attempts OpenAI classification when `OPENAI_API_KEY` is configured. The dashboard `OPENAI_MODEL` default is `gpt-5.4-nano`, selected after checking official OpenAI docs on 2026-05-17 for low-cost classification/extraction suitability. If OpenAI is not configured and `GOOGLE_AI_API_KEY` is present, Refresh Inbox attempts Google AI Studio/Gemini classification with structured JSON output. Local deterministic triage remains the fallback when external AI is unavailable or errors.
 - Microsoft Graph OAuth code exists but is not the active path because the user hit enterprise access restrictions in Microsoft Entra.
-- `build_exe.ps1` builds `dist\ReplyRight.exe` and attempts Desktop/Start Menu shortcuts. The latest source uses **pywebview** (WebView2/edgechromium backend) for the desktop window.
-- The rebuilt `dist\ReplyRight.exe` was launch-tested by the user: the pywebview window opens, the dashboard loads, and the sidebar tabs work.
+- `build_exe.ps1` builds `dist\ReplyRight\ReplyRight.exe` as a PyInstaller onedir app and attempts Desktop/Start Menu shortcuts. The latest source uses **pywebview** (WebView2/edgechromium backend) for the v0.1.1 bridge desktop window.
+- A previous rebuilt onefile EXE was launch-tested by the user: the pywebview window opened, the dashboard loaded, and the sidebar tabs worked. The current onedir installer path still needs manual install validation.
 - Refresh Inbox was verified through the packaged EXE: it directly read/imported 46 messages from `NYCWA_Reservations > Inbox`, analyzed 46 locally, skipped 0, and did not launch the VBA macro (`launch_method=pywin32-com`). A prior verification pass deleted 6 stale/non-current rows.
 - The inbox API now returns 28 conversation groups from those 46 Outlook emails. Conversation details include the thread messages for the selected conversation.
 - Owner routing is limited to operating departments: Front Desk, Reservations, Concierge, Sales, Housekeeping, Engineering, and All Departments. There is no Management owner.
@@ -49,16 +60,16 @@ Last updated: 2026-05-18 (v0.1.1 emergency release repair in progress)
 - A CCA/completed-form pattern now routes to Reservations with concise steps to apply the form and confirm completion.
 - Urgency is deliberately more conservative: level 5 is reserved for same/next-day operational blockers or serious risk, while completed/thank-you/form-submission updates are lowered unless a high-risk signal is present.
 - `python -m pytest tests/ -x` passes with **424 tests** (35 subtests). One existing warning remains for `datetime.utcnow()` in auth reset-token code.
-- `dist\ReplyRight.exe` was rebuilt after adaptive triage changes. Packaged health check succeeded, and current packaged data rendered 28 conversation groups with urgency distribution `2:14, 3:4, 4:7, 5:3`.
+- Previous packaged health checks succeeded with 28 conversation groups and urgency distribution `2:14, 3:4, 4:7, 5:3`; current onedir builds should be validated through `--health-smoke` and the installer.
 - `docs/FUTURE_ROADMAP_SUPABASE_ADAPTIVE_LEARNING.md` captures the broader Supabase/shared-learning roadmap.
 - Confidence scoring (10–95%) is computed per email and shown as a color-coded pill in the UI.
 - Rule candidate engine mines local feedback for recurring correction patterns. Three matching corrections create visible candidates; five or more mark the rule as auto-promoted for hands-off shared learning.
 - Admin Suggested Rules now includes emergency `Reject` and `Dismiss` controls. Dismissed candidates are hidden locally; rejected candidates stay visible as rejected and are skipped by Supabase auto-promotion.
-- Login is gated by local ReplyRight accounts. The configured admin account is read from `REPLYRIGHT_ADMIN_EMAIL` / `REPLYRIGHT_ADMIN_PASSWORD` in `.env`; startup creates or repairs that admin hash if it already exists.
+- Login is gated by Supabase Auth. The configured admin account can still be repaired from `REPLYRIGHT_ADMIN_EMAIL` / `REPLYRIGHT_ADMIN_PASSWORD` when an admin already exists; if no admin exists, first-run setup can create one through the bundled Supabase service-role configuration.
 - Login failures render a persistent static error message with an X close button and preserve the typed email address. Dashboard action failures such as invite/reset errors now use a persistent dismissable error toast.
 - Auth middleware protects `/api/auth/me` and admin endpoints again. Public auth routes are limited to login/logout/forgot-password/reset-password, fixing the post-login dashboard boot loop.
 - Admin view now has its own dashboard shell: the Refresh Inbox button is hidden while Admin is active, the topbar changes to Admin, and leaving Admin restores/rebinds the inbox queue/detail DOM so Inbox, Urgent, VIP, and Missing Info render correctly again.
-- `dist\ReplyRight.exe` was rebuilt after the admin navigation fix and shortcuts were refreshed. A headless Edge/Selenium check verified Admin -> Inbox -> Urgent navigation, including Refresh Inbox visibility.
+- A previous packaged build after the admin navigation fix passed a headless Edge/Selenium Admin -> Inbox -> Urgent navigation check, including Refresh Inbox visibility.
 - Roadmap audit completed and recorded in `docs/HANDOFF.md`. Phase 1 is mostly complete; the next blanks are structured feedback controls, Supabase durable sync/cache, hands-off rule auto-promotion, and a true staged AI pipeline.
 - Brian answered the roadmap questions: summary quality and reply quality should be 1-5 ratings; shared learning rules should auto-promote hands-off with no required admin monitoring; multi-property/cross-property support is irrelevant and should be removed from the roadmap because ReplyRight is only for this hotel.
 - Supabase approved rules are cached durably in local SQLite, and failed feedback uploads are queued locally for retry on the next configured startup.
@@ -83,9 +94,9 @@ Last updated: 2026-05-18 (v0.1.1 emergency release repair in progress)
 
 - Desktop launcher uses **pywebview** (`webview.start(gui="edgechromium")`). WebView2 runtime ships with Windows 10/11 (22H2+) but must be present on any machine running the EXE.
 - `run_desktop.py` does a pre-flight `import clr` check and raises a descriptive error if pythonnet is missing, rather than crashing natively with no log entry.
-- Startup logging is in `run_desktop.py`; packaged builds write to `dist\data\replyright-startup.log`.
+- Startup logging is in `run_desktop.py`; packaged builds write to `dist\ReplyRight\data\replyright-startup.log`.
 - `build_exe.ps1` auto-skips `.venv` and `.build-venv` to find system Python (VS Code auto-activates project venvs). If `.vendor` exists but is empty/partial, delete it and rebuild — the existence check short-circuits pip install.
-- If Defender locks `dist\ReplyRight.exe` during a rebuild, the script falls back to renaming the old EXE to `.exe.old`. If both are locked, delete them manually first.
+- If Defender locks `dist\ReplyRight\ReplyRight.exe` or the onedir folder during a rebuild, the script falls back to renaming the old build out of the way. If both are locked, delete them manually first.
 - Start Menu shortcut creation may fail on this locked-down Windows environment. Desktop shortcut creation uses the OneDrive Desktop path as a fallback.
 - Local Python temp-directory permissions were unreliable. `build_support/sitecustomize.py` exists as a workaround for project-local dependency installation.
 - Mock/demo data seeding has been removed from the active dashboard path.
@@ -119,7 +130,7 @@ Important variables:
 - AI drafts are suggestions only and require human review.
 - Supabase integration is wired: `upload_feedback_event()` fires after every correction and `download_approved_rules()` runs on startup. Uploads are a no-op until `SUPABASE_URL`/`SUPABASE_KEY` are set in `.env` and the schema is created (paste `docs/supabase_schema.sql` into the Supabase SQL Editor). **Both Supabase keys shared in session chat must be rotated before use.**
 - The Google AI Studio key shared in session chat must also be rotated before use. Do not store pasted/shared keys in tracked files or docs.
-- `.env` and `dist\.env` currently contain local admin/SMTP credentials and must not be committed or shared.
+- `.env` and `dist\ReplyRight\.env` may contain local admin/SMTP credentials and must not be committed or shared. The installer excludes `.env`.
 - This app intentionally does not mutate Outlook messages; adding send/archive/move/category actions requires a new design and approval.
 - Local mailbox exports and SQLite data are ignored for privacy and are not portable through git.
 - Phase 7 training must remain privacy-preserving by default. Do not store raw hotel email bodies, guest PII, reservation numbers, payment details, or attachments in Supabase training tables unless Brian explicitly approves a new override.
@@ -148,9 +159,9 @@ Tests: `python -m unittest tests.test_kernel_plugins tests.test_kernel_orchestra
 3. **Emergency v0.1.1 Release**: after tests and installer smoke checks pass, push a tag (`git tag v0.1.1 && git push origin v0.1.1`) to trigger the release job. It must publish `ReplyRightSetup-v0.1.1.exe` as the primary asset, not a bare EXE.
 4. **Local classifier training (Phase 7 long-term)**: import historical completed emails → redact PII → AI-label → human-review samples → store sanitized Supabase training set → train lightweight local classifiers. Start with urgency, owner, category, status, missing_information targets only.
 5. **Refresh check**: click Refresh Inbox once and visually confirm the feedback box, resized window behavior, and Outlook-like independent scrolling.
-6. **Login check**: use the local ReplyRight admin credentials from `dist\.env`; bad credentials should show a persistent error with an X, good credentials should enter the app.
+6. **Login check**: on a fresh install with no admin, confirm `/setup` creates the first admin; otherwise use the configured Supabase admin credentials. Bad credentials should show a persistent error with an X, good credentials should enter the app.
 7. **Spot-check triage**: review conversations formerly over-scored as urgency 4/5, especially completed CCA/payment form threads and friendly travel-agent replies.
-8. **If launch fails**: inspect `dist\data\replyright-startup.log`. Look for `pythonnet (clr) is not available`; if seen, delete `.vendor` and re-run `.\build_exe.ps1` so pip re-installs pythonnet.
+8. **If launch fails**: inspect `dist\ReplyRight\data\replyright-startup.log`. Look for `pythonnet (clr) is not available`; if seen, delete `.vendor` and re-run `.\build_exe.ps1` so pip re-installs pythonnet.
 9. **Use the roadmap**: read `docs/FUTURE_ROADMAP_SUPABASE_ADAPTIVE_LEARNING.md` before broad architecture work, especially Supabase shared learning and staged AI pipeline. Ignore multi-property/cross-property ideas unless Brian reopens them.
 10. **Wire `replyright_kernel`** into `outlook_dashboard/ai.py` only where it supports the new split: OpenAI refresh classification, local fallback/tests, and Claude Opus `AI Suggestion`.
 11. **Admin rules check**: after entering real feedback, confirm Suggested Rules shows Reject/Dismiss and that Dismiss removes a candidate from the local admin view.

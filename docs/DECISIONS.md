@@ -6,6 +6,12 @@ Decision: ReplyRight user releases must publish `ReplyRightSetup-v{version}.exe`
 
 Rationale: The v0.1.0 GitHub release allowed a user-visible failure where the desktop window opened to `127.0.0.1 refused to connect`. That breaks the standalone desktop illusion and is not acceptable for a user release. Installer-first packaging also gives users shortcuts, uninstall behavior, WebView2 handling, and a more professional Windows installation path.
 
+## 2026-05-18: Onedir Packaging And First-Run Admin Setup For v0.1.1
+
+Decision: Build v0.1.1 as a PyInstaller onedir app at `dist\ReplyRight\ReplyRight.exe`, then package the full folder with Inno Setup while excluding local `.env`, runtime data, databases, and logs. Add a first-run setup route that creates the first Supabase admin when no admin exists and service-role configuration is available.
+
+Rationale: Onedir packaging is easier to validate and install reliably than a single self-extracting EXE, and it lets the installer carry the full runtime bundle. First-run setup removes the requirement that a fresh user have a local `.env` admin seed before the first login.
+
 ## 2026-05-18: PySide6 Is The Recommended Native UI Migration Target
 
 Decision: Keep pywebview only as a short-term bridge for v0.1.1 emergency repair. For v0.2.0, evaluate and prototype a PySide6 native desktop shell that reuses the existing Python intelligence, SQLite, Supabase, Outlook, classifier, and training modules through direct Python service calls. Do not use `QWebEngineView` as the main UI.

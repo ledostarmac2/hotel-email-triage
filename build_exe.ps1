@@ -25,16 +25,27 @@ if (-not $PYTHON) {
 if (-not $PYTHON) { throw "Could not find a Python with PyInstaller. Run: pip install pyinstaller" }
 Write-Host "Using Python: $PYTHON"
 
-# If the previous EXE is locked (e.g. by Windows Defender scanning it),
-# rename it out of the way so PyInstaller can write the new one.
-$oldExe = Join-Path (Get-Location) "dist\ReplyRight.exe"
-if (Test-Path $oldExe) {
+# If a previous build is locked (e.g. by Windows Defender scanning it), rename
+# it out of the way so PyInstaller can write the new onedir bundle.
+$distRoot = Join-Path (Get-Location) "dist"
+$oldOneFileExe = Join-Path $distRoot "ReplyRight.exe"
+$appDir = Join-Path $distRoot "ReplyRight"
+if (Test-Path $oldOneFileExe) {
     try {
-        Remove-Item $oldExe -Force -ErrorAction Stop
+        Remove-Item $oldOneFileExe -Force -ErrorAction Stop
     } catch {
-        $backupExe = $oldExe + ".old"
+        $backupExe = $oldOneFileExe + ".old"
         Remove-Item $backupExe -Force -ErrorAction SilentlyContinue
-        Rename-Item $oldExe $backupExe -Force -ErrorAction Stop
+        Rename-Item $oldOneFileExe $backupExe -Force -ErrorAction Stop
+    }
+}
+if (Test-Path $appDir) {
+    try {
+        Remove-Item $appDir -Recurse -Force -ErrorAction Stop
+    } catch {
+        $backupDir = Join-Path $distRoot "ReplyRight.old"
+        Remove-Item $backupDir -Recurse -Force -ErrorAction SilentlyContinue
+        Rename-Item $appDir $backupDir -Force -ErrorAction Stop
     }
 }
 
@@ -48,7 +59,11 @@ $runtimePackages = @(
     "anthropic",
     "pywebview>=4.4,<6",
     "pythonnet",
-    "pywin32"
+    "pywin32",
+    "dateparser",
+    "scikit-learn",
+    "joblib",
+    "threadpoolctl"
 )
 
 function Invoke-VendorPipInstall {
@@ -108,8 +123,12 @@ if (-not (Test-Path $vendorPath)) {
     $vendorChecks = @{
         "win32com"  = "pywin32"
         "anthropic" = "anthropic"
+        "dateparser" = "dateparser"
         "httpx"     = "httpx"
+        "joblib"    = "joblib"
         "openai"    = "openai"
+        "sklearn"   = "scikit-learn"
+        "threadpoolctl" = "threadpoolctl"
     }
     $toInstall = @()
     foreach ($dir in $vendorChecks.Keys) {
@@ -135,7 +154,8 @@ $buildInfoJson | Set-Content "outlook_dashboard\build_info.json" -Encoding utf8
 Write-Host "Build metadata: $buildInfoJson"
 
 & $PYTHON -m PyInstaller `
-    --onefile `
+    --onedir `
+    --clean `
     --windowed `
     --name ReplyRight `
     --icon "outlook_dashboard/static/replyright.ico" `
@@ -162,12 +182,12 @@ Write-Host "Build metadata: $buildInfoJson"
     --hidden-import sklearn.neighbors._partition_nodes `
     run_desktop.py
 
-$exePath = (Resolve-Path "dist\ReplyRight.exe").Path
+$exePath = (Resolve-Path "dist\ReplyRight\ReplyRight.exe").Path
 
 # Copy .env next to the EXE so it can load API keys at runtime
 if (Test-Path ".env") {
-    Copy-Item ".env" "dist\.env" -Force
-    Write-Host "Copied .env to dist\"
+    Copy-Item ".env" "dist\ReplyRight\.env" -Force
+    Write-Host "Copied .env to dist\ReplyRight\"
 }
 
 function New-ReplyRightShortcut {

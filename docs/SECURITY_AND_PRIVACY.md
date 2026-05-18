@@ -24,9 +24,9 @@ Local mailbox content and runtime data stay under ignored runtime folders by def
 ## Never Commit
 
 - `.env`
-- `dist\.env`
+- `dist\ReplyRight\.env`
 - `data\*`
-- `dist\data\*`
+- `dist\ReplyRight\data\*`
 - SQLite databases
 - `.msg` exports
 - startup logs

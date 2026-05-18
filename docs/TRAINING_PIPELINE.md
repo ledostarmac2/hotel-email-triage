@@ -138,7 +138,7 @@ python -m pytest tests/test_redaction.py -v
 
 End-to-end packaged smoke checks:
 
-1. Start `dist\ReplyRight.exe` in the background.
+1. Start `dist\ReplyRight\ReplyRight.exe` in the background.
 2. Confirm `/api/health` returns `ok=true`.
 3. Query packaged SQLite for `training_pipeline_log`.
 4. Log in and post `/api/admin/training/run?batch_size=50`.

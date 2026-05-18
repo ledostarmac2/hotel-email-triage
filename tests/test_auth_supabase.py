@@ -7,7 +7,10 @@ from unittest.mock import patch
 
 from outlook_dashboard.auth import (
     _decode_session,
+    admin_setup_available,
+    admin_user_exists,
     authenticate_user,
+    create_first_admin,
     create_reset_token,
     encode_session,
     ensure_admin,
@@ -150,6 +153,49 @@ def test_ensure_admin_create_and_update_paths(monkeypatch) -> None:
 
     methods = [method for method, _, _ in calls]
     assert methods == ["GET", "POST", "GET", "PUT"]
+
+
+def test_admin_setup_available_requires_supabase_service_role(monkeypatch) -> None:
+    monkeypatch.setenv("SUPABASE_URL", SUPABASE_URL)
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service-role-test-key")
+    assert admin_setup_available() is True
+
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", " ")
+    assert admin_setup_available() is False
+
+
+def test_admin_user_exists_detects_admin_role(monkeypatch) -> None:
+    _set_supabase_env(monkeypatch)
+
+    def fake_urlopen(request, timeout=15):
+        assert request.full_url.endswith("/auth/v1/admin/users?per_page=1000")
+        return FakeResponse(
+            {
+                "users": [
+                    {"id": "user-id", "email": "user@example.com", "app_metadata": {"role": "user"}},
+                    {"id": USER_ID, "email": "admin@example.com", "app_metadata": {"role": "admin"}},
+                ]
+            }
+        )
+
+    with patch("urllib.request.urlopen", side_effect=fake_urlopen):
+        assert admin_user_exists() is True
+
+
+def test_create_first_admin_refuses_when_admin_exists(monkeypatch) -> None:
+    _set_supabase_env(monkeypatch)
+
+    def fake_urlopen(request, timeout=15):
+        assert request.full_url.endswith("/auth/v1/admin/users?per_page=1000")
+        return FakeResponse({"users": [{"id": USER_ID, "email": "admin@example.com", "app_metadata": {"role": "admin"}}]})
+
+    with patch("urllib.request.urlopen", side_effect=fake_urlopen):
+        try:
+            create_first_admin("new@example.com", "StrongPass123!")
+        except RuntimeError as exc:
+            assert "already exists" in str(exc)
+        else:  # pragma: no cover
+            raise AssertionError("Expected RuntimeError")
 
 
 def test_create_reset_token_stores_supabase_uuid(tmp_path, monkeypatch) -> None:

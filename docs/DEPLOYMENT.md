@@ -26,7 +26,7 @@ The EXE contains:
 - pywebview desktop shell
 - bundled Python dependencies collected by PyInstaller
 
-Runtime data is written next to the executable under `dist\data\` for packaged builds.
+Runtime data is written next to the executable under `dist\ReplyRight\data\` for packaged builds.
 
 ## Local Build
 
@@ -37,11 +37,11 @@ From the repository root:
 .\installer\build_installer.ps1
 ```
 
-`build_exe.ps1` builds the internal PyInstaller executable at `dist\ReplyRight.exe`.
+`build_exe.ps1` builds the internal PyInstaller onedir app at `dist\ReplyRight\ReplyRight.exe`.
 
 `installer\build_installer.ps1` builds the Inno Setup installer at `installer\output\ReplyRightSetup-v{version}.exe`.
 
-The setup installer is the artifact users should download. The raw EXE is an internal build input.
+The setup installer is the artifact users should download. The onedir EXE is an internal build input.
 
 Important dynamic dependency collection includes:
 
@@ -84,7 +84,7 @@ http://127.0.0.1:8000
 Start the EXE in the background or off-screen:
 
 ```powershell
-Start-Process "dist\ReplyRight.exe"
+Start-Process "dist\ReplyRight\ReplyRight.exe"
 Start-Sleep -Seconds 8
 Invoke-RestMethod http://127.0.0.1:8000/healthz
 ```
@@ -108,7 +108,7 @@ Get-Process ReplyRight -ErrorAction SilentlyContinue | Stop-Process
 Confirm the packaged SQLite database has the training log table:
 
 ```powershell
-python -c "import sqlite3; c=sqlite3.connect(r'dist\data\hotel_email_triage.sqlite3'); print(c.execute(\"SELECT name FROM sqlite_master WHERE type='table' AND name='training_pipeline_log'\").fetchall())"
+python -c "import sqlite3; c=sqlite3.connect(r'dist\ReplyRight\data\hotel_email_triage.sqlite3'); print(c.execute(\"SELECT name FROM sqlite_master WHERE type='table' AND name='training_pipeline_log'\").fetchall())"
 ```
 
 Trigger a training run through the API only after authenticated admin login. Do not print passwords, cookies, or service-role keys.
@@ -123,7 +123,7 @@ Release assets must be installer-first:
 ReplyRightSetup-v{version}.exe
 ```
 
-Raw `dist\ReplyRight.exe` must not be attached as the default user download.
+Raw `dist\ReplyRight\ReplyRight.exe` must not be attached as the default user download.
 
 Typical release flow:
 
@@ -137,6 +137,7 @@ Before tagging:
 - Run tests.
 - Build locally.
 - Build the installer locally.
+- Run packaged health smoke: `dist\ReplyRight\ReplyRight.exe --health-smoke`.
 - Smoke-test packaged `/healthz`.
 - Confirm installer output exists.
 - Confirm `docs/CURRENT_STATE.md` and `docs/HANDOFF.md` are current.
@@ -151,7 +152,7 @@ installer/replyright_setup.iss
 installer/build_installer.ps1
 ```
 
-Use them after the EXE build is known good. See `docs/INSTALLER_STRATEGY.md`.
+Use them after the onedir app build is known good. The installer bundles `dist\ReplyRight\*` and excludes local `.env`, runtime data, DBs, and logs. See `docs/INSTALLER_STRATEGY.md`.
 
 ## Auto-Updater
 
@@ -161,7 +162,7 @@ Use them after the EXE build is known good. See `docs/INSTALLER_STRATEGY.md`.
 
 If the EXE fails to launch:
 
-1. Check `dist\data\replyright-startup.log`.
+1. Check `dist\ReplyRight\data\replyright-startup.log`.
 2. Confirm WebView2 is installed.
 3. Confirm bundled dependencies were collected.
 4. Delete partial `.vendor` or build temp folders if dependency installation short-circuited.
@@ -183,9 +184,9 @@ If classifier imports fail in the EXE:
 
 ## Do Not Commit
 
-- `dist\ReplyRight.exe`
-- `dist\.env`
-- `dist\data\*`
+- `dist\ReplyRight\ReplyRight.exe`
+- `dist\ReplyRight\.env`
+- `dist\ReplyRight\data\*`
 - local SQLite databases
 - startup logs
 - build folders

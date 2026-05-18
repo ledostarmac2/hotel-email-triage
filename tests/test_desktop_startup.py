@@ -85,3 +85,9 @@ def test_choose_app_port_moves_when_preferred_is_occupied(tmp_path: Path, monkey
 def test_launcher_does_not_open_external_browser_fallback() -> None:
     source = Path("run_desktop.py").read_text(encoding="utf-8")
     assert "webbrowser.open" not in source
+
+
+def test_launcher_has_headless_health_smoke_mode() -> None:
+    source = Path("run_desktop.py").read_text(encoding="utf-8")
+    assert "--health-smoke" in source
+    assert "Health smoke mode succeeded" in source

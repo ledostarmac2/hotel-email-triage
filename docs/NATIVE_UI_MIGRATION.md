@@ -8,6 +8,8 @@ ReplyRight v0.1.0 exposed the pywebview/FastAPI implementation detail to users w
 
 v0.1.1 keeps pywebview temporarily but gates window creation on backend health and removes external browser fallback. The longer-term direction should be a native desktop UI that does not depend on browser chrome, WebView navigation, or localhost as the visible app surface.
 
+The initial non-production PySide6 scaffold now lives in `replyright_core/`, `replyright_qt/`, and `docs/PYSIDE6_MIGRATION_PLAN.md`.
+
 ## Current UI Architecture
 
 Active UI path:

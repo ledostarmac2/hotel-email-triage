@@ -15,8 +15,8 @@ def test_inno_installer_bundles_onedir_app_and_excludes_runtime_secrets() -> Non
     assert "OutputBaseFilename=ReplyRightSetup-v{#MyAppVersion}" in iss
     assert 'Source: "..\\dist\\ReplyRight\\*"' in iss
     assert "recursesubdirs" in iss
-    # .env is intentionally included so bundled Supabase credentials reach the install.
-    # Runtime-only data (databases, logs) must still be excluded.
+    # Runtime-only data and local secrets must stay out of the installer.
+    assert ".env" in iss
     assert "data\\*" in iss
     assert "*.sqlite3" in iss
     assert "*.log" in iss

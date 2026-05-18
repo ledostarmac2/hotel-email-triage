@@ -44,6 +44,14 @@ Expected local output:
 installer\output\ReplyRightSetup-v0.1.1.exe
 ```
 
+`build_exe.ps1` must use PyInstaller `--onedir`, producing:
+
+```text
+dist\ReplyRight\ReplyRight.exe
+```
+
+The installer bundles the full `dist\ReplyRight\*` folder and excludes local `.env`, runtime data, SQLite databases, and logs.
+
 ## Installer Requirements
 
 - Installer display name: `ReplyRight Setup`
@@ -56,6 +64,7 @@ installer\output\ReplyRightSetup-v0.1.1.exe
 - Start Menu shortcut.
 - Windows uninstall entry.
 - No Python installation required on target machine.
+- No local `.env` required for first login; if no admin exists, first-run setup can create one through the bundled Supabase service-role configuration.
 - Compatible with a fresh Windows 10/11 machine.
 - Installer includes or handles WebView2 runtime.
 - Installer uses ReplyRight icon where available.
@@ -70,12 +79,12 @@ If WebView2 is still unavailable at app startup, ReplyRight must show a controll
 
 The release workflow must:
 
-1. Build the PyInstaller EXE.
+1. Build the PyInstaller onedir app.
 2. Build the Inno Setup installer.
 3. Fail the release if installer creation fails.
-4. Run the desktop startup helper tests before publishing.
+4. Run the desktop startup helper tests and packaged `--health-smoke` before publishing.
 5. Upload `ReplyRightSetup-v{version}.exe` as the primary release asset.
-6. Avoid attaching raw `dist/ReplyRight.exe` as the main user asset.
+6. Avoid attaching raw `dist/ReplyRight/ReplyRight.exe` as the main user asset.
 
 The build workflow may upload an installer artifact for CI verification:
 
@@ -111,13 +120,14 @@ Before release:
 
 - Build EXE.
 - Build installer.
+- Run `dist\ReplyRight\ReplyRight.exe --health-smoke`.
 - Install on a clean or clean-ish Windows profile.
 - Launch from Start Menu.
 - Confirm no external browser opens.
 - Confirm no WebView localhost refused page appears.
 - Confirm `/healthz` succeeds after startup.
 - Confirm login page loads.
-- Confirm `dist\data\replyright-startup.log` or installed runtime log contains safe diagnostics only.
+- Confirm `dist\ReplyRight\data\replyright-startup.log` or installed runtime log contains safe diagnostics only.
 - Confirm uninstall entry appears in Windows Apps.
 
 ## Known Follow-Up

@@ -1,5 +1,59 @@
 # Handoff Log
 
+## 2026-05-18 - v0.1.1 release finalization and PySide6 scaffold
+
+Summary:
+
+- Verified the v0.1.1 emergency patch against the release checklist and closed remaining gaps.
+- Switched `build_exe.ps1` to PyInstaller `--onedir`, with output at `dist\ReplyRight\ReplyRight.exe`.
+- Kept the installer-first release path and changed the Inno Setup script to bundle `dist\ReplyRight\*` while excluding local `.env`, runtime data, SQLite databases, and logs.
+- Added packaged `--health-smoke` startup mode and wired GitHub Actions to run it after the EXE build and before installer creation.
+- Hardened `installer\build_installer.ps1` so winget/Chocolatey output cannot pollute the returned `ISCC.exe` path.
+- Added first-run setup support for creating the first Supabase admin when no admin exists and service-role configuration is available.
+- Added `docs/PYSIDE6_MIGRATION_PLAN.md`; the `replyright_core/` and `replyright_qt/` scaffolds already exist and remain non-production.
+
+Files changed:
+
+- `.github/workflows/build.yml`
+- `AGENTS.md`
+- `build_exe.ps1`
+- `installer/build_installer.ps1`
+- `installer/replyright_setup.iss`
+- `outlook_dashboard/auth.py`
+- `outlook_dashboard/main.py`
+- `run_desktop.py`
+- `tests/test_auth_supabase.py`
+- `tests/test_desktop_startup.py`
+- `tests/test_installer_contract.py`
+- `docs/PYSIDE6_MIGRATION_PLAN.md`
+- `docs/CURRENT_STATE.md`
+- `docs/DECISIONS.md`
+- `docs/DEPLOYMENT.md`
+- `docs/INSTALLER_STRATEGY.md`
+- `docs/NATIVE_UI_MIGRATION.md`
+- `docs/RELEASE_BLOCKERS_v0.1.0.md`
+- `docs/ROADMAP.md`
+- `docs/SECURITY_AND_PRIVACY.md`
+- `docs/TRAINING_PIPELINE.md`
+
+Verification:
+
+- `python -m py_compile run_desktop.py outlook_dashboard\main.py outlook_dashboard\auth.py outlook_dashboard\updater.py replyright_core\app_state.py replyright_qt\main_qt.py` - passed.
+- `.github/workflows/build.yml` parsed successfully with PyYAML.
+- `python -m pytest tests/test_desktop_startup.py tests/test_updater.py tests/test_auth_supabase.py tests/test_first_run_setup.py tests/test_installer_contract.py tests/test_pyside6_scaffold.py -q --timeout=30` - 28 passed, 1 existing warning.
+- `python -m pytest tests/ -x --timeout=30` - 445 passed, 1 warning, 35 subtests passed.
+- `.\build_exe.ps1` - succeeded and built `dist\ReplyRight\ReplyRight.exe`.
+- `dist\ReplyRight\ReplyRight.exe --health-smoke` - succeeded without opening a WebView window.
+- `.\installer\build_installer.ps1` - succeeded and built `installer\output\ReplyRightSetup-v0.1.1.exe`.
+
+Remaining work:
+
+- Do not commit `installer\output\ReplyRightSetup-v0.1.1.exe`; it is a generated release artifact.
+- Push/tag `v0.1.1` only after confirming the pushed CI run stays green.
+- After the tag creates the GitHub Release, download `ReplyRightSetup-v0.1.1.exe`, install it, launch from Start Menu, and confirm no `127.0.0.1 refused to connect` page is visible.
+
+---
+
 ## 2026-05-18 - Emergency v0.1.1 startup gate and installer-first release plan
 
 Summary:

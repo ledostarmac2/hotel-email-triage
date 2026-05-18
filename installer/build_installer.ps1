@@ -25,7 +25,7 @@ function Install-InnoSetup {
     $winget = Get-Command "winget.exe" -ErrorAction SilentlyContinue
     if ($winget) {
         try {
-            & $winget.Source install --id JRSoftware.InnoSetup --exact --silent --accept-package-agreements --accept-source-agreements
+            $null = & $winget.Source install --id JRSoftware.InnoSetup --exact --silent --accept-package-agreements --accept-source-agreements 2>&1
             $found = Find-Iscc
             if ($found) { return $found }
         } catch {
@@ -37,7 +37,7 @@ function Install-InnoSetup {
     $choco = Get-Command "choco.exe" -ErrorAction SilentlyContinue
     if ($choco) {
         try {
-            & $choco.Source install innosetup -y --no-progress
+            $null = & $choco.Source install innosetup -y --no-progress 2>&1
             $found = Find-Iscc
             if ($found) { return $found }
         } catch {

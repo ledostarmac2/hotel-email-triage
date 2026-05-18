@@ -175,6 +175,7 @@ def main() -> None:
     _log(f"Frozen: {getattr(sys, 'frozen', False)}")
     _log(f"Working directory: {os.getcwd()}")
     _log(f"Root directory: {ROOT_DIR}")
+    health_smoke_only = "--health-smoke" in sys.argv or os.getenv("REPLYRIGHT_HEALTH_SMOKE") == "1"
 
     try:
         _log("Importing application modules")
@@ -226,6 +227,10 @@ def main() -> None:
         _wait_for_server_health(url)
         if server_error:
             raise RuntimeError(server_error[-1])
+
+        if health_smoke_only:
+            _log("Health smoke mode succeeded; not opening WebView2 window")
+            return
 
         # _open_window blocks until the user closes the ReplyRight window,
         # then we fall through to the finally block to shut down the server.

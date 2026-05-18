@@ -107,8 +107,10 @@ async def lifespan(_: FastAPI):
         settings.graph_configured,
     )
     initialize_database(settings.database_path)
-    if settings.replyright_admin_email and settings.replyright_admin_password:
+    if settings.replyright_admin_email and settings.replyright_admin_password and admin_user_exists():
         ensure_admin(settings.replyright_admin_email, settings.replyright_admin_password, settings.database_path)
+    elif settings.replyright_admin_email and settings.replyright_admin_password:
+        _log.info("No Supabase admin found; first-run setup is available.")
     else:
         _log.warning("Admin account seed skipped: REPLYRIGHT_ADMIN_EMAIL/PASSWORD are not configured.")
     rules = download_approved_rules()
