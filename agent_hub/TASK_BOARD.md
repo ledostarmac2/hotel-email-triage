@@ -1,6 +1,6 @@
 # Task Board
 
-Last updated: 2026-05-18
+Last updated: 2026-05-18 (Session 4)
 
 ## Claude
 
@@ -11,11 +11,14 @@ Last updated: 2026-05-18
 | Agent hub creation | Done | this directory |
 | Core service interface definitions | Done | replyright_core/services/ |
 | Core model dataclasses | Done | replyright_core/models/ |
-| Qt window skeletons | Done | replyright_qt/windows/ |
-| Qt viewmodel skeletons | Done | replyright_qt/viewmodels/ |
-| Qt widget skeletons | Done | replyright_qt/widgets/ |
-| First native login slice | Pending | After v0.1.1 clears |
-| PySide6 dependency added to requirements | Blocked | Not until first runnable slice |
+| First native login slice | **Done** | feat/pyside6-native-ui, commit 493803e |
+| Full native Qt shell (all screens) | **Done** | feat/pyside6-native-ui, commit 493803e |
+| PySide6 dependency added to requirements | **Done** | PySide6>=6.7, pywebview removed |
+| run_desktop.py wired to Qt window | **Done** | _open_qt_window replaces _open_window |
+| Admin dashboard panel (Qt) | Pending | After v0.1.1 merges |
+| PyInstaller packaging for PySide6 | Pending | Validate bundle, platform plugins |
+| Merge feat/pyside6-native-ui → main | Blocked | After v0.1.1 is tagged and released |
+| Rotate/revoke leaked key in dist/.env | Action needed | User must delete/revoke |
 
 ## Codex
 

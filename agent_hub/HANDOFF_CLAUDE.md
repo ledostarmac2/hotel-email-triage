@@ -1,56 +1,65 @@
 # Handoff: Claude
 
-Last updated: 2026-05-18
+Last updated: 2026-05-18 (Session 4)
 
-## What Claude is working on
+## What Claude completed this session
 
-### Active: PySide6 migration scaffold and planning
+### PySide6 migration — Phase 1 COMPLETE (branch: feat/pyside6-native-ui)
 
-Claude owns the PySide6 migration architecture. v0.1.1 security work is complete
-and blocked only on the Gemini verdict — Claude is not involved in that path.
+Commit: 493803e on `feat/pyside6-native-ui`
 
-**Completed this session:**
-- Created `agent_hub/` with all coordination files
-- Expanded `replyright_core/models/` — email and user dataclasses
-- Expanded `replyright_core/services/` — service Protocol interfaces
-- Expanded `replyright_core/adapters/` — adapter Protocol
-- Expanded `replyright_qt/windows/` — login and main window skeletons
-- Expanded `replyright_qt/viewmodels/` — inbox viewmodel skeleton
-- Expanded `replyright_qt/widgets/` — conversation list widget skeleton
-- Updated `docs/PYSIDE6_MIGRATION_PLAN.md` — fuller modules/testing/packaging detail
-- Added `tests/test_pyside6_no_browser_engine.py` — comprehensive no-engine checks
-- Added `tests/test_agent_hub_exists.py` — hub file existence
-- Added `tests/test_migration_docs_reference_no_qwebengine.py` — docs assertions
-- All tests passing
+The full pywebview → PySide6 replacement is working. The FastAPI backend is
+**untouched**. The Qt shell replaces the browser-based frontend and makes the
+same HTTP calls to the local uvicorn server.
+
+**Files written/replaced:**
+- `replyright_qt/api_client.py` — `ApiClient` (requests) + `ApiWorker` (QThread)
+- `replyright_qt/app.py` — `QApplication` factory, login→main→logout flow
+- `replyright_qt/styles/theme.py` — Qt stylesheet (dark sidebar, light content)
+- `replyright_qt/widgets/sidebar_nav.py` — Inbox/Urgent/VIP/Missing/Admin nav + logout
+- `replyright_qt/widgets/filter_bar.py` — search + category/status/risk dropdowns + Sync
+- `replyright_qt/widgets/conversation_list.py` — custom rows with sender/urgency/time
+- `replyright_qt/widgets/conversation_detail.py` — thread, AI analysis, feedback, status
+- `replyright_qt/windows/login_window.py` — fully wired (ApiWorker, loading state, errors)
+- `replyright_qt/windows/main_window.py` — QSplitter layout, all signals wired
+- `run_desktop.py` — `_open_window` (pywebview) → `_open_qt_window` (PySide6)
+- `requirements.txt` — pywebview/pythonnet removed, `PySide6>=6.7` added
+- `tests/test_pyside6_no_browser_engine.py` — updated guard assertion
+
+**Tests:** 485 passed, 0 failures (excluding pre-existing secret hygiene failure
+in `dist/ReplyRight/.env` — unrelated to this branch).
 
 ---
 
-## Claude's next tasks (after v0.1.1 clears)
+## Claude's next tasks
 
-**Priority 1: First runnable native login slice**
-- Wire `replyright_core/services/auth_service.py` to a real adapter
-- Build a concrete `replyright_qt/windows/login_window.py` using Qt widgets
-- Show the window, accept email/password, call Supabase auth, show error or proceed
-- Target: app starts without FastAPI, pywebview, or localhost
+**Priority 1: PyInstaller packaging for PySide6**
+- Verify `pyinstaller` builds correctly with PySide6 (Qt platform plugins, styles)
+- PySide6 bundles are larger (~150 MB); update `build_exe.ps1` and `replyright_setup.iss`
+- Test that the built exe launches without needing a separate PySide6 install
 
-**Priority 2: Inbox list window**
-- Implement `replyright_core/services/inbox_service.py` adapter against local SQLite
-- Build `replyright_qt/windows/main_window.py` with a conversation list
-- Use Qt item models (QAbstractListModel) for the conversation table
+**Priority 2: Admin dashboard panel**
+- The admin queue button shows in the sidebar for admin users but has no dedicated panel yet
+- Build `replyright_qt/widgets/admin_panel.py` using `/api/admin/stats` endpoint
+- Show: correction count, misclassification table, training queue, model health
 
-**Priority 3: Packaging**
-- Add PySide6 to a separate `requirements-qt.txt` (not production requirements until ready)
-- Validate PyInstaller + PySide6 packaging: check bundle size, Qt platform plugins, icon
-- Only merge into production requirements when the native slice is demonstrably runnable
+**Priority 3: Merge to main after Gemini/Codex clear v0.1.1**
+- Do not merge `feat/pyside6-native-ui` into main until v0.1.1 is tagged and released
+- After merge: delete pywebview/WebView2 references from all docs
+
+**Priority 4: Remove dist/ReplyRight/.env leak**
+- `dist/ReplyRight/.env` contains a real Anthropic API key (line 10)
+- This is not version-controlled but it's sitting on disk and failing secret hygiene test
+- User should delete or revoke that key; it should NOT be in dist/
 
 ---
 
 ## Standing constraints for Claude
 
-- Do not touch `outlook_dashboard/`, `run_desktop.py`, or installer files during PySide6 work
 - Do not add QWebEngineView to any file in `replyright_qt/`
-- Do not import pywebview in `replyright_qt/`
-- Do not wire `replyright_core/` into production until a runnable slice exists
+- Do not import pywebview or webview in `replyright_qt/`
+- Do not wire `replyright_kernel/` into production
 - Do not commit real secrets
 - Do not log raw email bodies
 - Do not add reply sending
+- Do not touch `app/` (inactive Next.js scaffold)

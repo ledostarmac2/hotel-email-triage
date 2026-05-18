@@ -1,12 +1,22 @@
 # Current Situation Report
 
-Last updated: 2026-05-18
+Last updated: 2026-05-18 (Session 4)
 
-## Status: v0.1.1 BLOCKED PENDING GEMINI SECURITY VERDICT
+## Status: v0.1.1 BLOCKED PENDING GEMINI SECURITY VERDICT | PySide6 Phase 1 COMPLETE
 
 ---
 
 ## What is done
+
+### PySide6 Phase 1 — native Qt shell (committed 493803e on feat/pyside6-native-ui)
+
+- `pywebview` + `pythonnet` removed from `requirements.txt`; `PySide6>=6.7` added
+- `run_desktop.py`: `_open_window` (WebView2) → `_open_qt_window` (native Qt)
+- Full native UI written: `api_client.py`, `app.py`, `styles/theme.py`,
+  `sidebar_nav.py`, `filter_bar.py`, `conversation_list.py`,
+  `conversation_detail.py`, `login_window.py`, `main_window.py`
+- FastAPI backend **untouched** — Qt shell calls same HTTP endpoints
+- 485 tests passing, 0 failures on branch
 
 ### v0.1.1 source work (committed ea84602 on main)
 - `bundled_secrets.py` cleaned: no `SUPABASE_SERVICE_ROLE_KEY`, no `ANTHROPIC_API_KEY`,
