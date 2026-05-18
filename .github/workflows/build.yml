@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+    tags:
+      - "v*.*.*"
 
 jobs:
   lint:
@@ -89,3 +91,50 @@ jobs:
           docker logs replyright-ci
           docker stop replyright-ci
           exit 1
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [lint, build-exe]
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Write CI .env
+        shell: pwsh
+        run: |
+          @"
+          ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
+          SUPABASE_URL=${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          "@ | Set-Content -Path .env -Encoding UTF8
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+      - name: Build EXE
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File .\build_exe.ps1
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ReplyRight ${{ github.ref_name }}
+          body: |
+            ## ReplyRight ${{ github.ref_name }}
+
+            Waldorf Astoria New York — Reservations Intelligence Dashboard
+
+            ### Install
+            1. Download `ReplyRight.exe` below
+            2. Run it — no other software required (except Outlook Classic for live inbox sync)
+
+            ### What's New
+            See [CHANGELOG](https://github.com/ledostarmac2/hotel-email-triage/blob/main/docs/CHANGELOG_AI.md) for details.
+          files: dist/ReplyRight.exe
+          draft: false
+          prerelease: false

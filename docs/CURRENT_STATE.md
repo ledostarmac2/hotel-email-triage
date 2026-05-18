@@ -1,6 +1,6 @@
 # Current State
 
-Last updated: 2026-05-17 (v0.1.0 — Phases 1-6 complete, optimization and test pass)
+Last updated: 2026-05-17 (v0.1.0 — Phase 7 complete: enterprise deployment, Supabase Auth, bundled credentials, 175 tests)
 
 ## Status
 
@@ -24,7 +24,7 @@ Last updated: 2026-05-17 (v0.1.0 — Phases 1-6 complete, optimization and test 
   - Similar future messages can reuse stored local feedback patterns.
 - A CCA/completed-form pattern now routes to Reservations with concise steps to apply the form and confirm completion.
 - Urgency is deliberately more conservative: level 5 is reserved for same/next-day operational blockers or serious risk, while completed/thank-you/form-submission updates are lowered unless a high-risk signal is present.
-- `python -m unittest discover -s tests` passes with 76 tests using the project-local dependency target and the installed WindowsApps Python. Python compile checks for active source files and a FastAPI health smoke also pass.
+- `python -m pytest tests/ -x --timeout=30` passes with **175 tests** (35 subtests). Python compile checks for active source files and a FastAPI health smoke also pass.
 - `dist\ReplyRight.exe` was rebuilt after adaptive triage changes. Packaged health check succeeded, and current packaged data rendered 28 conversation groups with urgency distribution `2:14, 3:4, 4:7, 5:3`.
 - `docs/FUTURE_ROADMAP_SUPABASE_ADAPTIVE_LEARNING.md` captures the broader Supabase/shared-learning roadmap.
 - Confidence scoring (10–95%) is computed per email and shown as a color-coded pill in the UI.
@@ -42,7 +42,18 @@ Last updated: 2026-05-17 (v0.1.0 — Phases 1-6 complete, optimization and test 
 - A dedicated import smoke test now imports the active dashboard and Semantic Kernel modules so missing optional dependencies or broken import-time assumptions are caught earlier.
 - Phase 7 of `docs/FUTURE_ROADMAP_SUPABASE_ADAPTIVE_LEARNING.md` now defines the long-term local hotel-specific training direction: import historical completed emails, redact/sanitize PII, AI-label sanitized examples, human-review samples, store a Supabase training dataset, train lightweight local classifiers, route by confidence, and use external AI only for low-confidence, complex, sensitive, summary, or reply-drafting work.
 - Phase 7 should start with local classification targets only: urgency, owner, category, status, missing information, reply required, and escalation required. Do not try to train local polished reply writing first.
-- **v0.1.0 optimization pass (2026-05-17):** All code optimizations applied — dead category-check branch removed from `ai.py`, bare JSON parse in `_analyze_with_claude` wrapped with proper error handling, SMTP code deduplicated in `auth.py`, three near-identical Supabase download functions unified in `supabase_client.py`, httpx.Client reused across `promote_rule_candidates` loop, `secrets` moved to top-level import in `main.py`, rate-limit bucket TTL pruning added, `registry.py` plugin loop introduced. 160 pytest tests pass after all changes.
+- **v0.1.0 optimization pass (2026-05-17):** All code optimizations applied — dead category-check branch removed from `ai.py`, bare JSON parse in `_analyze_with_claude` wrapped with proper error handling, SMTP code deduplicated in `auth.py`, three near-identical Supabase download functions unified in `supabase_client.py`, httpx.Client reused across `promote_rule_candidates` loop, `secrets` moved to top-level import in `main.py`, rate-limit bucket TTL pruning added, `registry.py` plugin loop introduced.
+- **Phase 7 enterprise deployment (2026-05-17):**
+  - **Supabase Auth migration**: All user authentication, session management, and admin provisioning now go through Supabase `/auth/v1/*` endpoints. No local SQLite user tables. Sessions stored as `access_token|||refresh_token` cookie (`rr_session`). Token refresh handled transparently in `_AuthMiddleware`.
+  - **Bundled credentials**: `outlook_dashboard/bundled_secrets.py` ships XOR-obfuscated Supabase URLs, keys, Anthropic API key, and model name — committed to GitHub so any machine with the repo can connect to the DB and run AI with zero manual configuration. `.env` takes precedence when present.
+  - **Claude AI usage rule (CRITICAL)**: Claude/Anthropic is called ONLY when the user clicks the single-email "Analyze" button (`analyze_email()`). Bulk Refresh uses OpenAI → Google → heuristic only (no Claude). Violating this burns credits on every inbox refresh.
+  - **EXE now includes anthropic**: `build_exe.ps1` uses `--collect-all anthropic` so the packaged EXE can call Claude without "No module named 'anthropic'" errors.
+  - **Docker**: `Dockerfile` + `docker-compose.yml` for web-only server mode on Linux/Mac.
+  - **Inno Setup installer**: `installer/replyright_setup.iss` builds a Windows installer wizard.
+  - **Auto-updater**: `outlook_dashboard/updater.py` checks `ledostarmac2/hotel-email-triage` GitHub releases on startup.
+  - **Platform compat**: `outlook_dashboard/platform_compat.py` provides `IS_WINDOWS`, `HAS_OUTLOOK_COM`, `HAS_WEBVIEW` flags for cross-platform safe guards.
+  - **One-command setup**: `setup.ps1` installs Python, clones repo, creates venv, installs deps, builds EXE, and creates shortcuts. Run with: `irm https://raw.githubusercontent.com/ledostarmac2/hotel-email-triage/main/setup.ps1 | iex`
+  - **GitHub Actions CI**: lint (syntax + pytest) on windows-latest + EXE build artifact + Docker health check on ubuntu-latest + release job triggered on `v*.*.*` tags that creates a GitHub Release with EXE attached.
 
 ## Known Local Build/Launch Notes
 
@@ -57,20 +68,24 @@ Last updated: 2026-05-17 (v0.1.0 — Phases 1-6 complete, optimization and test 
 
 ## Config Requirements
 
-Copy `.env.example` to `.env` for local runs. `.env` must not be committed.
+Copy `.env.example` to `.env` for local runs. `.env` must not be committed. All credentials are bundled encrypted in `bundled_secrets.py` so the app works out-of-the-box even without a `.env` file — but `.env` always takes precedence.
 
 Important variables:
 
-- `OPENAI_API_KEY` for on-demand AI responses.
-- `OPENAI_MODEL`, default `gpt-5.4-nano`.
-- Optional `GOOGLE_AI_API_KEY` / `GOOGLE_AI_MODEL`, default `gemini-3-flash-preview`, for Google AI Studio refresh-classification fallback. Use `.\scripts\configure_google_ai_studio.ps1` to prompt for a new rotated key and write it to ignored `.env` without printing it.
-- `APP_HOST=127.0.0.1`
-- `APP_PORT=8000`
-- `REPLYRIGHT_ADMIN_EMAIL` and `REPLYRIGHT_ADMIN_PASSWORD` for the local ReplyRight admin account.
-- SMTP invite/reset variables: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`.
-- `OUTLOOK_EXPORT_MAILBOX=NYCWA_Reservations`
-- `OUTLOOK_EXPORT_FOLDER=Inbox`
-- Optional Microsoft Graph values: `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`, `MICROSOFT_TENANT_ID`, `MICROSOFT_REDIRECT_URI`, `SHARED_MAILBOX_EMAIL`.
+- `ANTHROPIC_API_KEY` — bundled; override in `.env` if rotating. Used ONLY for single-email Analyze button (Claude Opus).
+- `ANTHROPIC_MODEL` — default `claude-opus-4-7` (bundled).
+- `SUPABASE_URL`, `SUPABASE_KEY`, `SUPABASE_SERVICE_ROLE_KEY` — bundled; all auth and data goes through Supabase.
+- `REPLYRIGHT_ADMIN_EMAIL` and `REPLYRIGHT_ADMIN_PASSWORD` — Supabase Auth admin account credentials. `ensure_admin()` creates/repairs this user in Supabase on startup.
+- `OPENAI_API_KEY` / `OPENAI_MODEL` — for Refresh Inbox bulk classification (not Analyze button).
+- `GOOGLE_AI_API_KEY` / `GOOGLE_AI_MODEL` — fallback for Refresh Inbox when OpenAI not configured.
+- `APP_HOST=127.0.0.1`, `APP_PORT=8000`
+- `OUTLOOK_EXPORT_MAILBOX=NYCWA_Reservations`, `OUTLOOK_EXPORT_FOLDER=Inbox`
+- SMTP: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` (for password reset emails).
+
+**GitHub Actions Secrets** (set in repo Settings → Secrets → Actions):
+- `ANTHROPIC_API_KEY`, `SUPABASE_URL`, `SUPABASE_KEY`, `SUPABASE_SERVICE_ROLE_KEY` — used by CI to build the EXE and run the Docker health check.
+
+**Supabase setup** (one-time): paste `docs/supabase_schema.sql` into the Supabase SQL Editor and run it. Creates `feedback_events`, `classification_rules`, `known_senders`, and `prompt_versions` tables with RLS policies.
 
 ## Current Risks
 
@@ -103,10 +118,10 @@ Tests: `python -m unittest tests.test_kernel_plugins tests.test_kernel_orchestra
 
 ## Recommended Next Steps
 
-1. **Packaged UI check**: launch the rebuilt Desktop shortcut and confirm Admin -> Inbox/Urgent/VIP/Missing Info leaves Admin correctly and restores the Refresh Inbox button only outside Admin.
-2. **Verify expanded feedback**: launch the app and confirm direct feedback controls for category/contact/sentiment/status plus 1-5 summary/reply ratings save and recompute the selected conversation.
-3. **Supabase live check**: prompt-version and known-sender durable sync are implemented locally; next verify against a live Supabase project after rotating keys and applying the latest `docs/supabase_schema.sql`.
-4. **AI pipeline**: Refresh Inbox now uses OpenAI when configured with local fallback; next refinement is splitting it into explicit staged OpenAI classification steps.
+1. **Supabase schema**: if not yet run, paste `docs/supabase_schema.sql` into the Supabase SQL Editor (project `dxalumiijcfmwzmosijf`) and execute it once to create all tables.
+2. **GitHub Secrets**: in the GitHub repo Settings → Secrets → Actions, confirm `ANTHROPIC_API_KEY`, `SUPABASE_URL`, `SUPABASE_KEY`, `SUPABASE_SERVICE_ROLE_KEY` are set so CI can build and test.
+3. **First GitHub Release**: push a tag (`git tag v0.1.0 && git push origin v0.1.0`) to trigger the release job — it builds the EXE and posts a GitHub Release with the installer attached.
+4. **Local classifier training (Phase 7 long-term)**: import historical completed emails → redact PII → AI-label → human-review samples → store sanitized Supabase training set → train lightweight local classifiers. Start with urgency, owner, category, status, missing_information targets only.
 5. **Refresh check**: click Refresh Inbox once and visually confirm the feedback box, resized window behavior, and Outlook-like independent scrolling.
 6. **Login check**: use the local ReplyRight admin credentials from `dist\.env`; bad credentials should show a persistent error with an X, good credentials should enter the app.
 7. **Spot-check triage**: review conversations formerly over-scored as urgency 4/5, especially completed CCA/payment form threads and friendly travel-agent replies.
