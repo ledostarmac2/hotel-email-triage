@@ -1,5 +1,43 @@
 # Handoff Log
 
+## 2026-05-18 - Documentation hardening and architecture roadmap
+
+Summary:
+
+- Finished the documentation task that was interrupted after `docs/ROADMAP.md` was started.
+- Rewrote `docs/ROADMAP.md` so the roadmap matches the current FastAPI/pywebview app, default port `8000`, Supabase Auth posture, Phase 7 module status, current packaging state, and single-property focus.
+- Updated `AGENTS.md` with current first reads, active/inactive app boundaries, read-only Outlook rules, AI usage rules, training/classifier docs, and security constraints for future agents.
+- Rewrote `docs/ARCHITECTURE.md` with the current module map, data flow, auth model, persistence boundaries, training pipeline, local classifier, AI routing, admin tools, packaging, and constraints.
+- Updated `README.md` and added focused guides for the training pipeline, classifier, security/privacy, deployment, and hotel operator workflow.
+
+Files changed:
+
+- `README.md`
+- `AGENTS.md`
+- `docs/ARCHITECTURE.md`
+- `docs/ROADMAP.md`
+- `docs/TRAINING_PIPELINE.md`
+- `docs/CLASSIFIER.md`
+- `docs/SECURITY_AND_PRIVACY.md`
+- `docs/DEPLOYMENT.md`
+- `docs/OPERATIONS_GUIDE.md`
+- `docs/FUTURE_ROADMAP_SUPABASE_ADAPTIVE_LEARNING.md`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+
+Verification:
+
+- `python -m pytest tests/ -x` - 424 passed, 1 warning, 35 subtests passed.
+- `git diff --check` - no whitespace errors; line-ending normalization warnings only.
+- Documentation-only changes; no application code changed.
+- No EXE or UI launch was needed.
+
+Remaining work:
+
+- Keep these docs synchronized as the Phase 7 parallel branches are merged and as the classifier/training admin flows mature.
+
+---
+
 ## 2026-05-18 - Multilingual hotel workflow bug-test pass
 
 Summary:

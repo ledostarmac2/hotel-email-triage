@@ -1,11 +1,12 @@
 # Current State
 
-Last updated: 2026-05-18 (v0.1.0 - multilingual hotel workflow bug-test pass, 325 tests)
+Last updated: 2026-05-18 (v0.1.0 - documentation hardening pass, 424 tests)
 
 ## Status
 
 - Product name is ReplyRight.
 - Current runnable app is `outlook_dashboard/` plus `run_desktop.py`.
+- Documentation hardening pass completed: `README.md`, `AGENTS.md`, `docs/ARCHITECTURE.md`, `docs/ROADMAP.md`, `docs/TRAINING_PIPELINE.md`, `docs/CLASSIFIER.md`, `docs/SECURITY_AND_PRIVACY.md`, `docs/DEPLOYMENT.md`, `docs/OPERATIONS_GUIDE.md`, and `docs/FUTURE_ROADMAP_SUPABASE_ADAPTIVE_LEARNING.md` now describe the active FastAPI/pywebview app, inactive `app/` scaffold, experimental `replyright_kernel/`, training pipeline, local classifier, privacy boundaries, deployment workflow, and operator workflow.
 - Phase 7 hotel domain intelligence layer is implemented but intentionally not wired into `triage_email()` yet:
   - `outlook_dashboard/hotel_entities.py` exposes `extract_entities(subject, body, received_at=None)` for confirmation numbers, stay dates, nights, room category, rate code, guest counts, arrival window, and billing amounts.
   - `outlook_dashboard/travel_programs.py` exposes `detect_program(sender_email, body, signature=None)` for luxury travel program and advisor/agency detection.
@@ -31,7 +32,7 @@ Last updated: 2026-05-18 (v0.1.0 - multilingual hotel workflow bug-test pass, 32
   - Similar future messages can reuse stored local feedback patterns.
 - A CCA/completed-form pattern now routes to Reservations with concise steps to apply the form and confirm completion.
 - Urgency is deliberately more conservative: level 5 is reserved for same/next-day operational blockers or serious risk, while completed/thank-you/form-submission updates are lowered unless a high-risk signal is present.
-- `python -m pytest tests/ -x` passes with **325 tests** (35 subtests). One existing warning remains for `datetime.utcnow()` in auth reset-token code.
+- `python -m pytest tests/ -x` passes with **424 tests** (35 subtests). One existing warning remains for `datetime.utcnow()` in auth reset-token code.
 - `dist\ReplyRight.exe` was rebuilt after adaptive triage changes. Packaged health check succeeded, and current packaged data rendered 28 conversation groups with urgency distribution `2:14, 3:4, 4:7, 5:3`.
 - `docs/FUTURE_ROADMAP_SUPABASE_ADAPTIVE_LEARNING.md` captures the broader Supabase/shared-learning roadmap.
 - Confidence scoring (10–95%) is computed per email and shown as a color-coded pill in the UI.

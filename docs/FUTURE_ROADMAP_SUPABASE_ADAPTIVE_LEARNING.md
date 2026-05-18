@@ -1,6 +1,6 @@
 # ReplyRight Future Roadmap: Supabase Adaptive Learning
 
-> **Status as of v0.1.0 (2026-05-17):** Phases 1-6 are complete and committed. Phase 7 (local hotel-specific classifier training) is staged and fully specified below but not yet started. All prerequisite infrastructure — Supabase feedback upload, rule candidate engine, startup sync, local cache, Semantic Kernel plugins, and 160 automated tests — is in place.
+> **Status as of v0.1.0 (2026-05-18):** Phases 1-6 are complete and committed. Phase 7 is partially implemented: the training pipeline, Supabase `training_examples`, local scikit-learn classifier, hotel entity extraction, travel program detection, and deterministic urgency engine exist. Historical import, richer review workflows, model comparison/promotion, and full runtime wiring remain future work. Current source verification: 424 automated tests plus 35 subtests pass.
 
 ## Project Vision
 
@@ -49,7 +49,7 @@ GitHub Repository
 
 | Component | Platform |
 | --- | --- |
-| Desktop application | Python + PySide6 |
+| Desktop application | Python + FastAPI + pywebview/WebView2 |
 | AI engine | OpenAI API |
 | Central database | Supabase (PostgreSQL) |
 | Authentication | Supabase Auth |
@@ -58,7 +58,7 @@ GitHub Repository
 | IDE | VS Code |
 | Primary coding agent | Codex |
 
-Note: the current working desktop app is FastAPI + pywebview/WebView2. Treat PySide6 as the future target only after a deliberate migration plan.
+Note: PySide6 was mentioned in an earlier future direction, but the current working desktop app is FastAPI + pywebview/WebView2. Do not migrate UI frameworks without a deliberate migration plan.
 
 ## Why Supabase
 
