@@ -1,17 +1,21 @@
 """Import and reconcile Claude + ChatGPT label files.
 
-Reads labeling/inbox/{date}-claude.json and {date}-chatgpt.json,
-joins on training_example_id, applies agreement logic, and updates
-Supabase training_examples.
+Scans labeling/Claude/ for a file matching the target date and
+labeling/ChatGPT/ for a file matching the target date, joins on
+training_example_id, applies agreement logic, and updates Supabase.
+
+Claude files: flat labeler format (category, priority_level, …)
+ChatGPT files: critic format (agrees_with_claude, corrected_labels, …)
+              OR flat labeler format — both are handled automatically.
 
 Agreement logic (6 compared fields: category, priority_level, owner,
 contact_type, guest_sentiment, missing_information):
-  - 6/6 match  → dual_labeled: write labels, set human_reviewed=true,
+  - 6/6 match  -> dual_labeled: write labels, set human_reviewed=true,
                   labeling_engine='dual_labeled'
-  - 4-5/6 match → partial: write agreed fields, push to human-review
+  - 4-5/6 match -> partial: write agreed fields, push to human-review
                   queue (human_reviewed stays false),
                   labeling_engine='partial_agreement'
-  - ≤3/6 match  → human-review only: do not write labels,
+  - <=3/6 match -> human-review only: do not write labels,
                   labeling_engine='needs_full_review'
 
 Writes a JSON run log to labeling/runs/{timestamp}.json.
@@ -26,6 +30,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -47,12 +52,31 @@ _COMPARE_FIELDS = [
     "missing_information",
 ]
 
-# Map priority_level strings to label_urgency integers
 _PRIORITY_TO_URGENCY = {"Low": 1, "Normal": 2, "High": 4, "Immediate": 5}
 
 
+def _date_variants(date_str: str) -> list[str]:
+    """Return common filename variants for a date string (hyphen and underscore)."""
+    return [date_str, date_str.replace("-", "_")]
+
+
+def _find_date_file(folder: Path, date_str: str) -> Path | None:
+    """Return the first file in folder whose stem contains the date (any separator)."""
+    if not folder.is_dir():
+        return None
+    variants = _date_variants(date_str)
+    for f in sorted(folder.iterdir()):
+        if not f.suffix.lower() == ".json":
+            continue
+        stem = f.stem.lower()
+        for v in variants:
+            if v.replace("-", "").replace("_", "") in stem.replace("-", "").replace("_", ""):
+                return f
+    return None
+
+
 def _load_json_file(path: Path) -> list[dict]:
-    if not path.exists():
+    if not path or not path.exists():
         return []
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -65,13 +89,39 @@ def _load_json_file(path: Path) -> list[dict]:
         return []
 
 
+def _is_critic_format(row: dict) -> bool:
+    """Detect ChatGPT critic format (has agrees_with_claude key)."""
+    return "agrees_with_claude" in row
+
+
+def _normalize_critic_to_labels(critic_row: dict, claude_row: dict) -> dict:
+    """Flatten ChatGPT critic format into a comparable label dict.
+
+    For each field ChatGPT agrees on, adopts Claude's value.
+    For each field ChatGPT disagrees on, uses the corrected value.
+    """
+    agrees = critic_row.get("agrees_with_claude") or {}
+    corrected = critic_row.get("corrected_labels") or {}
+    out: dict[str, Any] = {"training_example_id": critic_row.get("training_example_id", "")}
+    for field in _COMPARE_FIELDS:
+        if agrees.get(field, True):
+            out[field] = claude_row.get(field)
+        else:
+            out[field] = corrected.get(field)
+    return out
+
+
 def _count_agreements(a: dict, b: dict) -> tuple[int, list[str], list[str]]:
     """Return (matched_count, agreed_fields, disagreed_fields)."""
     agreed: list[str] = []
     disagreed: list[str] = []
     for field in _COMPARE_FIELDS:
-        va = (a.get(field) or "").strip() if isinstance(a.get(field), str) else a.get(field)
-        vb = (b.get(field) or "").strip() if isinstance(b.get(field), str) else b.get(field)
+        va = a.get(field)
+        vb = b.get(field)
+        if isinstance(va, str):
+            va = va.strip()
+        if isinstance(vb, str):
+            vb = vb.strip()
         if va == vb:
             agreed.append(field)
         else:
@@ -138,23 +188,45 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    inbox = ROOT / "labeling" / "inbox"
-    claude_path = inbox / f"{args.date}-claude.json"
-    chatgpt_path = inbox / f"{args.date}-chatgpt.json"
+    claude_dir = ROOT / "labeling" / "Claude"
+    chatgpt_dir = ROOT / "labeling" / "ChatGPT"
 
-    claude_rows = _load_json_file(claude_path)
-    chatgpt_rows = _load_json_file(chatgpt_path)
+    claude_path = _find_date_file(claude_dir, args.date)
+    chatgpt_path = _find_date_file(chatgpt_dir, args.date)
 
-    if not claude_rows and not chatgpt_rows:
-        print(f"No label files found for {args.date} in {inbox}/")
-        print(f"  Expected: {claude_path.name}, {chatgpt_path.name}")
+    if not claude_path and not chatgpt_path:
+        print(f"No label files found for {args.date}.")
+        print(f"  Searched: {claude_dir}/ and {chatgpt_dir}/")
         return
 
-    # Index by training_example_id
-    claude_idx = {r["training_example_id"]: r for r in claude_rows if r.get("training_example_id")}
-    chatgpt_idx = {r["training_example_id"]: r for r in chatgpt_rows if r.get("training_example_id")}
+    if claude_path:
+        print(f"Claude labels:  {claude_path.relative_to(ROOT)}")
+    if chatgpt_path:
+        print(f"ChatGPT labels: {chatgpt_path.relative_to(ROOT)}")
+
+    claude_rows = _load_json_file(claude_path)
+    chatgpt_rows_raw = _load_json_file(chatgpt_path)
+
+    # Index Claude labels by ID
+    claude_idx: dict[str, dict] = {r["training_example_id"]: r for r in claude_rows if r.get("training_example_id")}
+
+    # Normalize ChatGPT rows — critic format or flat format
+    chatgpt_idx: dict[str, dict] = {}
+    for row in chatgpt_rows_raw:
+        tid = row.get("training_example_id")
+        if not tid:
+            continue
+        if _is_critic_format(row):
+            claude_ref = claude_idx.get(tid, {})
+            chatgpt_idx[tid] = _normalize_critic_to_labels(row, claude_ref)
+        else:
+            chatgpt_idx[tid] = row
 
     all_ids = set(claude_idx) | set(chatgpt_idx)
+
+    if not all_ids:
+        print("No valid training_example_id entries found in either file.")
+        return
 
     stats = {"processed": 0, "dual_labeled": 0, "partial": 0, "needs_review": 0, "errors": 0}
     run_log: list[dict] = []
@@ -163,19 +235,17 @@ def main() -> None:
         c_row = claude_idx.get(tid)
         g_row = chatgpt_idx.get(tid)
 
-        # If only one source has data, send to human review
         if not c_row or not g_row:
             present = "claude" if c_row else "chatgpt"
             update = {"labeling_engine": "needs_full_review"}
             ok, err = _patch_example(tid, update)
-            log_entry: dict[str, Any] = {
+            run_log.append({
                 "training_example_id": tid,
                 "outcome": "needs_review",
                 "reason": f"only {present} label present",
                 "supabase_ok": ok,
                 "error": err or None,
-            }
-            run_log.append(log_entry)
+            })
             stats["processed"] += 1
             stats["needs_review"] += 1
             if not ok:
@@ -185,7 +255,6 @@ def main() -> None:
         match_count, agreed_fields, disagreed_fields = _count_agreements(c_row, g_row)
 
         if match_count == 6:
-            # Full agreement — dual labeled
             update = _build_update(c_row, agreed_fields)
             update["labeling_engine"] = "dual_labeled"
             update["human_reviewed"] = True
@@ -203,7 +272,6 @@ def main() -> None:
                 stats["errors"] += 1
 
         elif match_count >= 4:
-            # Partial agreement — write agreed fields, queue disagreements
             update = _build_update(c_row, agreed_fields)
             update["labeling_engine"] = "partial_agreement"
             ok, err = _patch_example(tid, update)
@@ -223,7 +291,6 @@ def main() -> None:
                 stats["errors"] += 1
 
         else:
-            # Low agreement — human review only
             update = {"labeling_engine": "needs_full_review"}
             ok, err = _patch_example(tid, update)
             run_log.append({
@@ -241,7 +308,6 @@ def main() -> None:
             if not ok:
                 stats["errors"] += 1
 
-    # Write run log
     ts = datetime.now(tz=timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     runs_dir = ROOT / "labeling" / "runs"
     runs_dir.mkdir(parents=True, exist_ok=True)

@@ -33,8 +33,10 @@ htmlcov/
 
 data/
 
-# Labeling inbox files contain redacted but potentially sensitive email content
+# Labeling raw label files contain redacted but potentially sensitive email content
 labeling/inbox/*.json
+labeling/Claude/*.json
+labeling/ChatGPT/*.json
 
 build/
 dist/

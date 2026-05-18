@@ -1,7 +1,8 @@
 """Tests for the human-in-the-loop dual-labeling workflow.
 
 Covers: export formatting, import agreement logic (full/partial/low),
-idempotency, skip-reviewed filtering, run-log writing.
+critic-format normalization, flexible file discovery, idempotency,
+skip-reviewed filtering, run-log writing.
 """
 from __future__ import annotations
 
@@ -50,7 +51,28 @@ def _chatgpt_label(tid: str, **overrides) -> dict:
     return base
 
 
-# ── import helpers ─────────────────────────────────────────────────────────────
+def _chatgpt_critic(tid: str, agrees: dict | None = None, corrected: dict | None = None) -> dict:
+    """Build a ChatGPT critic-format row (all fields agree by default)."""
+    default_agrees = {
+        "category": True,
+        "priority_level": True,
+        "owner": True,
+        "contact_type": True,
+        "guest_sentiment": True,
+        "missing_information": True,
+    }
+    if agrees:
+        default_agrees.update(agrees)
+    return {
+        "training_example_id": tid,
+        "agrees_with_claude": default_agrees,
+        "corrected_labels": corrected or {},
+        "critic_confidence": 90,
+        "reasoning": "test",
+    }
+
+
+# ── module loaders ─────────────────────────────────────────────────────────────
 
 def _load_import_module():
     import importlib.util, sys
@@ -147,36 +169,98 @@ class TestExportFormatting:
             assert "human_reviewed" not in params
 
 
+# ── critic-format normalization tests ─────────────────────────────────────────
+
+class TestCriticFormatNormalization:
+    def test_is_critic_format_detects_key(self):
+        mod = _load_import_module()
+        assert mod._is_critic_format({"agrees_with_claude": {}}) is True
+        assert mod._is_critic_format({"category": "VIP pre-arrival"}) is False
+
+    def test_full_agreement_critic_adopts_claude_values(self):
+        mod = _load_import_module()
+        tid = "norm-001"
+        c = _claude_label(tid)
+        critic = _chatgpt_critic(tid)  # all agrees=True, no corrections
+        normalized = mod._normalize_critic_to_labels(critic, c)
+        assert normalized["category"] == c["category"]
+        assert normalized["priority_level"] == c["priority_level"]
+        assert normalized["owner"] == c["owner"]
+
+    def test_disagreement_critic_uses_corrected_value(self):
+        mod = _load_import_module()
+        tid = "norm-002"
+        c = _claude_label(tid, category="VIP pre-arrival")
+        critic = _chatgpt_critic(
+            tid,
+            agrees={"category": False},
+            corrected={"category": "Rooming list / group"},
+        )
+        normalized = mod._normalize_critic_to_labels(critic, c)
+        assert normalized["category"] == "Rooming list / group"
+        # other fields adopted from Claude
+        assert normalized["owner"] == c["owner"]
+
+    def test_critic_partial_disagreement_count(self):
+        mod = _load_import_module()
+        tid = "norm-003"
+        c = _claude_label(tid)
+        critic = _chatgpt_critic(
+            tid,
+            agrees={"category": False, "owner": False},
+            corrected={"category": "Billing dispute", "owner": "Front Desk"},
+        )
+        normalized = mod._normalize_critic_to_labels(critic, c)
+        # Only 2 fields differ from Claude's original
+        match_count, _, disagreed = mod._count_agreements(c, normalized)
+        assert match_count == 4
+        assert "category" in disagreed
+        assert "owner" in disagreed
+
+
+# ── file discovery tests ──────────────────────────────────────────────────────
+
+class TestFileFindByDate:
+    def test_finds_hyphen_date_file(self, tmp_path):
+        mod = _load_import_module()
+        folder = tmp_path / "Claude"
+        folder.mkdir()
+        f = folder / "2026-05-18-labels.json"
+        f.write_text("[]")
+        result = mod._find_date_file(folder, "2026-05-18")
+        assert result == f
+
+    def test_finds_underscore_date_file(self, tmp_path):
+        mod = _load_import_module()
+        folder = tmp_path / "ChatGPT"
+        folder.mkdir()
+        f = folder / "replyright_critic_results_2026_05_18_json.json"
+        f.write_text("[]")
+        result = mod._find_date_file(folder, "2026-05-18")
+        assert result == f
+
+    def test_returns_none_for_missing_date(self, tmp_path):
+        mod = _load_import_module()
+        folder = tmp_path / "Claude"
+        folder.mkdir()
+        (folder / "2026-05-17-labels.json").write_text("[]")
+        result = mod._find_date_file(folder, "2026-05-18")
+        assert result is None
+
+    def test_returns_none_for_missing_folder(self, tmp_path):
+        mod = _load_import_module()
+        result = mod._find_date_file(tmp_path / "DoesNotExist", "2026-05-18")
+        assert result is None
+
+
 # ── import / agreement tests ──────────────────────────────────────────────────
 
 class TestImportFullAgreement:
-    def test_dual_labeled_outcome(self, tmp_path):
+    def test_dual_labeled_outcome(self):
         mod = _load_import_module()
         tid = "aaaa-bbbb"
         claude = [_claude_label(tid)]
         chatgpt = [_chatgpt_label(tid)]
-
-        patched_calls: list[dict] = []
-
-        def fake_patch(training_id, update):
-            patched_calls.append({"id": training_id, "update": update})
-            return True, ""
-
-        with patch.object(mod, "_patch_example", side_effect=fake_patch):
-            inbox = tmp_path / "labeling" / "inbox"
-            inbox.mkdir(parents=True)
-            runs_dir = tmp_path / "labeling" / "runs"
-            runs_dir.mkdir(parents=True)
-
-            (inbox / "2026-05-18-claude.json").write_text(json.dumps(claude))
-            (inbox / "2026-05-18-chatgpt.json").write_text(json.dumps(chatgpt))
-
-            with patch.object(mod, "ROOT", tmp_path):
-                mod.main.__globals__["ROOT"] = tmp_path
-                # Call the reconcile logic directly
-                mod._count_agreements  # ensure loaded
-
-        # Verify agreement logic directly
         match_count, agreed, disagreed = mod._count_agreements(claude[0], chatgpt[0])
         assert match_count == 6
         assert disagreed == []
@@ -195,7 +279,16 @@ class TestImportFullAgreement:
         assert update["labeling_engine"] == "dual_labeled"
         assert update.get("label_category") == "VIP pre-arrival"
         assert update.get("label_owner") == "Reservations"
-        assert update.get("label_urgency") == 4  # High → 4
+        assert update.get("label_urgency") == 4  # High -> 4
+
+    def test_critic_full_agreement_is_dual_labeled(self):
+        mod = _load_import_module()
+        tid = "critic-full-001"
+        c = _claude_label(tid)
+        critic = _chatgpt_critic(tid)
+        normalized = mod._normalize_critic_to_labels(critic, c)
+        match_count, agreed, _ = mod._count_agreements(c, normalized)
+        assert match_count == 6
 
 
 class TestImportPartialAgreement:
@@ -217,9 +310,7 @@ class TestImportPartialAgreement:
         _, agreed, disagreed = mod._count_agreements(c, g)
         assert "category" in disagreed
         update = mod._build_update(c, agreed)
-        # category should NOT be in update since it's disagreed
         assert "label_category" not in update
-        # but agreed fields should be present
         assert "label_owner" in update
 
 
@@ -239,31 +330,15 @@ class TestImportLowAgreement:
 
 
 class TestImportIdempotency:
-    def test_same_date_twice_is_safe(self, tmp_path):
+    def test_same_date_twice_is_safe(self):
         mod = _load_import_module()
         tid = "idem-001"
-        claude = [_claude_label(tid)]
-        chatgpt = [_chatgpt_label(tid)]
-
-        patch_calls: list[dict] = []
-
-        def fake_patch(training_id, update):
-            patch_calls.append({"id": training_id, "update": update})
-            return True, ""
-
-        inbox = tmp_path / "labeling" / "inbox"
-        inbox.mkdir(parents=True)
-        (inbox / "2026-05-18-claude.json").write_text(json.dumps(claude))
-        (inbox / "2026-05-18-chatgpt.json").write_text(json.dumps(chatgpt))
-
-        with patch.object(mod, "_patch_example", side_effect=fake_patch), \
-             patch.object(mod, "ROOT", tmp_path):
-            # Run the reconcile logic twice (simulate two calls)
-            for _ in range(2):
-                mod._count_agreements(claude[0], chatgpt[0])  # no side effects
-
-        # Both runs produce the same logical outcome — safe to call _patch_example twice
-        assert True  # idempotency is enforced by Supabase upsert on the caller side
+        claude_row = _claude_label(tid)
+        chatgpt_row = _chatgpt_label(tid)
+        # Calling count_agreements twice produces the same result — no side effects
+        r1 = mod._count_agreements(claude_row, chatgpt_row)
+        r2 = mod._count_agreements(claude_row, chatgpt_row)
+        assert r1 == r2
 
 
 class TestRunLogWritten:
@@ -273,12 +348,15 @@ class TestRunLogWritten:
         claude_data = [_claude_label(tid)]
         chatgpt_data = [_chatgpt_label(tid)]
 
-        inbox = tmp_path / "labeling" / "inbox"
-        inbox.mkdir(parents=True)
+        claude_dir = tmp_path / "labeling" / "Claude"
+        claude_dir.mkdir(parents=True)
+        chatgpt_dir = tmp_path / "labeling" / "ChatGPT"
+        chatgpt_dir.mkdir(parents=True)
         runs_dir = tmp_path / "labeling" / "runs"
         runs_dir.mkdir(parents=True)
-        (inbox / "2026-05-18-claude.json").write_text(json.dumps(claude_data))
-        (inbox / "2026-05-18-chatgpt.json").write_text(json.dumps(chatgpt_data))
+
+        (claude_dir / "2026-05-18-labels.json").write_text(json.dumps(claude_data))
+        (chatgpt_dir / "2026-05-18-chatgpt.json").write_text(json.dumps(chatgpt_data))
 
         patch_log: list = []
 
@@ -296,4 +374,36 @@ class TestRunLogWritten:
         log_data = json.loads(run_files[0].read_text())
         assert log_data["date"] == "2026-05-18"
         assert log_data["stats"]["processed"] == 1
+        assert log_data["stats"]["dual_labeled"] == 1
+
+    def test_run_log_with_critic_format(self, tmp_path):
+        mod = _load_import_module()
+        tid = "log-critic-001"
+        claude_data = [_claude_label(tid)]
+        chatgpt_data = [_chatgpt_critic(tid)]  # critic format — full agreement
+
+        claude_dir = tmp_path / "labeling" / "Claude"
+        claude_dir.mkdir(parents=True)
+        chatgpt_dir = tmp_path / "labeling" / "ChatGPT"
+        chatgpt_dir.mkdir(parents=True)
+        runs_dir = tmp_path / "labeling" / "runs"
+        runs_dir.mkdir(parents=True)
+
+        (claude_dir / "2026-05-18-labels.json").write_text(json.dumps(claude_data))
+        (chatgpt_dir / "replyright_critic_results_2026_05_18_json.json").write_text(json.dumps(chatgpt_data))
+
+        patch_log: list = []
+
+        def fake_patch(tid_, update):
+            patch_log.append(tid_)
+            return True, ""
+
+        with patch.object(mod, "_patch_example", side_effect=fake_patch), \
+             patch.object(mod, "ROOT", tmp_path), \
+             patch("sys.argv", ["import_labels.py", "--date", "2026-05-18"]):
+            mod.main()
+
+        run_files = list(runs_dir.glob("*.json"))
+        assert len(run_files) == 1
+        log_data = json.loads(run_files[0].read_text())
         assert log_data["stats"]["dual_labeled"] == 1
