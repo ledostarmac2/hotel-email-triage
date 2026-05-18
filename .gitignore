@@ -33,6 +33,9 @@ htmlcov/
 
 data/
 
+# Labeling inbox files contain redacted but potentially sensitive email content
+labeling/inbox/*.json
+
 build/
 dist/
 *.spec
