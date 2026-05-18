@@ -2,135 +2,193 @@
 
 Last updated: 2026-05-18
 
+---
+
 ## Decision
 
-PySide6 is the recommended native UI target for ReplyRight v0.2.0.
+PySide6 is the target native UI framework for ReplyRight v0.2.0.
 
-The current v0.1.1 bridge may keep pywebview temporarily, but pywebview is not the long-term product shell. The native app must not use `QWebEngineView`, Electron, Tauri, or another browser/WebView engine as the primary UI.
+The current v0.1.1 bridge keeps pywebview temporarily for emergency repair continuity,
+but pywebview is not the long-term product shell.
 
-## Scaffold
+**Non-negotiable rules:**
+- Do not use `QWebEngineView` as the primary UI surface — ever.
+- Do not use pywebview in the new native app shell.
+- Do not use Electron.
+- Do not use Tauri.
+- Do not use any browser/WebView engine as the primary application UI.
+- Native Qt widgets only.
 
-New non-production scaffold:
+Rationale: The v0.1.0 incident (user-visible localhost refused-to-connect page) was
+caused by the pywebview/WebView2 layer. The only durable fix is eliminating the browser
+dependency from the desktop shell entirely.
+
+---
+
+## Scaffold (current state)
 
 ```text
-replyright_core/
-  services/
+replyright_core/                     — Framework-neutral service layer
   models/
+    email_models.py                  — Conversation, EmailMessage, TriageResult dataclasses
+    user_models.py                   — User, Session dataclasses
+  services/
+    auth_service.py                  — AuthServiceProtocol
+    inbox_service.py                 — InboxServiceProtocol
   adapters/
-  app_state.py
+    sqlite_adapter.py                — SqliteAdapterProtocol
+  app_state.py                       — AppState dataclass
 
-replyright_qt/
-  main_qt.py
+replyright_qt/                       — PySide6 native shell scaffold
+  main_qt.py                         — Entry point (raises until native slice ready)
   windows/
+    login_window.py                  — LoginWindow skeleton
+    main_window.py                   — MainWindow skeleton
   widgets/
+    conversation_list.py             — ConversationListWidget skeleton
   viewmodels/
+    inbox_viewmodel.py               — InboxViewModel (framework-neutral)
   resources/
 ```
 
-The active product remains:
-
+The active production path remains:
 ```text
-outlook_dashboard/
-run_desktop.py
+run_desktop.py -> outlook_dashboard/main.py (FastAPI) -> static HTML/CSS/JS -> pywebview
 ```
 
-## Service Boundaries To Extract
+---
 
-1. Auth service
-   - Login/logout/current user
-   - First-run admin setup
-   - User list/invite/delete/reset wrappers
+## Modules to preserve (do not rewrite without test backing)
 
-2. Inbox service
-   - Conversation list
-   - Conversation detail/thread loading
-   - Local status updates
-   - Read-only Outlook refresh
+These modules are called by the future service layer, not replaced:
 
-3. Analysis service
-   - Deterministic triage
-   - Hotel entities, travel programs, urgency engine
-   - Local classifier prediction
-   - Shared rules and sender intelligence
-   - Optional AI analysis/draft request
+| Module | Purpose |
+|---|---|
+| `outlook_dashboard/ai.py` | AI analysis/draft request (Anthropic, OpenAI, Gemini) |
+| `outlook_dashboard/signal_extractor.py` | Signal extraction from email text |
+| `outlook_dashboard/sender_intelligence.py` | Sender reputation and pattern scoring |
+| `outlook_dashboard/local_classifier.py` | Scikit-learn local triage classifier |
+| `outlook_dashboard/hotel_entities.py` | Hotel-specific entity recognition |
+| `outlook_dashboard/travel_programs.py` | Travel program and loyalty entity matching |
+| `outlook_dashboard/urgency_engine.py` | Urgency scoring |
+| `outlook_dashboard/taxonomy_meta.py` | Category/label taxonomy |
+| `outlook_dashboard/redaction.py` | PII redaction (must not be weakened) |
+| `outlook_dashboard/supabase_client.py` | Supabase cloud sync |
+| `outlook_dashboard/database.py` | Local SQLite read/write |
+| `outlook_dashboard/training_pipeline.py` | Local classifier training |
+| `outlook_dashboard/auth.py` | Supabase Auth integration |
 
-4. Feedback service
-   - Correction capture
-   - Rule candidate detection
-   - Supabase feedback upload/queue
+---
 
-5. Training service
-   - Training pipeline run/status
-   - Human review queue
-   - Local classifier train/status/feature importance
+## Modules to extract into service interfaces
 
-6. Diagnostics service
-   - `/healthz` equivalent
-   - Version/build info
-   - Platform checks
-   - Updater status
+These are called through `replyright_core/services/` Protocols in the native app:
 
-## Screen Migration Map
+| Service | Backed by |
+|---|---|
+| `AuthServiceProtocol` | `outlook_dashboard/auth.py` |
+| `InboxServiceProtocol` | `outlook_dashboard/database.py` + `outlook_dashboard/main.py` inbox logic |
+| `AnalysisServiceProtocol` (future) | `outlook_dashboard/ai.py` + deterministic pipeline |
+| `FeedbackServiceProtocol` (future) | `outlook_dashboard/supabase_client.py` |
 
-| Current Screen | Future Qt Equivalent | Notes |
-| --- | --- | --- |
-| Login | Login window | Supabase Auth-backed, no browser |
-| First-run setup | Setup window | Create first admin when none exists |
-| Inbox/Urgent/VIP/Missing Info queues | Main window with queue tabs | Use Qt item models for dense scanning |
-| Email detail/thread | Conversation detail pane | Preserve quoted-thread cleanup and risk display |
-| Feedback form | Feedback panel/dialog | Keep structured corrections and ratings |
-| AI suggestion modal | Reply suggestion dialog | Human review only; no sending |
-| Admin overview | Admin window/tab | Protected by admin role |
-| Rules/users/prompts | Admin widgets | Keep audit records |
-| Training/model health | Training widgets | Background worker with progress/status |
-| Signal inspector/sender profile/audit | Diagnostics/admin widgets | Read-only diagnostic views |
-| Update/version | Diagnostics/update panel | Installer-first update flow |
+---
 
-## Background Tasks
+## Screen migration map
 
-Use Qt worker threads or a small task runner for:
+| Current screen | Future Qt equivalent | Status |
+|---|---|---|
+| Login | `LoginWindow` | Scaffold only |
+| First-run admin setup | `SetupWindow` (future) | Not yet |
+| `/credentials-setup` | `CredentialsSetupWindow` (future) | Not yet |
+| Inbox / queue tabs | `MainWindow` with tab widget | Scaffold only |
+| Conversation detail | `ConversationDetailWidget` (future) | Not yet |
+| Feedback form | `FeedbackDialog` (future) | Not yet |
+| AI suggestion | `SuggestionDialog` (future) | Not yet |
+| Admin overview | `AdminWindow` (future) | Not yet |
+| Rules / users / prompts | Admin sub-widgets (future) | Not yet |
+| Training / model health | `TrainingWidget` (future) | Not yet |
+| Signal inspector / audit | `DiagnosticsWidget` (future) | Not yet |
 
-- Outlook refresh/import
-- AI calls
-- Supabase sync
-- Training export
-- Local classifier training
-- Update checks
+### Screens to migrate first (slice 1)
+1. Login — auth required for everything else
+2. Inbox list — core daily workflow
+3. Conversation detail — core daily workflow
 
-UI code must not block the event loop.
+### Screens to defer (slice 2+)
+- Admin screens (complex, low daily frequency)
+- Training/model health (background-only interaction)
+- Signal inspector (diagnostic only)
+- `/credentials-setup` (first-run only)
 
-## Packaging
+---
 
-The PySide6 shell should eventually have a separate PyInstaller entry point:
-
-```text
-replyright_qt/main_qt.py
-```
-
-Keep the Inno Setup installer-first release model:
+## Folder structure
 
 ```text
-ReplyRightSetup-v{version}.exe
+replyright_core/        Framework-neutral models, service interfaces, adapters
+replyright_qt/          PySide6 application code only
+  main_qt.py            CLI entry point — no pywebview, no FastAPI
+  windows/              Top-level QMainWindow/QDialog subclasses
+  widgets/              Reusable QWidget subclasses
+  viewmodels/           Framework-neutral presentation state (testable without Qt)
+  resources/            Icons, stylesheets, compiled Qt resources
 ```
 
-Do not add PySide6 to production requirements until a runnable native slice exists and packaging has been verified.
+---
 
-## Acceptance Criteria For First Native Slice
+## Service boundary plan
 
-- Starts without FastAPI or pywebview.
-- Does not import `QWebEngineView`.
-- Shows login/setup.
-- Lists conversations from local SQLite through a core service.
-- Opens conversation detail.
-- Saves structured feedback.
-- Shows health/version diagnostics.
-- Preserves read-only Outlook posture.
-- Passes existing tests plus new Qt service/viewmodel tests.
+1. `replyright_core` imports nothing from `replyright_qt` or `outlook_dashboard`
+2. `replyright_qt` imports from `replyright_core` only (never from `outlook_dashboard` directly)
+3. Concrete adapters in `replyright_qt/` or a new `replyright_adapters/` package
+   implement the `replyright_core` Protocols by delegating to `outlook_dashboard` modules
+4. This keeps intelligence modules stable while the shell changes
 
-## Non-Goals For The Scaffold
+---
 
-- No full UI rewrite in this step.
-- No reply sending.
-- No migration to `app/`.
-- No `replyright_kernel/` production wiring.
-- No PySide6 dependency added to production requirements yet.
+## Testing plan
+
+- `tests/test_pyside6_scaffold.py` — no browser-engine imports in scaffold
+- `tests/test_pyside6_no_browser_engine.py` — comprehensive no-engine checks
+- `tests/test_migration_docs_reference_no_qwebengine.py` — docs assertions
+- All viewmodel tests use no PySide6 — just pure Python dataclass state
+- Qt window tests use `pytest-qt` (future) when PySide6 is in requirements
+- Existing 471+ tests must continue to pass throughout migration
+
+---
+
+## Packaging risks and mitigations
+
+| Risk | Mitigation |
+|---|---|
+| PySide6 adds ~200 MB to installer | Keep PySide6 out of production requirements until slice 1 is demo-ready; evaluate bundle size before committing |
+| Qt platform plugin missing on target Windows | Test PyInstaller PySide6 bundle on a clean Windows 10/11 VM before release |
+| Qt dark theme inconsistency across Windows versions | Use explicit QPalette rather than relying on system theme |
+| Two entry points (run_desktop.py + main_qt.py) in installer | Separate build scripts; ship one or the other per release, not both |
+| pywebview removal breaks v0.1.1 smoke test | Do not remove pywebview from production until native slice passes full parity checklist |
+
+---
+
+## What not to touch during migration
+
+- `outlook_dashboard/` intelligence modules (preserve as-is; extract through interfaces)
+- `run_desktop.py` (production bridge; do not change until native slice is ready)
+- `installer/` files (release process; separate concern)
+- `.github/workflows/` (CI; separate concern)
+- `app/` (inactive Next.js scaffold; remains inactive)
+- `replyright_kernel/` (experimental; remains experimental)
+
+---
+
+## Acceptance Criteria for First Native Slice (v0.2.0 gate)
+
+1. `replyright_qt/main_qt.py` starts without FastAPI or pywebview
+2. Does not import `QWebEngineView`
+3. Does not import pywebview
+4. Login window appears — native Qt widgets, no browser
+5. Successful Supabase auth shows the inbox list
+6. Conversation list loads from local SQLite through `InboxServiceProtocol`
+7. Read-only Outlook posture preserved (no reply sending from Qt app)
+8. All existing 471+ tests still pass
+9. New Qt viewmodel unit tests added (no PySide6 dependency in those tests)
+10. PyInstaller + Inno Setup build tested on clean Windows VM
