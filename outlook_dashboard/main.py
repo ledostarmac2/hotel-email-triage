@@ -76,6 +76,8 @@ from .supabase_client import (
     upload_feedback_event,
 )
 from .taxonomy import CATEGORIES, CONTACT_TYPES, DEPARTMENT_OWNERS, PRIORITY_LEVELS, RISK_FLAGS, STATUSES
+from .training_pipeline import pipeline_status as training_pipeline_status
+from .training_pipeline import run_pipeline as run_training_pipeline
 from .updater import get_update_status, start_update_check
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -538,6 +540,31 @@ def api_admin_stats(request: Request):
         "rule_candidates": detect_rule_candidates(settings.database_path),
         "audit_logs": admin_recent_audit_logs(db_path=settings.database_path),
     }
+
+
+@app.get("/api/admin/training/status")
+def api_training_status(request: Request) -> dict[str, object]:
+    if request.state.user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only.")
+    return training_pipeline_status(db_path=get_settings().database_path)
+
+
+@app.post("/api/admin/training/run")
+def api_training_run(request: Request, batch_size: int = 10, refine: bool = False) -> dict[str, object]:
+    if request.state.user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only.")
+    settings = get_settings()
+    result = run_training_pipeline(batch_size=batch_size, refine=refine, db_path=settings.database_path)
+    record_audit_event(
+        action="training.pipeline.run",
+        actor_user_id=None,
+        actor_email=str(request.state.user["email"]),
+        entity_type="training_pipeline",
+        entity_id=None,
+        metadata=result,
+        db_path=settings.database_path,
+    )
+    return result
 
 
 @app.post("/api/rule-candidates/status")

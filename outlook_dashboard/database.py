@@ -227,6 +227,20 @@ def initialize_database(db_path: Path | None = None) -> None:
         _ensure_column(db, "triage_feedback", "corrected_status", "TEXT")
         _ensure_column(db, "triage_feedback", "summary_quality_rating", "INTEGER")
         _ensure_column(db, "triage_feedback", "reply_quality_rating", "INTEGER")
+        db.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS training_pipeline_log (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                email_id    INTEGER NOT NULL,
+                fingerprint TEXT NOT NULL,
+                status      TEXT NOT NULL DEFAULT 'pending',
+                error       TEXT,
+                created_at  TEXT NOT NULL
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_tpl_email_id ON training_pipeline_log (email_id);
+            CREATE INDEX IF NOT EXISTS idx_tpl_status ON training_pipeline_log (status);
+            """
+        )
 
 
 def _ensure_column(db: sqlite3.Connection, table: str, column: str, definition: str) -> None:
@@ -1222,3 +1236,69 @@ def record_sync_run(
                 utc_now_iso(),
             ),
         )
+
+
+# ── Training pipeline helpers ─────────────────────────────────────────────────
+
+def log_training_example(
+    email_id: int,
+    fingerprint: str,
+    status: str,
+    error: str | None = None,
+    db_path: Path | None = None,
+) -> None:
+    """Insert or replace a training pipeline log entry for this email."""
+    with managed_connect(db_path) as db:
+        db.execute(
+            """
+            INSERT INTO training_pipeline_log (email_id, fingerprint, status, error, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(email_id) DO UPDATE SET status=excluded.status, error=excluded.error
+            """,
+            (email_id, fingerprint, status, error, utc_now_iso()),
+        )
+
+
+def get_training_pipeline_status(db_path: Path | None = None) -> dict:
+    """Return counts of emails by training pipeline status."""
+    with managed_connect(db_path) as db:
+        rows = db.execute(
+            "SELECT status, COUNT(*) AS n FROM training_pipeline_log GROUP BY status"
+        ).fetchall()
+        counts = {row["status"]: row["n"] for row in rows}
+        total_completed = db.execute(
+            "SELECT COUNT(*) FROM emails WHERE status = 'Completed'"
+        ).fetchone()[0]
+        processed = sum(counts.values())
+        return {
+            "uploaded": counts.get("uploaded", 0),
+            "skipped": counts.get("skipped", 0),
+            "failed": counts.get("failed", 0),
+            "processed": processed,
+            "pending": max(0, total_completed - processed),
+        }
+
+
+def list_unprocessed_completed_emails(
+    batch_size: int = 10,
+    db_path: Path | None = None,
+) -> list[dict]:
+    """Return completed emails not yet in the training pipeline log."""
+    with managed_connect(db_path) as db:
+        rows = db.execute(
+            """
+            SELECT e.id, e.subject, e.sender_email, e.body_text, e.received_datetime,
+                   ea.category, ea.recommended_department_owner, ea.guest_sentiment,
+                   ea.priority_level, ea.missing_information, ea.analysis_engine,
+                   ea.confidence_score
+            FROM emails e
+            JOIN email_analysis ea ON ea.email_id = e.id
+            LEFT JOIN training_pipeline_log tl ON tl.email_id = e.id
+            WHERE e.status = 'Completed'
+              AND tl.email_id IS NULL
+            ORDER BY e.received_datetime DESC
+            LIMIT ?
+            """,
+            (batch_size,),
+        ).fetchall()
+        return [dict(row) for row in rows]

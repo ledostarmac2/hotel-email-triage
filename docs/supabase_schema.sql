@@ -88,6 +88,35 @@ CREATE TABLE IF NOT EXISTS prompt_versions (
 
 CREATE INDEX IF NOT EXISTS idx_prompt_versions_status ON prompt_versions (status);
 
+-- ── training_examples ─────────────────────────────────────────────────────────
+-- Sanitized, redacted email bodies with classification labels.
+-- No raw PII stored: bodies are redacted before upload.
+-- Inserted by the admin training pipeline using the service role key.
+CREATE TABLE IF NOT EXISTS training_examples (
+    id                      UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    email_fingerprint       TEXT NOT NULL UNIQUE,  -- SHA-256(sender_domain:subject_tokens)
+    sender_domain           TEXT,
+    subject_tokens          TEXT,                  -- sanitized keyword tokens, no PII
+    body_redacted           TEXT NOT NULL,         -- PII-stripped body (max 4000 chars)
+    label_urgency           INTEGER CHECK (label_urgency BETWEEN 1 AND 5),
+    label_owner             TEXT,
+    label_category          TEXT,
+    label_status            TEXT,
+    label_sentiment         TEXT,
+    label_missing_info      BOOLEAN DEFAULT FALSE,
+    label_reply_required    BOOLEAN DEFAULT FALSE,
+    label_escalation_required BOOLEAN DEFAULT FALSE,
+    labeling_engine         TEXT,                  -- "claude", "heuristic", "openai", "human"
+    human_reviewed          BOOLEAN DEFAULT FALSE,
+    app_version             TEXT DEFAULT '0.1.0',
+    created_at              TIMESTAMPTZ DEFAULT NOW(),
+    updated_at              TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_training_urgency  ON training_examples (label_urgency);
+CREATE INDEX IF NOT EXISTS idx_training_owner    ON training_examples (label_owner);
+CREATE INDEX IF NOT EXISTS idx_training_reviewed ON training_examples (human_reviewed);
+
 -- ── RLS: allow inserts from the publishable (anon) key ───────────────────────
 -- Enable Row Level Security then allow anonymous inserts so the desktop app
 -- can upload feedback without needing the service_role key.
@@ -95,14 +124,17 @@ ALTER TABLE feedback_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE classification_rules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE known_senders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE prompt_versions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE training_examples ENABLE ROW LEVEL SECURITY;
 
 -- Drop policies before (re)creating so this script is safe to run multiple times.
-DROP POLICY IF EXISTS "allow_insert_feedback"       ON feedback_events;
-DROP POLICY IF EXISTS "allow_read_rules"            ON classification_rules;
-DROP POLICY IF EXISTS "allow_read_senders"          ON known_senders;
-DROP POLICY IF EXISTS "allow_read_active_prompts"   ON prompt_versions;
-DROP POLICY IF EXISTS "allow_upsert_rules"          ON classification_rules;
-DROP POLICY IF EXISTS "allow_update_rules"          ON classification_rules;
+DROP POLICY IF EXISTS "allow_insert_feedback"           ON feedback_events;
+DROP POLICY IF EXISTS "allow_read_rules"                ON classification_rules;
+DROP POLICY IF EXISTS "allow_read_senders"              ON known_senders;
+DROP POLICY IF EXISTS "allow_read_active_prompts"       ON prompt_versions;
+DROP POLICY IF EXISTS "allow_upsert_rules"              ON classification_rules;
+DROP POLICY IF EXISTS "allow_update_rules"              ON classification_rules;
+DROP POLICY IF EXISTS "allow_service_insert_training"   ON training_examples;
+DROP POLICY IF EXISTS "allow_service_select_training"   ON training_examples;
 
 -- Anyone can insert feedback (desktop app uses publishable key)
 CREATE POLICY "allow_insert_feedback"
@@ -131,3 +163,11 @@ CREATE POLICY "allow_upsert_rules"
 CREATE POLICY "allow_update_rules"
     ON classification_rules FOR UPDATE TO anon
     USING (true) WITH CHECK (true);
+
+-- Training examples: only the service role key (admin app) may insert or read.
+-- The anon/publishable key cannot touch this table.
+CREATE POLICY "allow_service_insert_training"
+    ON training_examples FOR INSERT TO service_role WITH CHECK (true);
+
+CREATE POLICY "allow_service_select_training"
+    ON training_examples FOR SELECT TO service_role USING (true);

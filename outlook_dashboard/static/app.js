@@ -748,11 +748,12 @@ async function renderAdminView() {
   if (!workspace) return;
   workspace.innerHTML = `<div class="admin-loading">Loading admin dashboard…</div>`;
 
-  let data, users;
+  let data, users, trainingStatus;
   try {
-    [data, users] = await Promise.all([
+    [data, users, trainingStatus] = await Promise.all([
       fetchJson("/api/admin/stats"),
       fetchJson("/api/auth/users"),
+      fetchJson("/api/admin/training/status").catch(() => null),
     ]);
   } catch (err) {
     if (state.currentView !== "admin") return;
@@ -915,6 +916,36 @@ async function renderAdminView() {
           </table>
         </section>
 
+        <section class="admin-card admin-card--wide" id="trainingPipelineCard">
+          <h3>Training Data Pipeline</h3>
+          <p class="muted" style="margin-bottom:12px;">
+            Exports completed emails (PII-redacted) to Supabase as labeled training examples.
+            Default run uses existing labels — zero AI cost.
+            Enable <em>Refine</em> to re-label heuristic-only emails with Claude.
+          </p>
+          ${trainingStatus ? `
+          <div class="admin-overview" style="margin-bottom:16px;">
+            <article class="metric"><span>Uploaded</span><strong>${trainingStatus.uploaded}</strong><small>to Supabase</small></article>
+            <article class="metric"><span>Pending</span><strong>${trainingStatus.pending}</strong><small>completed emails</small></article>
+            <article class="metric"><span>Skipped</span><strong>${trainingStatus.skipped}</strong><small>too short</small></article>
+            <article class="metric"><span>Failed</span><strong>${trainingStatus.failed}</strong><small>upload errors</small></article>
+          </div>` : "<p class='muted'>Training status unavailable.</p>"}
+          <div class="admin-invite-row" style="flex-wrap:wrap;gap:8px;">
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;">
+              Batch size:
+              <input type="number" id="trainingBatchSize" value="10" min="1" max="50" style="width:60px;padding:4px 8px;" />
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;">
+              <input type="checkbox" id="trainingRefine" />
+              Refine with Claude (uses AI credits)
+            </label>
+            <button class="button primary" id="trainingRunBtn" onclick="adminRunTrainingPipeline()">
+              Run Pipeline
+            </button>
+          </div>
+          <div id="trainingRunResult" style="margin-top:12px;"></div>
+        </section>
+
         <section class="admin-card admin-card--wide">
           <h3>Audit Log</h3>
           ${auditRows ? `<table class="admin-table"><thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Entity</th></tr></thead><tbody>${auditRows}</tbody></table>` : "<p class='muted'>No audit events yet.</p>"}
@@ -953,6 +984,38 @@ function bindAdminRuleButtons() {
     });
     button.dataset.bound = "true";
   });
+}
+
+async function adminRunTrainingPipeline() {
+  const btn = document.getElementById("trainingRunBtn");
+  const resultEl = document.getElementById("trainingRunResult");
+  const batchSize = parseInt(document.getElementById("trainingBatchSize")?.value || "10", 10);
+  const refine = document.getElementById("trainingRefine")?.checked || false;
+  if (refine && !confirm("Refine mode calls Claude for each heuristic email and uses AI credits. Continue?")) return;
+  if (btn) { btn.disabled = true; btn.textContent = "Running…"; }
+  if (resultEl) resultEl.innerHTML = "";
+  try {
+    const result = await fetchJson(
+      `/api/admin/training/run?batch_size=${batchSize}&refine=${refine}`,
+      { method: "POST" }
+    );
+    if (resultEl) {
+      resultEl.innerHTML = `
+        <div class="toast-success" style="padding:10px 14px;border-radius:6px;background:var(--success-bg,#ecfdf5);color:var(--success-text,#065f46);font-size:13px;">
+          Processed <strong>${result.processed}</strong> emails —
+          <strong>${result.uploaded}</strong> uploaded,
+          <strong>${result.skipped}</strong> skipped,
+          <strong>${result.failed}</strong> failed.
+        </div>`;
+    }
+    showToast(`Training pipeline: ${result.uploaded} uploaded, ${result.skipped} skipped.`);
+    renderAdminView();
+  } catch (err) {
+    if (resultEl) resultEl.innerHTML = `<p class="error-msg">${escapeHtml(err.message || "Pipeline failed.")}</p>`;
+    showToast(err.message || "Training pipeline failed.", "error");
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "Run Pipeline"; }
+  }
 }
 
 async function adminInviteUser() {
