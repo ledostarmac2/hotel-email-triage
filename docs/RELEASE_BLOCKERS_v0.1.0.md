@@ -43,6 +43,8 @@ v0.1.1 must:
 10. Build the app as a PyInstaller onedir bundle so the installer carries the full application folder.
 11. Provide first-run admin setup when no admin exists, without requiring a local `.env`.
 12. Keep Outlook read-only and preserve all human review gates.
+13. Pass the `scripts/check_no_bundled_secrets.py` security lint in CI.
+14. Ensure the installer extraction audit confirms no privileged keys (e.g., `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`) are bundled.
 
 ## Code Changes Applied For v0.1.1
 

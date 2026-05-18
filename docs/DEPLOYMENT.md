@@ -182,7 +182,7 @@ If classifier imports fail in the EXE:
 2. Confirm hidden imports for sklearn C extensions remain in `build_exe.ps1`.
 3. Rebuild and rerun `/api/health`.
 
-## Do Not Commit
+## Do Not Commit or Bundle
 
 - `dist\ReplyRight\ReplyRight.exe`
 - `dist\ReplyRight\.env`
@@ -191,4 +191,6 @@ If classifier imports fail in the EXE:
 - startup logs
 - build folders
 - vendored dependencies
-- secrets
+- secrets (e.g., `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`)
+
+**Never ship the service-role key or provider API keys inside the installer or source code.** The Supabase anon key (`SUPABASE_KEY`) is acceptable to bundle *only* if Row Level Security (RLS) is flawlessly configured. The service-role key must be entered locally during first-run setup or provisioned securely by IT. The local `.env` stays on the machine and must be strictly excluded from all release artifacts.

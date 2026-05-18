@@ -1,42 +1,30 @@
 """
 Bundled credential store for ReplyRight.
 
-Credentials are XOR-obfuscated so they do not appear as plaintext in git history
-or compiled EXE strings. This is not cryptographic security — the keys are hotel
-internal and the obfuscation is sufficient to prevent casual scraping.
+This file no longer bundles privileged secrets (e.g. Supabase Service Role Key or
+Anthropic API keys) via XOR obfuscation, as shipping privileged keys in a client
+installer is a critical security vulnerability.
 
-To update credentials after acquiring new API keys, run:
-    python scripts/seal_credentials.py
+The application relies on local configuration (e.g., .env) or first-run setup UI
+to obtain privileged credentials for the specific deployment environment.
 
-Bundled values are only injected if the corresponding environment variable is
-absent, so a local .env always takes precedence.
+Public or non-privileged keys (like SUPABASE_URL) may be stored here if absolutely
+necessary, but prefer .env.
 """
 
 from __future__ import annotations
 
-import base64
 import os
 from contextlib import suppress
 
-_K = b"WaldorfAstoriaNYCWA"
-
 _SECRETS: dict[str, str] = {
-    "SUPABASE_URL": "PxUYFBxISW4XDA4eHAwnMCk0JzoWFgkAAQ8rFVocBxkALDgwMm80Dg==",
-    "SUPABASE_KEY": "JAMzFBoQCigAHA4QBQQRPQAZeCc+XwM1IV5xFjteMC07ARAMFh4hVChUNRssAg==",
-    "SUPABASE_SERVICE_ROLE_KEY": "JAMzFwoRFCQHKysHI1ALOCw+MhkMGysWPD4WHhYKOx4+egAmHxIfCwI=",
-    "ANTHROPIC_API_KEY": "JApBBQEGSyADHV9BRBsrCHMcHmIrVAs9NxQgNUYNCyYLfAk7InEvMFQPBF8Sd0A9WyQgTCZrdRNzOFdaUlskAnI3NwgbLS4hdCwAeBUbAFMsA1EzKkYgAwsjJwYiGykwMCkTQkEhGRk2CDMo",
-    "ANTHROPIC_MODEL": "NA0NEQsXSy4DARxfXUx5",
+    # DO NOT PUT PRIVILEGED SECRETS HERE.
+    # ONLY NON-PRIVILEGED, PUBLICLY SAFE CONFIGURATION IS ALLOWED.
 }
-
-
-def _dec(encoded: str) -> str:
-    raw = base64.b64decode(encoded)
-    return bytes(d ^ _K[i % len(_K)] for i, d in enumerate(raw)).decode("utf-8")
-
 
 def inject() -> None:
     """Inject bundled credentials into os.environ for any key not already set."""
-    for name, encoded in _SECRETS.items():
+    for name, value in _SECRETS.items():
         if not os.environ.get(name):
             with suppress(Exception):
-                os.environ[name] = _dec(encoded)
+                os.environ[name] = value

@@ -34,6 +34,7 @@ Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription
 
 [Files]
 Source: "..\dist\ReplyRight\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: ".env,*.env,data\*,*.sqlite3,*.sqlite,*.db,*.log"
+Source: "sample.env"; DestDir: "{app}"; DestName: "sample.env"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\ReplyRight"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"

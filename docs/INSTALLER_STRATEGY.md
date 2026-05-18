@@ -133,3 +133,11 @@ Before release:
 ## Known Follow-Up
 
 Native UI migration should eventually remove the WebView2 dependency. Until then, the installer plus health-gated startup is the v0.1.1 release repair.
+
+## Installer Secret Hygiene
+
+- **Never ship the service-role key inside the installer or source code.**
+- **Never ship provider API keys (Anthropic, OpenAI, Google) inside the installer.**
+- The Supabase anon key (`SUPABASE_KEY`) is acceptable to bundle *only* if Row Level Security (RLS) is flawlessly configured.
+- The service-role key must be entered locally by the user during first-run setup or provisioned securely by IT.
+- The local `.env` file stays on the machine and must be strictly excluded from all release artifacts.

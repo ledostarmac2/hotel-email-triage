@@ -124,6 +124,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt -r requirements-dev.txt
+      - name: Security Lint (Source)
+        shell: pwsh
+        run: python scripts/check_no_bundled_secrets.py
       - name: Build EXE
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -File .\build_exe.ps1
@@ -133,6 +136,13 @@ jobs:
       - name: Build Installer
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -File .\installer\build_installer.ps1
+      - name: Security Lint (Installer Extraction)
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem ".\installer\output\ReplyRightSetup-v*.exe" | Select-Object -First 1
+          if (-not $installer) { throw "Installer missing for extraction audit." }
+          7z x $installer.FullName -o".\installer\output\extracted"
+          python scripts/check_no_bundled_secrets.py
       - name: Rename Installer
         shell: pwsh
         run: |

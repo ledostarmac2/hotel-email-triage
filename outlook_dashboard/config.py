@@ -134,6 +134,41 @@ class Settings:
         return warnings
 
 
+def write_local_env(values: dict[str, str]) -> Path:
+    """Merge key=value pairs into ROOT_DIR/.env and set them in os.environ.
+
+    Existing keys in .env are preserved; the supplied values overwrite their
+    entries.  Values are never logged.  Writes atomically (temp-then-rename).
+    Returns the path of the written .env file.
+    """
+    import tempfile
+
+    env_path = ROOT_DIR / ".env"
+    existing: dict[str, str] = {}
+    if env_path.exists():
+        for raw in env_path.read_text(encoding="utf-8").splitlines():
+            stripped = raw.strip()
+            if stripped and not stripped.startswith("#") and "=" in stripped:
+                k, _, v = stripped.partition("=")
+                existing[k.strip()] = v
+    existing.update(values)
+    lines = [f"{k}={v}" for k, v in existing.items()]
+    tmp_fd, tmp_path = tempfile.mkstemp(dir=ROOT_DIR, prefix=".env.tmp.", suffix="")
+    try:
+        with os.fdopen(tmp_fd, "w", encoding="utf-8") as fh:
+            fh.write("\n".join(lines) + "\n")
+        os.replace(tmp_path, env_path)
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+    for k, v in values.items():
+        os.environ[k] = v
+    return env_path
+
+
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     _load_env()

@@ -177,6 +177,7 @@ def test_remember_email_survives_app_restart_style_login(tmp_path, monkeypatch) 
     monkeypatch.setattr(main, "download_known_senders", lambda: [])
     monkeypatch.setattr(main, "flush_feedback_queue", lambda: 0)
     monkeypatch.setattr(main, "start_update_check", lambda: None)
+    monkeypatch.setattr(main, "needs_credentials_setup", lambda: False)
     monkeypatch.setattr(
         main,
         "authenticate_user",

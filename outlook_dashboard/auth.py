@@ -186,6 +186,18 @@ def ensure_admin(email: str, password: str, db_path: Path | None = None) -> None
         _log.info("Supabase: admin account created for %s", normalized)
 
 
+def needs_credentials_setup() -> bool:
+    """Return True when Supabase config is absent or incomplete.
+
+    Two cases trigger this:
+    - SUPABASE_URL missing: completely unconfigured install.
+    - SUPABASE_URL present but SUPABASE_SERVICE_ROLE_KEY absent: privileged key
+      was not bundled (intentional security policy) and must be entered by the
+      operator on first run via /credentials-setup.
+    """
+    return not bool(_supabase_url() and _service_key())
+
+
 def admin_setup_available() -> bool:
     """Return whether ReplyRight can create the first Supabase admin user."""
     return bool(_supabase_url() and _service_key())

@@ -173,3 +173,11 @@ Planned modes:
 - External AI allowed.
 
 Until a UI setting exists, preserve the current code-level routing rules and conservative fallbacks.
+
+## Installer Secret Hygiene
+
+- **Never ship the service-role key inside the installer or source code.**
+- **Never ship provider API keys (Anthropic, OpenAI, Google) inside the installer.**
+- The Supabase anon key (`SUPABASE_KEY`) is acceptable to bundle *only* if Row Level Security (RLS) is flawlessly configured.
+- The service-role key must be entered locally by the user during first-run setup or provisioned securely by IT.
+- The local `.env` file stays on the machine and must be strictly excluded from all release artifacts.
