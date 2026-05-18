@@ -1,50 +1,48 @@
-from __future__ import annotations
+from PySide6.QtWidgets import (
+    QDialog, QVBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox
+)
+from PySide6.QtCore import Signal, Qt
 
-# PySide6 is not yet in production requirements.
-# This scaffold compiles and imports without PySide6 installed.
-try:
-    from PySide6.QtWidgets import (
-        QLabel,
-        QLineEdit,
-        QPushButton,
-        QVBoxLayout,
-        QWidget,
-    )
-    _PYSIDE6 = True
-except ImportError:
-    QWidget = object  # type: ignore[assignment,misc]
-    _PYSIDE6 = False
+class LoginWindow(QDialog):
+    """
+    Native Login Screen.
+    Eventually wired to AuthServiceProtocol for Supabase Auth.
+    """
+    login_successful = Signal()
 
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("ReplyRight - Login")
+        self.setFixedSize(400, 300)
 
-class LoginWindow(QWidget):  # type: ignore[misc]
-    """Native login window — scaffold only, not yet wired to any service."""
+        layout = QVBoxLayout(self)
+        layout.setSpacing(15)
+        layout.setContentsMargins(30, 30, 30, 30)
 
-    def __init__(self) -> None:
-        if not _PYSIDE6:
-            raise RuntimeError(
-                "LoginWindow requires PySide6. "
-                "Add PySide6 to requirements when the native slice is ready."
-            )
-        super().__init__()
-        self._build_ui()
+        title = QLabel("Sign in to ReplyRight")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title.setStyleSheet("font-size: 20px; font-weight: bold; margin-bottom: 10px;")
+        layout.addWidget(title)
 
-    def _build_ui(self) -> None:
-        layout = QVBoxLayout(self)  # type: ignore[call-arg]
-        layout.addWidget(QLabel("ReplyRight"))  # type: ignore[call-arg]
-        self._email = QLineEdit()  # type: ignore[call-arg]
-        self._email.setPlaceholderText("Email")
-        layout.addWidget(self._email)
-        self._password = QLineEdit()  # type: ignore[call-arg]
-        self._password.setPlaceholderText("Password")
-        self._password.setEchoMode(QLineEdit.EchoMode.Password)  # type: ignore[attr-defined]
-        layout.addWidget(self._password)
-        self._submit = QPushButton("Sign in")  # type: ignore[call-arg]
-        layout.addWidget(self._submit)
-        self._error = QLabel("")  # type: ignore[call-arg]
-        layout.addWidget(self._error)
+        self.email_input = QLineEdit()
+        self.email_input.setPlaceholderText("Email Address")
+        self.email_input.setStyleSheet("padding: 8px; font-size: 14px;")
+        layout.addWidget(self.email_input)
 
-    def show_error(self, message: str) -> None:
-        self._error.setText(message)  # type: ignore[attr-defined]
+        self.password_input = QLineEdit()
+        self.password_input.setPlaceholderText("Password")
+        self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self.password_input.setStyleSheet("padding: 8px; font-size: 14px;")
+        layout.addWidget(self.password_input)
 
-    def clear_error(self) -> None:
-        self._error.setText("")  # type: ignore[attr-defined]
+        self.login_button = QPushButton("Login")
+        self.login_button.clicked.connect(self._handle_login)
+        self.login_button.setStyleSheet("padding: 10px; font-weight: bold; font-size: 14px;")
+        layout.addWidget(self.login_button)
+
+    def _handle_login(self):
+        # TODO: Inject AuthServiceProtocol to validate via Supabase
+        if self.email_input.text() and self.password_input.text():
+            self.login_successful.emit()
+        else:
+            QMessageBox.warning(self, "Login Failed", "Please enter a valid email and password.")

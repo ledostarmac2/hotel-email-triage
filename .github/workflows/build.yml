@@ -61,6 +61,12 @@ jobs:
       - name: Packaged health smoke
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -Command "& '.\dist\ReplyRight\ReplyRight.exe' --health-smoke"
+      - name: Clean up CI secrets
+        shell: pwsh
+        run: |
+          if (Test-Path ".env") { Remove-Item ".env" -Force }
+          if (Test-Path ".\dist\ReplyRight\.env") { Remove-Item ".\dist\ReplyRight\.env" -Force }
+          if (Test-Path ".\dist\ReplyRight\_internal\.env") { Remove-Item ".\dist\ReplyRight\_internal\.env" -Force }
       - name: Build Installer
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -File .\installer\build_installer.ps1
@@ -133,15 +139,22 @@ jobs:
       - name: Packaged health smoke
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -Command "& '.\dist\ReplyRight\ReplyRight.exe' --health-smoke"
+      - name: Clean up CI secrets
+        shell: pwsh
+        run: |
+          if (Test-Path ".env") { Remove-Item ".env" -Force }
+          if (Test-Path ".\dist\ReplyRight\.env") { Remove-Item ".\dist\ReplyRight\.env" -Force }
+          if (Test-Path ".\dist\ReplyRight\_internal\.env") { Remove-Item ".\dist\ReplyRight\_internal\.env" -Force }
       - name: Build Installer
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -File .\installer\build_installer.ps1
       - name: Security Lint (Installer Extraction)
         shell: pwsh
         run: |
+          choco install innoextract -y --no-progress
           $installer = Get-ChildItem ".\installer\output\ReplyRightSetup-v*.exe" | Select-Object -First 1
           if (-not $installer) { throw "Installer missing for extraction audit." }
-          7z x $installer.FullName -o".\installer\output\extracted"
+          innoextract $installer.FullName -d ".\installer\output\extracted"
           python scripts/check_no_bundled_secrets.py
       - name: Rename Installer
         shell: pwsh
