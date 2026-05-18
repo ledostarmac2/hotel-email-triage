@@ -736,6 +736,47 @@ def api_mark_training_reviewed(example_id: str, request: Request) -> dict[str, o
     return {"ok": True, "id": example_id}
 
 
+@app.get("/api/admin/training/dual-labeled-stats")
+def api_dual_labeled_stats(request: Request) -> dict[str, object]:
+    """Return dual-labeled counts: this week + last 4 weekly buckets for sparkline."""
+    if request.state.user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only.")
+    url = (os.getenv("SUPABASE_URL") or "").rstrip("/")
+    key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or ""
+    if not url or not key:
+        return {"this_week": 0, "weeks": [0, 0, 0, 0], "error": "Supabase not configured"}
+    from datetime import datetime, timedelta, timezone as _tz
+
+    now = datetime.now(tz=_tz.utc)
+    headers = {
+        "apikey": key,
+        "Authorization": f"Bearer {key}",
+        "Accept": "application/json",
+    }
+    weeks: list[int] = []
+    try:
+        import httpx as _httpx
+        with _httpx.Client(timeout=10) as client:
+            for w in range(3, -1, -1):  # week 3 (oldest) → week 0 (current)
+                week_end = now - timedelta(weeks=w)
+                week_start = week_end - timedelta(weeks=1)
+                r = client.get(
+                    f"{url}/rest/v1/training_examples",
+                    params={
+                        "select": "id",
+                        "labeling_engine": "eq.dual_labeled",
+                        "created_at": f"gte.{week_start.isoformat()}&created_at=lte.{week_end.isoformat()}",
+                        "limit": "1000",
+                    },
+                    headers={**headers, "Prefer": "count=exact"},
+                )
+                count = int(r.headers.get("content-range", "*/0").split("/")[-1])
+                weeks.append(count)
+    except Exception as exc:
+        return {"this_week": 0, "weeks": [0, 0, 0, 0], "error": str(exc)[:200]}
+    return {"this_week": weeks[-1] if weeks else 0, "weeks": weeks}
+
+
 @app.post("/api/rule-candidates/status")
 def api_set_rule_candidate_status(payload: RuleCandidateStatusRequest, request: Request) -> dict[str, object]:
     if request.state.user.get("role") != "admin":

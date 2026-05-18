@@ -748,13 +748,14 @@ async function renderAdminView() {
   if (!workspace) return;
   workspace.innerHTML = `<div class="admin-loading">Loading admin dashboard…</div>`;
 
-  let data, users, trainingStatus, trainingExamples;
+  let data, users, trainingStatus, trainingExamples, dualLabeledStats;
   try {
-    [data, users, trainingStatus, trainingExamples] = await Promise.all([
+    [data, users, trainingStatus, trainingExamples, dualLabeledStats] = await Promise.all([
       fetchJson("/api/admin/stats"),
       fetchJson("/api/auth/users"),
       fetchJson("/api/admin/training/status").catch(() => null),
       fetchJson("/api/admin/training/examples?limit=10").catch(() => null),
+      fetchJson("/api/admin/training/dual-labeled-stats").catch(() => null),
     ]);
   } catch (err) {
     if (state.currentView !== "admin") return;
@@ -948,6 +949,46 @@ async function renderAdminView() {
             </button>
           </div>
           <div id="trainingRunResult" style="margin-top:12px;"></div>
+        </section>
+
+        <section class="admin-card" id="dualLabeledCard">
+          <h3>Dual-Labeled This Week</h3>
+          ${(() => {
+            if (!dualLabeledStats || dualLabeledStats.error) {
+              return `<p class="muted">${dualLabeledStats?.error ? escapeHtml(dualLabeledStats.error) : "Unavailable."}</p>`;
+            }
+            const thisWeek = dualLabeledStats.this_week ?? 0;
+            const weeks = dualLabeledStats.weeks ?? [0, 0, 0, 0];
+            const maxVal = Math.max(...weeks, 1);
+            const barWidth = 18;
+            const barGap = 6;
+            const chartH = 40;
+            const bars = weeks.map((v, i) => {
+              const h = Math.max(3, Math.round((v / maxVal) * chartH));
+              const x = i * (barWidth + barGap);
+              const isCurrent = i === weeks.length - 1;
+              return `<rect x="${x}" y="${chartH - h}" width="${barWidth}" height="${h}" rx="3"
+                fill="${isCurrent ? "var(--accent)" : "#c7d9f5"}" />`;
+            }).join("");
+            const svgW = weeks.length * (barWidth + barGap) - barGap;
+            return `
+              <div class="admin-overview" style="margin-bottom:16px;">
+                <article class="metric">
+                  <span>Dual-labeled</span>
+                  <strong>${thisWeek}</strong>
+                  <small>this week</small>
+                </article>
+                <article class="metric">
+                  <span>Total labeled</span>
+                  <strong>${weeks.reduce((a, b) => a + b, 0)}</strong>
+                  <small>last 4 weeks</small>
+                </article>
+              </div>
+              <svg width="${svgW}" height="${chartH}" style="display:block;overflow:visible;" aria-label="4-week sparkline">
+                ${bars}
+              </svg>
+              <p class="muted" style="margin-top:8px;font-size:11px;">← 4 weeks ago &nbsp;·&nbsp; this week →</p>`;
+          })()}
         </section>
 
         <section class="admin-card admin-card--wide" id="humanReviewCard">
