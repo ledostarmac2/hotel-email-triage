@@ -4,6 +4,14 @@ Append-only log. Most-recent entry first.
 
 ---
 
+## 2026-05-18 — Session 6 (Gemini)
+
+### PySide6 Integration & Admin Panel
+
+- Instructed user to merge `feat/pyside6-native-ui` into `main` and delete `dist/ReplyRight/.env` leak.
+- Created `replyright_qt/widgets/admin_panel.py` to fulfill PySide6 Priority 2.
+- Updated agent hub to reflect PySide6 as the active main-branch architecture.
+
 ## 2026-05-18 — Session 5 (Gemini)
 
 ### v0.1.1 Release on main

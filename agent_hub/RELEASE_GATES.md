@@ -11,7 +11,7 @@ All gates must be green before any version tag is created.
 | Gate | Status | Owner | Notes |
 |---|---|---|---|
 | All security gates pass (see SECURITY_GATES.md) | PASS | Codex/Claude | ea84602 |
-| Gemini security verdict: CLEAN | PENDING | Gemini | See HANDOFF_GEMINI.md |
+| Gemini security verdict: CLEAN | PASS | Gemini | Verdict written to HANDOFF_GEMINI.md |
 | `py -3.12 -m pytest --timeout=60` passes (zero failures) | PASS | Claude | 471 passed |
 | `build_exe.ps1` runs without error | UNKNOWN | Codex | Not yet re-run post ea84602 |
 | `installer/build_installer.ps1` runs without error | UNKNOWN | Codex | Not yet re-run |

@@ -2,7 +2,7 @@
 
 Last updated: 2026-05-18 (Session 4)
 
-## Status: v0.1.1 BLOCKED PENDING GEMINI SECURITY VERDICT | PySide6 Phase 1 COMPLETE
+## Status: PySide6 Merged into main | Admin Dashboard In Progress
 
 ---
 
@@ -51,19 +51,15 @@ Last updated: 2026-05-18 (Session 4)
 
 | Blocker | Owner | Resolution |
 |---|---|---|
-| Gemini security verdict not yet returned | Gemini | See HANDOFF_GEMINI.md |
-| v0.1.1 must not be tagged until verdict | All | Unblock when Gemini clears |
 | Codex rate-limited | Codex | Rate limit resolves on its own |
 
 ---
 
 ## What is next (in order)
 
-1. Gemini returns security verdict for v0.1.1 (see HANDOFF_GEMINI.md)
-2. If verdict is clean → Codex or Claude tags v0.1.1 and triggers GitHub Actions release
-3. If verdict requires changes → Codex implements per the verdict
-4. Clean-machine smoke test: install → `/credentials-setup` → `/setup` → create admin
-5. Claude continues PySide6 migration: service interfaces, first login window
+1. Build Qt Admin Dashboard panel (`admin_panel.py`)
+2. Verify PyInstaller PySide6 packaging (`build_exe.ps1`)
+3. Update testing docs for native Qt assertions
 
 ---
 

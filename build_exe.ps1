@@ -184,12 +184,6 @@ Write-Host "Build metadata: $buildInfoJson"
 
 $exePath = (Resolve-Path "dist\ReplyRight\ReplyRight.exe").Path
 
-# Copy .env next to the EXE so it can load API keys at runtime
-if (Test-Path ".env") {
-    Copy-Item ".env" "dist\ReplyRight\.env" -Force
-    Write-Host "Copied .env to dist\ReplyRight\"
-}
-
 function New-ReplyRightShortcut {
     param(
         [Parameter(Mandatory = $true)][string]$Path,

@@ -4,30 +4,6 @@ Last updated: 2026-05-18
 
 ---
 
-## BLOCKER-001: v0.1.1 tag blocked — Gemini security verdict pending
-
-**Status:** ACTIVE
-
-**Blocking:** v0.1.1 tag, GitHub Actions release run, installer distribution
-
-**Owner:** Gemini
-
-**What is needed:**
-Gemini must review the files listed in HANDOFF_GEMINI.md and write a verdict
-to the §Verdict section of that file. A verdict of "clean" unblocks the tag.
-A list of specific issues blocks until those issues are fixed.
-
-**Do not work around this blocker** by tagging without the verdict. The files
-under review contain the security path that was previously shipping privileged
-secrets in the installer.
-
-**Resolution path:**
-1. Gemini completes review and writes verdict
-2. If clean: Codex or Claude tags v0.1.1
-3. If issues found: Codex implements fixes per verdict, re-submits for review
-
----
-
 ## BLOCKER-002: Codex rate-limited
 
 **Status:** MAY HAVE RESOLVED — check before proceeding
@@ -47,6 +23,7 @@ secrets in the installer.
 
 | Blocker | Resolution | Date |
 |---|---|---|
+| BLOCKER-001: v0.1.1 tag blocked | Gemini completed review and returned CLEAN verdict | 2026-05-18 |
 | bundled_secrets.py contained SUPABASE_SERVICE_ROLE_KEY | Cleaned and verified by tests | 2026-05-18 |
 | bundled_secrets.py contained ANTHROPIC_API_KEY | Cleaned and verified by tests | 2026-05-18 |
 | No first-run credentials setup path | /credentials-setup implemented | 2026-05-18 |

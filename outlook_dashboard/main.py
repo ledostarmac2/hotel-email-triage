@@ -514,6 +514,49 @@ def api_login(payload: LoginRequest, request: Request):
     return response
 
 
+@app.get("/api/auth/startup-state")
+def api_startup_state():
+    """Return the first-run state so the Qt desktop shell can route to the correct window."""
+    if needs_credentials_setup():
+        return JSONResponse({"state": "credentials_setup"})
+    if admin_setup_available() and not admin_user_exists():
+        return JSONResponse({"state": "admin_setup"})
+    return JSONResponse({"state": "login"})
+
+
+@app.post("/api/auth/credentials-setup")
+def api_credentials_setup(payload: CredentialsSetupRequest):
+    url = payload.supabase_url.strip()
+    key = payload.supabase_key.strip()
+    svc = payload.supabase_service_role_key.strip()
+    ai_key = payload.anthropic_api_key.strip()
+
+    if not url.startswith("https://"):
+        raise HTTPException(status_code=400, detail="SUPABASE_URL must start with https://")
+    if len(key) < 20:
+        raise HTTPException(status_code=400, detail="SUPABASE_KEY appears too short.")
+    if len(svc) < 20:
+        raise HTTPException(status_code=400, detail="SUPABASE_SERVICE_ROLE_KEY appears too short.")
+
+    values: dict[str, str] = {
+        "SUPABASE_URL": url,
+        "SUPABASE_KEY": key,
+        "SUPABASE_SERVICE_ROLE_KEY": svc,
+    }
+    if ai_key:
+        values["ANTHROPIC_API_KEY"] = ai_key
+
+    try:
+        write_local_env(values)
+    except Exception as exc:
+        _log.error("api credentials-setup: failed to write .env: %s", exc)
+        raise HTTPException(status_code=500, detail="Could not save credentials to local .env.") from exc
+
+    get_settings.cache_clear()
+    _log.info("api credentials-setup: Supabase config written for %d keys", len(values))
+    return JSONResponse({"ok": True, "keys_written": list(values.keys())})
+
+
 @app.post("/api/auth/setup")
 def api_setup_admin(payload: SetupAdminRequest, request: Request):
     settings = get_settings()

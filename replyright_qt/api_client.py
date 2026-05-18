@@ -124,6 +124,74 @@ class ApiClient:
         resp = self._session.get(self._url("/api/admin/stats"), timeout=15)
         return self._raise_for(resp)
 
+    def get_startup_state(self) -> dict:
+        resp = self._session.get(self._url("/api/auth/startup-state"), timeout=5)
+        return self._raise_for(resp)
+
+    def credentials_setup(
+        self,
+        supabase_url: str,
+        supabase_key: str,
+        supabase_service_role_key: str,
+        anthropic_api_key: str = "",
+    ) -> dict:
+        resp = self._session.post(
+            self._url("/api/auth/credentials-setup"),
+            json={
+                "supabase_url": supabase_url,
+                "supabase_key": supabase_key,
+                "supabase_service_role_key": supabase_service_role_key,
+                "anthropic_api_key": anthropic_api_key,
+            },
+            timeout=10,
+        )
+        return self._raise_for(resp)
+
+    def setup_admin(self, email: str, password: str) -> dict:
+        resp = self._session.post(
+            self._url("/api/auth/setup"),
+            json={"email": email, "password": password},
+            timeout=10,
+        )
+        return self._raise_for(resp)
+
+    # ── User management ────────────────────────────────────────────────────────
+
+    def list_users(self) -> list[dict]:
+        resp = self._session.get(self._url("/api/auth/users"), timeout=10)
+        data = self._raise_for(resp)
+        return data.get("users", [])
+
+    def delete_user(self, user_id: str) -> dict:
+        resp = self._session.delete(self._url(f"/api/auth/users/{user_id}"), timeout=10)
+        return self._raise_for(resp)
+
+    def invite_user(self, email: str) -> dict:
+        resp = self._session.post(
+            self._url("/api/auth/invite"),
+            json={"email": email},
+            timeout=10,
+        )
+        return self._raise_for(resp)
+
+    # ── Training ───────────────────────────────────────────────────────────────
+
+    def get_training_status(self) -> dict:
+        resp = self._session.get(self._url("/api/admin/training/status"), timeout=10)
+        return self._raise_for(resp)
+
+    def run_training_pipeline(self, batch_size: int = 10, refine: bool = False) -> dict:
+        resp = self._session.post(
+            self._url("/api/admin/training/run"),
+            params={"batch_size": batch_size, "refine": str(refine).lower()},
+            timeout=120,
+        )
+        return self._raise_for(resp)
+
+    def run_classifier_train(self) -> dict:
+        resp = self._session.post(self._url("/api/admin/classifier/train"), timeout=120)
+        return self._raise_for(resp)
+
 
 class ApiWorker(QThread):
     """Generic QThread that runs a single ApiClient call and emits the result."""

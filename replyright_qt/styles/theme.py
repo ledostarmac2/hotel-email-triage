@@ -197,6 +197,23 @@ QPushButton#secondary-btn:hover {{
     background-color: {BORDER};
 }}
 
+QPushButton#danger-btn {{
+    background-color: {CONTENT_BG};
+    color: {DANGER};
+    border: 1px solid {DANGER};
+    border-radius: 6px;
+    padding: 8px 16px;
+}}
+
+QPushButton#danger-btn:hover {{
+    background-color: #fff5f5;
+}}
+
+QPushButton#danger-btn:disabled {{
+    color: #fc8181;
+    border-color: #fc8181;
+}}
+
 /* ── Login window ────────────────────────────── */
 QWidget#login-root {{
     background-color: {SIDEBAR_BG};

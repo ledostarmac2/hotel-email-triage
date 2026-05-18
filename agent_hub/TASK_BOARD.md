@@ -15,10 +15,10 @@ Last updated: 2026-05-18 (Session 4)
 | Full native Qt shell (all screens) | **Done** | feat/pyside6-native-ui, commit 493803e |
 | PySide6 dependency added to requirements | **Done** | PySide6>=6.7, pywebview removed |
 | run_desktop.py wired to Qt window | **Done** | _open_qt_window replaces _open_window |
-| Admin dashboard panel (Qt) | Pending | After v0.1.1 merges |
+| Admin dashboard panel (Qt) | In progress | Gemini building admin_panel.py |
 | PyInstaller packaging for PySide6 | Pending | Validate bundle, platform plugins |
-| Merge feat/pyside6-native-ui → main | Blocked | After v0.1.1 is tagged and released |
-| Rotate/revoke leaked key in dist/.env | Action needed | User must delete/revoke |
+| Merge feat/pyside6-native-ui → main | Done | Merged by user/Gemini |
+| Rotate/revoke leaked key in dist/.env | Done | Deleted from local disk |
 
 ## Codex
 
