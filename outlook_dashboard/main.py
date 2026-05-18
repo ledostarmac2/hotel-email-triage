@@ -80,7 +80,7 @@ from .local_classifier import invalidate_cache as invalidate_classifier_cache
 from .local_classifier import train as train_local_classifier
 from .training_pipeline import pipeline_status as training_pipeline_status
 from .training_pipeline import run_pipeline as run_training_pipeline
-from .updater import get_update_status, start_update_check
+from .updater import get_build_info, get_update_status, start_download, start_update_check
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 _STATIC_VER = str(int(time.time()))
@@ -867,8 +867,38 @@ def update_available() -> dict[str, object]:
         "available": bool(status.get("available")),
         "version": status.get("version") or "",
         "url": status.get("url") or "",
+        "asset_url": status.get("asset_url") or "",
         "checked": bool(status.get("checked")),
+        "downloading": bool(status.get("downloading")),
+        "download_error": status.get("download_error") or "",
     }
+
+
+@app.get("/api/version")
+def api_version() -> dict[str, object]:
+    build = get_build_info()
+    status = get_update_status()
+    return {
+        "version": build.get("version") or "",
+        "commit": build.get("commit") or "",
+        "build_date": build.get("build_date") or "",
+        "update_available": bool(status.get("available")),
+        "latest_version": status.get("version") or "",
+    }
+
+
+@app.post("/api/update/download")
+def trigger_update_download() -> dict[str, object]:
+    status = get_update_status()
+    if not status.get("available"):
+        raise HTTPException(status_code=409, detail="No update available.")
+    if status.get("downloading"):
+        return {"status": "already_downloading"}
+    asset_url = status.get("asset_url") or ""
+    if not asset_url:
+        raise HTTPException(status_code=409, detail="No download URL — update from GitHub manually.")
+    start_download(asset_url)
+    return {"status": "started"}
 
 
 @app.get("/api/taxonomy")

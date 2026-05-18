@@ -37,6 +37,7 @@ const els = {
   updateBanner: document.getElementById("updateBanner"),
   updateBannerText: document.getElementById("updateBannerText"),
   updateBannerLink: document.getElementById("updateBannerLink"),
+  updateBannerInstall: document.getElementById("updateBannerInstall"),
   dismissUpdateBanner: document.getElementById("dismissUpdateBanner"),
 };
 
@@ -123,6 +124,10 @@ async function checkForUpdate() {
     els.updateBanner.dataset.version = data.version;
     els.updateBannerText.textContent = `ReplyRight v${data.version} is available`;
     els.updateBannerLink.href = data.url || "#";
+    if (data.asset_url && els.updateBannerInstall) {
+      els.updateBannerInstall.hidden = false;
+      els.updateBannerInstall.onclick = () => adminInstallUpdate(els.updateBannerInstall);
+    }
     els.updateBanner.hidden = false;
   } catch {
     // Update checks should never interrupt inbox work.
@@ -748,14 +753,15 @@ async function renderAdminView() {
   if (!workspace) return;
   workspace.innerHTML = `<div class="admin-loading">Loading admin dashboard…</div>`;
 
-  let data, users, trainingStatus, trainingExamples, dualLabeledStats;
+  let data, users, trainingStatus, trainingExamples, dualLabeledStats, versionInfo;
   try {
-    [data, users, trainingStatus, trainingExamples, dualLabeledStats] = await Promise.all([
+    [data, users, trainingStatus, trainingExamples, dualLabeledStats, versionInfo] = await Promise.all([
       fetchJson("/api/admin/stats"),
       fetchJson("/api/auth/users"),
       fetchJson("/api/admin/training/status").catch(() => null),
       fetchJson("/api/admin/training/examples?limit=10").catch(() => null),
       fetchJson("/api/admin/training/dual-labeled-stats").catch(() => null),
+      fetchJson("/api/version").catch(() => null),
     ]);
   } catch (err) {
     if (state.currentView !== "admin") return;
@@ -951,6 +957,36 @@ async function renderAdminView() {
           <div id="trainingRunResult" style="margin-top:12px;"></div>
         </section>
 
+        <section class="admin-card" id="versionCard">
+          <h3>Version</h3>
+          ${(() => {
+            if (!versionInfo) return `<p class="muted">Unavailable.</p>`;
+            const { version, commit, build_date, update_available, latest_version } = versionInfo;
+            const buildStr = build_date && build_date !== "unknown"
+              ? new Date(build_date).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+              : "unknown";
+            const commitStr = commit && commit !== "dev" ? commit.substring(0, 8) : "dev";
+            return `
+              <div class="admin-overview" style="margin-bottom:12px;">
+                <article class="metric">
+                  <span>Current</span>
+                  <strong>v${escapeHtml(version || "?")}</strong>
+                  <small>${escapeHtml(commitStr)}</small>
+                </article>
+                <article class="metric">
+                  <span>Built</span>
+                  <strong>${escapeHtml(buildStr)}</strong>
+                  <small>&nbsp;</small>
+                </article>
+              </div>
+              ${update_available ? `
+                <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                  <span style="color:var(--accent);font-weight:600;">v${escapeHtml(latest_version)} available</span>
+                  <button class="button small" id="installUpdateBtn" onclick="adminInstallUpdate(this)">Install Update</button>
+                </div>` : `<p class="muted" style="font-size:12px;">Up to date.</p>`}`;
+          })()}
+        </section>
+
         <section class="admin-card" id="dualLabeledCard">
           <h3>Dual-Labeled This Week</h3>
           ${(() => {
@@ -1048,6 +1084,18 @@ function bindAdminRuleButtons() {
     });
     button.dataset.bound = "true";
   });
+}
+
+async function adminInstallUpdate(btn) {
+  if (!confirm("Download and install the update? The app will restart automatically.")) return;
+  if (btn) { btn.disabled = true; btn.textContent = "Downloading…"; }
+  try {
+    await fetchJson("/api/update/download", { method: "POST" });
+    showToast("Update downloaded — app will restart shortly.");
+  } catch (err) {
+    showToast(err.message || "Download failed.", "error");
+    if (btn) { btn.disabled = false; btn.textContent = "Install Update"; }
+  }
 }
 
 async function adminRunTrainingPipeline() {

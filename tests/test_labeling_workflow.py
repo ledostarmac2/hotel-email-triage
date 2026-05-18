@@ -100,8 +100,9 @@ class TestExportFormatting:
         mod = _load_export_module()
         rows = _make_rows(2)
         md = mod._format_markdown(rows, "2026-05-18")
-        assert "Reply with a JSON array" in md
-        assert "LABELING_PROMPTS.md" in md
+        assert "OUTPUT SCHEMA" in md
+        assert "training_example_id" in md
+        assert "TAXONOMY" in md
 
     def test_empty_rows(self):
         mod = _load_export_module()

@@ -77,6 +77,17 @@ if (-not (Test-Path $vendorPath)) {
     }
 }
 
+# Embed build metadata so the running EXE can report its own version/commit.
+$gitCommit = try { (git rev-parse HEAD 2>$null).Trim() } catch { "unknown" }
+if (-not $gitCommit) { $gitCommit = "unknown" }
+$gitShort = $gitCommit.Substring(0, [Math]::Min(8, $gitCommit.Length))
+$buildDate = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+$initContent = Get-Content "outlook_dashboard\__init__.py" -Raw -ErrorAction SilentlyContinue
+$appVersion = if ($initContent -match '"(\d+\.\d+\.\d+)"') { $Matches[1] } else { "0.1.0" }
+$buildInfoJson = "{`"commit`":`"$gitShort`",`"build_date`":`"$buildDate`",`"version`":`"$appVersion`"}"
+$buildInfoJson | Set-Content "outlook_dashboard\build_info.json" -Encoding utf8
+Write-Host "Build metadata: $buildInfoJson"
+
 & $PYTHON -m PyInstaller `
     --onefile `
     --windowed `
@@ -84,6 +95,7 @@ if (-not (Test-Path $vendorPath)) {
     --icon "outlook_dashboard/static/replyright.ico" `
     --paths $vendorPath `
     --add-data "outlook_dashboard/static;outlook_dashboard/static" `
+    --add-data "outlook_dashboard/build_info.json;outlook_dashboard" `
     --collect-all webview `
     --collect-all pythonnet `
     --collect-all outlook_dashboard `

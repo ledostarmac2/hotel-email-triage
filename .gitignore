@@ -40,5 +40,8 @@ build/
 dist/
 *.spec
 
+# Generated at build time — not meaningful if committed from dev machine
+outlook_dashboard/build_info.json
+
 node_modules/
 .next/

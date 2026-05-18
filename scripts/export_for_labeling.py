@@ -64,6 +64,72 @@ def _fetch_examples(count: int, skip_reviewed: bool) -> list[dict]:
         sys.exit(1)
 
 
+_LABELING_INSTRUCTIONS = """\
+---
+
+## Labeling Instructions
+
+You are a hotel email classifier for the Waldorf Astoria New York Reservations team. Label each email above with the fields below. \
+Return ONLY a valid JSON array — no prose, no markdown fences, no explanation.
+
+### TAXONOMY
+
+**Categories:** VIP pre-arrival, Rate inquiry, Billing dispute, Consortia / FHR / Virtuoso, Complaint, Amenity request, \
+Accessibility request, Rooming list / group, Internal request, Cancellation / modification, Urgent same-day arrival, \
+Duplicate follow-up, General inquiry
+
+**Priority levels:**
+- Low — routine, no time pressure, future arrival
+- Normal — standard action needed this week
+- High — action needed within 1-2 days or arrival within a week
+- Immediate — same-day arrival, urgent guest issue, legal/medical flag
+
+**Department owners:** Front Desk, Reservations, Concierge, Sales, Housekeeping, Engineering, All Departments
+
+**Contact types:** Internal, Group contact, Travel agency, Direct guest
+
+**Guest sentiments:** Positive, Neutral, Concerned, Upset, Furious
+
+### URGENCY RULES
+
+- Arrival today or tomorrow -> Immediate
+- Arrival within 2-7 days -> High
+- Arrival same month (>7 days away) -> Normal
+- Arrival same year, different month -> Low or Normal
+- Arrival next year or beyond -> Low
+- Any legal threat, medical emergency, ADA urgent need, or Furious sentiment -> Immediate regardless of arrival date
+- Completion updates (CCA form signed, task confirmed done) may lower urgency one level
+
+### OUTPUT SCHEMA
+
+```json
+[
+  {
+    "training_example_id": "<UUID from [ID: ...] in the email>",
+    "category": "<from category list>",
+    "priority_level": "<Low|Normal|High|Immediate>",
+    "owner": "<from department owner list>",
+    "contact_type": "<from contact type list>",
+    "guest_sentiment": "<from sentiment list>",
+    "missing_information": "<short phrase describing what is missing to act, or null>",
+    "confidence": <integer 0-100>,
+    "notes": "<optional reasoning max 200 chars, or empty string>"
+  }
+]
+```
+
+### LABELING RULES
+
+1. Base labels on the **body (redacted)** only — PII has been removed, do not infer it.
+2. Subject tokens are keyword fragments, not a full subject line.
+3. `missing_information`: short phrase (e.g. "arrival date", "room type") only if genuinely absent and required to act. Set null if not missing.
+4. For travel agencies (Virtuoso, FHR, Amex, consortia), default `contact_type` to "Travel agency".
+5. For Waldorf/Hilton internal senders, set `contact_type` to "Internal" and `owner` to the best-match department.
+6. Rooming lists and group block emails -> "Rooming list / group" + owner = Sales.
+7. `confidence` and `notes` are for quality tracking only — not written to the database.
+"""
+
+
 def _format_markdown(rows: list[dict], today: str) -> str:
     count = len(rows)
     lines: list[str] = [
@@ -96,10 +162,7 @@ def _format_markdown(rows: list[dict], today: str) -> str:
             "",
         ]
 
-    lines += [
-        "**Reply with a JSON array. One object per email.**",
-        "Schema in LABELING_PROMPTS.md section 1.",
-    ]
+    lines.append(_LABELING_INSTRUCTIONS)
 
     return "\n".join(lines)
 
@@ -134,7 +197,7 @@ def main() -> None:
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(md, encoding="utf-8")
-    print(f"Wrote {len(rows)} emails → {out_path}")
+    print(f"Wrote {len(rows)} emails -> {out_path}")
 
     try:
         import pyperclip  # type: ignore[import]
