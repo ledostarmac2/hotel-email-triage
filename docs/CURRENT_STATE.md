@@ -1,11 +1,16 @@
 # Current State
 
-Last updated: 2026-05-17 (v0.1.0 — Phase 7 complete: enterprise deployment, Supabase Auth, bundled credentials, 175 tests)
+Last updated: 2026-05-18 (v0.1.0 - Phase 7 hotel intelligence layer added, 303 tests)
 
 ## Status
 
 - Product name is ReplyRight.
 - Current runnable app is `outlook_dashboard/` plus `run_desktop.py`.
+- Phase 7 hotel domain intelligence layer is implemented but intentionally not wired into `triage_email()` yet:
+  - `outlook_dashboard/hotel_entities.py` exposes `extract_entities(subject, body, received_at=None)` for confirmation numbers, stay dates, nights, room category, rate code, guest counts, arrival window, and billing amounts.
+  - `outlook_dashboard/travel_programs.py` exposes `detect_program(sender_email, body, signature=None)` for luxury travel program and advisor/agency detection.
+  - `outlook_dashboard/urgency_engine.py` exposes `compute_urgency(...)` for arrival-window-aware urgency scoring from extracted entities and detected program metadata.
+  - `new_dependencies.txt` records `dateparser`; `requirements.txt` was not edited because another agent owns it in the parallel branch.
 - The UI has ReplyRight branding, provided logo/icon assets, an urgency-ranked conversation queue, summary/steps panels, local status changes, and an on-demand AI response modal.
 - Outlook refresh is designed around classic Outlook for Windows and now uses read-only `pywin32` COM import as the primary path. The legacy `ExportNYCWAReservationsInboxOnly` VBA macro remains a fallback when direct import dependencies are unavailable.
 - Refresh Inbox now attempts OpenAI classification when `OPENAI_API_KEY` is configured. The dashboard `OPENAI_MODEL` default is `gpt-5.4-nano`, selected after checking official OpenAI docs on 2026-05-17 for low-cost classification/extraction suitability. If OpenAI is not configured and `GOOGLE_AI_API_KEY` is present, Refresh Inbox attempts Google AI Studio/Gemini classification with structured JSON output. Local deterministic triage remains the fallback when external AI is unavailable or errors.
@@ -24,7 +29,7 @@ Last updated: 2026-05-17 (v0.1.0 — Phase 7 complete: enterprise deployment, Su
   - Similar future messages can reuse stored local feedback patterns.
 - A CCA/completed-form pattern now routes to Reservations with concise steps to apply the form and confirm completion.
 - Urgency is deliberately more conservative: level 5 is reserved for same/next-day operational blockers or serious risk, while completed/thank-you/form-submission updates are lowered unless a high-risk signal is present.
-- `python -m pytest tests/ -x --timeout=30` passes with **175 tests** (35 subtests). Python compile checks for active source files and a FastAPI health smoke also pass.
+- `python -m pytest tests/ -x` passes with **303 tests** (35 subtests). The local environment does not currently have the `pytest-timeout` plugin, so commands with `--timeout=30` are rejected before test collection.
 - `dist\ReplyRight.exe` was rebuilt after adaptive triage changes. Packaged health check succeeded, and current packaged data rendered 28 conversation groups with urgency distribution `2:14, 3:4, 4:7, 5:3`.
 - `docs/FUTURE_ROADMAP_SUPABASE_ADAPTIVE_LEARNING.md` captures the broader Supabase/shared-learning roadmap.
 - Confidence scoring (10–95%) is computed per email and shown as a color-coded pill in the UI.
@@ -99,6 +104,7 @@ Important variables:
 - This app intentionally does not mutate Outlook messages; adding send/archive/move/category actions requires a new design and approval.
 - Local mailbox exports and SQLite data are ignored for privacy and are not portable through git.
 - Phase 7 training must remain privacy-preserving by default. Do not store raw hotel email bodies, guest PII, reservation numbers, payment details, or attachments in Supabase training tables unless Brian explicitly approves a new override.
+- The new hotel entity extractor depends on `dateparser`; install/merge the package from `new_dependencies.txt` into the active environment/requirements before using the module on a fresh machine.
 
 ## Semantic Kernel Orchestration Layer
 

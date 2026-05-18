@@ -1,5 +1,40 @@
 # Handoff Log
 
+## 2026-05-18 - Phase 7 hotel domain intelligence layer
+
+Summary:
+
+- Added `outlook_dashboard/hotel_entities.py` with the requested `extract_entities(subject, body, received_at=None)` API for confirmation numbers, stay dates, nights, room category, rate code, guest counts, arrival window, and billing amounts. It remains pure and is not wired into `triage_email()`.
+- Added `outlook_dashboard/travel_programs.py` with domain/keyword detection for Virtuoso, FHR, STARS, Signature, Mr_and_Mrs_Smith, Impresario, Hyatt_Prive, FS_Preferred, and internal Hilton communications.
+- Added `outlook_dashboard/urgency_engine.py` with deterministic arrival-window urgency scoring from extracted entities and detected program metadata.
+- Added `new_dependencies.txt` containing `dateparser`; did not edit `requirements.txt` because it is owned by the parallel labeling agent.
+
+Files changed:
+
+- `outlook_dashboard/hotel_entities.py`
+- `outlook_dashboard/travel_programs.py`
+- `outlook_dashboard/urgency_engine.py`
+- `tests/test_hotel_entities.py`
+- `tests/test_travel_programs.py`
+- `tests/test_urgency_engine.py`
+- `new_dependencies.txt`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+- `docs/CHANGELOG_AI.md`
+
+Verification:
+
+- `python -m pytest tests/test_hotel_entities.py tests/test_travel_programs.py tests/test_urgency_engine.py -v` - 94 passed.
+- `python -m pytest tests/ -x` - 303 passed, 1 warning, 35 subtests passed.
+- `python -m pytest ... --timeout=30` could not run because this environment lacks the `pytest-timeout` plugin and rejects the flag before collection.
+
+Remaining work:
+
+- Merge `dateparser` from `new_dependencies.txt` into `requirements.txt` after the parallel branch is reconciled.
+- Wire the three new pure modules into `triage_email()` in a later operator-approved step.
+
+---
+
 ## 2026-05-18 — Test fix, HANDOFF catch-up, ready for Codex handoff
 
 Summary:

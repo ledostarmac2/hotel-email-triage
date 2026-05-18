@@ -1,5 +1,13 @@
 # AI Change Log
 
+## 2026-05-18 - Phase 7 hotel domain intelligence layer
+
+- Added pure hotel entity extraction for confirmation numbers, stay dates, nights, room category, rate code, guest counts, arrival window, and mentioned billing amounts.
+- Added luxury travel-program detection for Virtuoso, FHR, STARS, Signature, Mr_and_Mrs_Smith, Impresario, Hyatt_Prive, FS_Preferred, and internal Hilton senders.
+- Added deterministic arrival-window urgency scoring from extracted entities and detected program metadata.
+- Kept all three modules unwired from `triage_email()` so the operator can merge this branch with the parallel labeling branch before integration.
+- Recorded `dateparser` in `new_dependencies.txt` instead of editing the parallel-agent-owned `requirements.txt`.
+
 ## 2026-05-17 - Phases 1-4 implementation pass
 
 - Changed refresh triage so `triage_email()` attempts OpenAI classification when configured, with local deterministic triage as the fallback.
