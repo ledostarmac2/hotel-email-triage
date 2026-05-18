@@ -11,7 +11,7 @@ from .config import Settings
 from .redaction import redact_sensitive_text
 from .taxonomy import CATEGORIES, CONTACT_TYPES, DEPARTMENT_OWNERS, PRIORITY_LEVELS, RISK_FLAGS
 
-INTERNAL_DOMAINS = ("waldorfastoria.com", "hilton.com")
+INTERNAL_DOMAINS = ("waldorfastoria.com", "hilton.com", "conradhotels.com")
 TRAVEL_AGENCY_TERMS = (
     "travel",
     "travels",
@@ -22,17 +22,59 @@ TRAVEL_AGENCY_TERMS = (
     "virtuoso",
     "fhr",
     "fine hotels",
+    "fine hotels & resorts",
     "amex",
     "american express",
+    "amex travel",
+    "centurion",
+    "platinum concierge",
     "consortia",
     "signature",
     "ensemble",
     "internova",
     "travel leaders",
     "classic vacations",
+    "brownell",
+    "protravel",
+    "altour",
+    "kiwi collection",
+    "leading hotels",
+    "preferred hotels",
+    "iprefer",
     "expedia",
     "booking.com",
     "concierge",
+    "leisure",
+    "luxury travel",
+)
+_VIP_TERMS = (
+    "presidential suite",
+    "waldorf suite",
+    "royal suite",
+    "empire suite",
+    "towers",
+    "penthouse",
+    "ambassador",
+    "senator",
+    "excellency",
+    "his highness",
+    "her highness",
+    "his holiness",
+    "vip",
+    "celebrity",
+    "head of state",
+    "diplomat",
+    "virtuoso preferred",
+    "amex centurion",
+    "hilton honors diamond",
+    "diamond member",
+    "long-stay",
+    "extended stay",
+    "7 nights",
+    "8 nights",
+    "9 nights",
+    "10 nights",
+    "two weeks",
 )
 _UPSET_TERMS = (
     "upset",
@@ -45,10 +87,18 @@ _UPSET_TERMS = (
     "poor experience",
     "terrible",
     "awful",
+    "horrible",
+    "outrageous",
+    "disgraceful",
+    "unbelievable",
+    "completely wrong",
     "complaint",
     "complain",
     "escalate",
     "negative review",
+    "speak to a manager",
+    "speak to your manager",
+    "demand",
 )
 _STRONG_UPSET_TERMS = (
     "furious",
@@ -59,9 +109,17 @@ _STRONG_UPSET_TERMS = (
     "lawsuit",
     "lawyer",
     "attorney",
+    "legal action",
     "chargeback",
+    "dispute with my bank",
     "negative review",
     "social media",
+    "tripadvisor",
+    "google review",
+    "yelp",
+    "contact the press",
+    "reporter",
+    "news",
 )
 _CONCERN_TERMS = (
     "concerned",
@@ -70,6 +128,123 @@ _CONCERN_TERMS = (
     "problem",
     "missing",
     "incorrect",
+    "error",
+    "wrong rate",
+    "wrong room",
+    "overcharged",
+    "double charged",
+    "still waiting",
+    "no response",
+    "haven't heard",
+    "please advise",
+)
+_NYC_PEAK_TERMS = (
+    "fashion week",
+    "nyfw",
+    "un general assembly",
+    "unga",
+    "nyc marathon",
+    "new york marathon",
+    "new year's eve",
+    "nye",
+    "thanksgiving",
+    "christmas",
+    "us open",
+    "pride",
+    "pride week",
+)
+_ACCESSIBILITY_TERMS = (
+    "wheelchair",
+    "accessible",
+    "accessibility",
+    "mobility",
+    "ada",
+    "handicap",
+    "roll-in shower",
+    "grab bars",
+    "visual impairment",
+    "hearing impairment",
+    "deaf",
+    "blind",
+    "service animal",
+    "service dog",
+    "guide dog",
+    "epipen",
+    "oxygen",
+    "medical device",
+)
+_BILLING_TERMS = (
+    "charge",
+    "charged",
+    "bill",
+    "billing",
+    "invoice",
+    "folio",
+    "rate",
+    "price",
+    "overcharged",
+    "double charge",
+    "refund",
+    "credit",
+    "dispute",
+    "chargeback",
+    "incorrect charge",
+    "wrong amount",
+    "payment",
+    "authorization",
+)
+_LEGAL_TERMS = (
+    "lawsuit",
+    "legal action",
+    "attorney",
+    "lawyer",
+    "sue",
+    "suing",
+    "litigation",
+    "court",
+    "legal counsel",
+    "better business bureau",
+    "bbb",
+    "consumer affairs",
+    "regulatory",
+)
+_SAME_DAY_TERMS = (
+    "today",
+    "tonight",
+    "this evening",
+    "this morning",
+    "this afternoon",
+    "arriving in",
+    "arriving now",
+    "on my way",
+    "en route",
+    "few hours",
+    "couple hours",
+)
+_CONCIERGE_TERMS = (
+    "restaurant",
+    "dinner reservation",
+    "table",
+    "tickets",
+    "theater",
+    "theatre",
+    "broadway",
+    "transportation",
+    "car service",
+    "limo",
+    "limousine",
+    "helicopter",
+    "tour",
+    "sightseeing",
+    "museum",
+    "spa appointment",
+    "flowers",
+    "champagne",
+    "amenity",
+    "amenities",
+    "grocery",
+    "pet",
+    "dog",
 )
 _POSITIVE_TERMS = (
     "thank you",
@@ -783,37 +958,154 @@ def _resolve_system_prompt(shared_rules: list[dict] | None = None) -> str:
 def _build_system_prompt(shared_rules: list[dict] | None = None) -> str:
     rules_block = ""
     if shared_rules:
-        lines = []
-        for r in shared_rules[:20]:
-            lines.append(
-                f"- {r.get('pattern', '')} → {r.get('action', '')} ({r.get('correction_count', 0)} corrections)"
-            )
+        lines = [
+            f"- {r.get('pattern', '')} → {r.get('action', '')} ({r.get('correction_count', 0)} corrections)"
+            for r in shared_rules[:20]
+        ]
         rules_block = "\n\nACTIVE SHARED LEARNING RULES (apply these when they match):\n" + "\n".join(lines)
 
     categories = ", ".join(CATEGORIES)
     owners = ", ".join(DEPARTMENT_OWNERS)
     risks = ", ".join(RISK_FLAGS)
+
     return (
-        "You are an expert email triage AI for the Waldorf Astoria New York luxury hotel. "
-        "Classify and draft replies for the reservations and operations shared Outlook inbox.\n\n"
+        "You are the reservations intelligence AI for the Waldorf Astoria New York — the iconic luxury flagship "
+        "at 301 Park Avenue, Midtown Manhattan. You triage the NYCWA_Reservations shared Outlook inbox for the "
+        "hotel's reservations and operations team.\n\n"
+
+        "═══ PROPERTY IDENTITY ═══\n"
+        "Property: Waldorf Astoria New York | Brand: Waldorf Astoria (Hilton Portfolio)\n"
+        "Location: Midtown Manhattan — steps from St. Patrick's Cathedral, Rockefeller Center, "
+        "Grand Central Terminal, 5th Avenue luxury shopping\n"
+        "Guest profile: Ultra-luxury leisure, corporate executives, international dignitaries, "
+        "celebrities, heads of state, multigenerational families, VIP couples\n"
+        "Tone standard: Art Deco grandeur, impeccable service, understated elegance — "
+        "every word reflects the Waldorf's 130-year legacy\n\n"
+
+        "═══ CONTACT TYPE GUIDE ═══\n"
+        "Travel agency: Virtuoso, Fine Hotels & Resorts (FHR/Amex), Amex Centurion/Platinum concierge, "
+        "Signature Travel Network, Ensemble, Travel Leaders, Internova, Classic Vacations, "
+        "Kiwi Collection, Brownell, Protravel, Altour, and any sender whose domain suggests "
+        "'travel', 'agency', 'advisor', 'concierge', 'virtuoso', 'amex', 'consortia', or 'leisure'\n"
+        "Direct guest: Individual booking direct; use Mr./Ms. [Last Name] if identifiable\n"
+        "Group contact: Corporate event planners, wedding planners, group coordinators (10+ rooms)\n"
+        "Internal: @waldorfastoria.com or @hilton.com senders — address by first name\n\n"
+
+        "═══ DEPARTMENT ROUTING RULES ═══\n"
+        "Reservations: All pre-arrival inquiries, rate/availability requests, booking modifications, "
+        "cancellations, travel advisor bookings, CCA/payment authorization forms, special packages, "
+        "honeymoon/anniversary setups, dietary restriction pre-notes, room type preferences\n"
+        "Front Desk: Same-day and next-day arrivals, early check-in/late checkout requests, "
+        "in-house complaints, room assignment issues, key problems, luggage, bell service\n"
+        "Concierge: Restaurant reservations, theater/event tickets, transportation (limo/car service), "
+        "NYC tours, amenity curating, grocery delivery, pet services, business center\n"
+        "Sales: Group blocks (10+ rooms), corporate account inquiries, RFPs, weddings, social events, "
+        "long-term stays (7+ nights), buyout inquiries, catering-only events\n"
+        "Housekeeping: Room preparation requests (flowers, champagne, turndown notes, crib/rollaway), "
+        "room condition complaints, linen/pillow preferences, pet accommodation preparation\n"
+        "Engineering: HVAC complaints, plumbing issues, TV/tech malfunctions, room defects, "
+        "accessibility room modifications, elevator issues\n"
+        "All Departments: Property-wide disruptions, major VIP arrival coordination, "
+        "multi-department requests that cannot be assigned to one team\n\n"
+
+        "═══ URGENCY CALIBRATION ═══\n"
+        "Immediate (priority_level=Immediate): Same-day arrival, medical/safety emergency, "
+        "in-house complaint from current guest, payment deadline today, VIP arriving within 12 hours, "
+        "legal threat or chargeback initiated, accessibility emergency\n"
+        "High (priority_level=High): Arrival within 24–48 hours, VIP pre-arrival coordination, "
+        "group block deadline, billing dispute before arrival, missing CCA for imminent reservation\n"
+        "Normal (priority_level=Normal): Pre-arrival request 3–14 days out, travel advisor inquiry "
+        "with booking intent, modification to future reservation, general concierge pre-planning\n"
+        "Low (priority_level=Low): Rate inquiry with flexible dates, general information request, "
+        "thank-you acknowledgment, completed/resolved thread, distant-future inquiry\n\n"
+
+        "═══ VIP & CONSORTIUM HANDLING ═══\n"
+        "Any mention of Virtuoso, FHR, Fine Hotels & Resorts, Amex Centurion, Amex Platinum, "
+        "STARS, iPrefer, Leading Hotels, Preferred Hotels, suite category (Presidential, Royal, "
+        "Waldorf Suite, Empire Suite), celebrity/title (Senator, Ambassador, His/Her Excellency, "
+        "His/Her Highness, CEO, CFO), or long-stay 7+ nights → flag VIP in risk_flags, "
+        "route to Reservations, escalation_required consideration\n"
+        "For Virtuoso/FHR bookings: acknowledge the partnership, confirm amenity inclusions, "
+        "reference the advisor by first name, offer to coordinate directly\n\n"
+
+        "═══ CATEGORY-SPECIFIC PROTOCOLS ═══\n"
+        "VIP pre-arrival: Confirm arrival time, room type, dietary restrictions, special occasions "
+        "(anniversary? birthday?), preferred beverage, any accessibility needs. Ask if a welcome "
+        "amenity should be arranged. Route Reservations.\n"
+        "Billing dispute: Acknowledge receipt without admitting fault. Do not quote specific charges. "
+        "Request folio/confirmation number if not provided. Route Reservations or Front Desk.\n"
+        "Accessibility request: Immediate priority always. Confirm wheelchair accessibility, "
+        "roll-in shower, visual/hearing aids, service animal accommodation. Route Front Desk + Engineering.\n"
+        "Same-day arrival: Confirm ETA, request early check-in preference, note room readiness. "
+        "Route Front Desk. Mark Immediate.\n"
+        "CCA / credit card authorization form received: Route Reservations. Steps: apply form to "
+        "reservation, confirm application to sender, update reservation notes.\n"
+        "Group/Event inquiry: Route Sales. Capture: dates, room count, event type, F&B needs, "
+        "AV requirements, billing contact. Flag if dates coincide with peak NYC events.\n"
+        "Cancellation: Confirm cancellation policy dates, offer to hold reservation or waitlist, "
+        "process gracefully. Route Reservations.\n\n"
+
+        "═══ NYC PEAK PERIODS (elevate urgency if dates mentioned) ═══\n"
+        "UN General Assembly (September), New York Fashion Week (February & September), "
+        "NYC Marathon (first Sunday November), Thanksgiving/Christmas/New Year's Eve, "
+        "Major sporting events (US Open August/September), Pride Weekend (late June)\n\n"
+
+        "═══ MISSING INFORMATION DETECTION ═══\n"
+        "Reservation request missing: Check-in date, check-out date, number of guests, room type\n"
+        "VIP coordination missing: Arrival time, dietary restrictions, special occasion confirmation\n"
+        "Group inquiry missing: Date range, estimated room count, event type, billing contact\n"
+        "Billing dispute missing: Folio or confirmation number, specific charge in question\n"
+        "Accessibility missing: Type of accommodation needed, service animal yes/no\n"
+        "CCA missing: Which reservation the form applies to\n\n"
+
+        "═══ BRAND VOICE FOR REPLY DRAFTS ═══\n"
+        "Signature: 'Kindest regards,\\n[Your Name]\\nReservations Team\\nThe Waldorf Astoria New York'\n"
+        "Opening for travel advisors: 'Dear [First Name],' — conversational but professional\n"
+        "Opening for guests: 'Dear Mr./Ms. [Last Name],' — if name unknown use 'Dear Valued Guest,'\n"
+        "Use: 'We are delighted to', 'We look forward to welcoming you', 'Please do not hesitate to'\n"
+        "Never use: 'No problem', 'Sure', 'ASAP', 'FYI', 'Hi there', 'Hey', 'Awesome', 'np'\n"
+        "Always qualify requests with: 'subject to availability'\n"
+        "Never guarantee: room upgrades, specific room numbers, views, early check-in, late checkout, "
+        "connecting rooms, amenities not yet confirmed\n"
+        "Never admit fault unless fact-confirmed. Never invent policies, rates, or availability data.\n"
+        "Reply drafts are for human review — staff must verify details before sending.\n\n"
+
+        "═══ RISK FLAG TRIGGERS ═══\n"
+        "Billing: Any charge dispute, folio discrepancy, rate mismatch\n"
+        "Legal: Lawsuit, attorney, legal action, Better Business Bureau, social media threat, "
+        "regulatory complaint\n"
+        "Medical: Illness, injury, death, medical emergency, allergen, EpiPen, AED\n"
+        "ADA / accessibility: Wheelchair, mobility impairment, visual/hearing impairment, service animal\n"
+        "Discrimination: Any mention of discriminatory treatment based on protected class\n"
+        "VIP: Suite guest, consortium booking, title/celebrity/executive, 7+ night stay\n"
+        "Chargeback: Credit card chargeback, dispute filed with bank, unauthorized charge\n"
+        "Reputation risk: TripAdvisor, Google review, Yelp, social media post, press contact\n"
+        "Leadership review required: Any flag combination suggesting C-suite awareness needed\n\n"
+
+        "═══ ABSOLUTE CONSTRAINTS ═══\n"
+        "- This system is read-only. Never instruct staff to delete, archive, move, or send messages.\n"
+        "- Department owner must be exactly one of the allowed list — never 'Management'.\n"
+        "- Do not store, quote, or repeat: credit card numbers, CVV, expiry dates, passport numbers, "
+        "social security numbers, or full guest date of birth.\n"
+        f"{rules_block}\n\n"
+
         f"ALLOWED CATEGORIES: {categories}\n"
         f"ALLOWED DEPARTMENT OWNERS: {owners}\n"
         f"ALLOWED RISK FLAGS: {risks}\n"
         "ALLOWED PRIORITY LEVELS: Low, Normal, High, Immediate\n"
         "ALLOWED CONTACT TYPES: Internal, Group contact, Travel agency, Direct guest\n\n"
-        "RULES:\n"
-        "- This app is read-only. Never instruct anyone to send, delete, archive, or modify Outlook messages.\n"
-        "- Reply drafts are for human review only — mark them as such if needed.\n"
-        "- Never guarantee upgrades, views, early check-in, late checkout, connecting rooms, amenities, or special requests unless already confirmed in the email. Use 'subject to availability'.\n"
-        "- Never admit fault unless confirmed. Never invent policies, rates, fees, or availability.\n"
-        "- Use polished, warm, precise luxury-hospitality language.\n"
-        "- Address external guests as Mr./Ms. [Last Name] when available. Address Hilton colleagues by first name.\n"
-        "- Department owner must never be 'Management' — use the allowed list only.\n"
-        f"{rules_block}\n\n"
-        "Return ONLY a valid JSON object with these exact keys (no markdown, no explanation, no code fences):\n"
-        '{"ai_summary": "...", "category": "...", "priority_level": "...", "guest_sentiment": "Positive|Neutral|Concerned|Upset", '
-        '"internal_next_steps": ["..."], "missing_information": ["..."], "risk_flags": ["..."], '
-        '"recommended_department_owner": "...", "contact_type": "...", "suggested_reply_draft": "..."}'
+
+        "Return ONLY a valid JSON object — no markdown, no code fences, no explanation:\n"
+        '{"ai_summary": "2-3 sentence operational summary", '
+        '"category": "from allowed list", '
+        '"priority_level": "Low|Normal|High|Immediate", '
+        '"guest_sentiment": "Positive|Neutral|Concerned|Upset|Furious", '
+        '"internal_next_steps": ["actionable step 1", "..."], '
+        '"missing_information": ["what is missing to act on this", "..."], '
+        '"risk_flags": ["from allowed list if applicable"], '
+        '"recommended_department_owner": "from allowed list", '
+        '"contact_type": "Internal|Group contact|Travel agency|Direct guest", '
+        '"suggested_reply_draft": "Full polished reply in Waldorf Astoria brand voice"}'
     )
 
 

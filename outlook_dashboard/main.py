@@ -569,6 +569,83 @@ def api_training_run(request: Request, batch_size: int = 10, refine: bool = Fals
     return result
 
 
+@app.get("/api/admin/prompts")
+def api_list_prompts(request: Request) -> dict[str, object]:
+    """List all prompt versions from Supabase."""
+    if request.state.user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only.")
+    url = (os.getenv("SUPABASE_URL") or "").rstrip("/")
+    key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or ""
+    if not url or not key:
+        return {"prompts": [], "error": "Supabase not configured"}
+    try:
+        import httpx
+        r = httpx.get(
+            f"{url}/rest/v1/prompt_versions",
+            params={"select": "*", "order": "updated_at.desc"},
+            headers={"apikey": key, "Authorization": f"Bearer {key}", "Accept": "application/json"},
+            timeout=10,
+        )
+        if r.status_code == 200:
+            return {"prompts": r.json()}
+        return {"prompts": [], "error": f"status={r.status_code}"}
+    except Exception as exc:
+        return {"prompts": [], "error": str(exc)[:200]}
+
+
+class PromptUpdateRequest(BaseModel):
+    prompt_id: str
+    prompt_text: str
+    version: str | None = None
+
+
+@app.patch("/api/admin/prompts/{prompt_id}")
+def api_update_prompt(prompt_id: str, payload: PromptUpdateRequest, request: Request) -> dict[str, object]:
+    """Update prompt text in Supabase and refresh the local cache."""
+    if request.state.user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only.")
+    url = (os.getenv("SUPABASE_URL") or "").rstrip("/")
+    key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or ""
+    if not url or not key:
+        raise HTTPException(status_code=503, detail="Supabase not configured")
+    update = {"prompt_text": payload.prompt_text}
+    if payload.version:
+        update["version"] = payload.version
+    try:
+        import httpx
+        r = httpx.patch(
+            f"{url}/rest/v1/prompt_versions",
+            params={"id": f"eq.{prompt_id}"},
+            json=update,
+            headers={
+                "apikey": key,
+                "Authorization": f"Bearer {key}",
+                "Content-Type": "application/json",
+                "Prefer": "return=minimal",
+            },
+            timeout=10,
+        )
+        if r.status_code not in (200, 204):
+            raise HTTPException(status_code=502, detail=f"Supabase error {r.status_code}")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)[:200]) from exc
+    # Refresh local cache so next Analyze call uses the new prompt immediately
+    from .supabase_client import download_prompt_versions
+    download_prompt_versions()
+    record_audit_event(
+        action="prompt.updated",
+        actor_user_id=None,
+        actor_email=str(request.state.user["email"]),
+        entity_type="prompt_version",
+        entity_id=prompt_id,
+        metadata={"version": payload.version},
+        db_path=get_settings().database_path,
+    )
+    return {"ok": True, "id": prompt_id}
+
+
 @app.post("/api/admin/classifier/train")
 def api_classifier_train(request: Request) -> dict[str, object]:
     """Train local scikit-learn classifiers from Supabase training_examples."""
