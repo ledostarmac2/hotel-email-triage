@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS feedback_events (
     confidence_score    INTEGER,             -- 10-95, from local heuristic
     feedback_notes      TEXT,               -- free-text correction note (no PII)
     analysis_engine     TEXT,               -- "local-triage", "openai", etc.
-    app_version         TEXT DEFAULT '0.1.0',
+    app_version         TEXT DEFAULT '0.1.1',
     created_at          TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -109,7 +109,7 @@ CREATE TABLE IF NOT EXISTS training_examples (
     label_escalation_required BOOLEAN DEFAULT FALSE,
     labeling_engine         TEXT,                  -- "claude", "heuristic", "openai", "human"
     human_reviewed          BOOLEAN DEFAULT FALSE,
-    app_version             TEXT DEFAULT '0.1.0',
+    app_version             TEXT DEFAULT '0.1.1',
     created_at              TIMESTAMPTZ DEFAULT NOW(),
     updated_at              TIMESTAMPTZ DEFAULT NOW()
 );
