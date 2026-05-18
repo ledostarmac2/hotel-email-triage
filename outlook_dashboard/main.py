@@ -76,6 +76,8 @@ from .supabase_client import (
     upload_feedback_event,
 )
 from .taxonomy import CATEGORIES, CONTACT_TYPES, DEPARTMENT_OWNERS, PRIORITY_LEVELS, RISK_FLAGS, STATUSES
+from .local_classifier import invalidate_cache as invalidate_classifier_cache
+from .local_classifier import train as train_local_classifier
 from .training_pipeline import pipeline_status as training_pipeline_status
 from .training_pipeline import run_pipeline as run_training_pipeline
 from .updater import get_update_status, start_update_check
@@ -565,6 +567,96 @@ def api_training_run(request: Request, batch_size: int = 10, refine: bool = Fals
         db_path=settings.database_path,
     )
     return result
+
+
+@app.post("/api/admin/classifier/train")
+def api_classifier_train(request: Request) -> dict[str, object]:
+    """Train local scikit-learn classifiers from Supabase training_examples."""
+    if request.state.user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only.")
+    result = train_local_classifier(db_path=get_settings().database_path)
+    invalidate_classifier_cache()
+    record_audit_event(
+        action="classifier.train",
+        actor_user_id=None,
+        actor_email=str(request.state.user["email"]),
+        entity_type="local_classifier",
+        entity_id=None,
+        metadata=result,
+        db_path=get_settings().database_path,
+    )
+    return result
+
+
+@app.get("/api/admin/training/examples")
+def api_training_examples(request: Request, limit: int = 20) -> dict[str, object]:
+    """Return unreviewed training examples from Supabase for the human-review queue."""
+    if request.state.user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only.")
+    url = (os.getenv("SUPABASE_URL") or "").rstrip("/")
+    key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or ""
+    if not url or not key:
+        return {"examples": [], "error": "Supabase not configured"}
+    try:
+        import httpx
+        headers = {
+            "apikey": key,
+            "Authorization": f"Bearer {key}",
+            "Accept": "application/json",
+        }
+        r = httpx.get(
+            f"{url}/rest/v1/training_examples",
+            params={"human_reviewed": "eq.false", "select": "*", "order": "created_at.desc", "limit": str(limit)},
+            headers=headers,
+            timeout=10,
+        )
+        if r.status_code == 200:
+            return {"examples": r.json()}
+        return {"examples": [], "error": f"Supabase error {r.status_code}"}
+    except Exception as exc:
+        return {"examples": [], "error": str(exc)[:200]}
+
+
+@app.patch("/api/admin/training/examples/{example_id}/review")
+def api_mark_training_reviewed(example_id: str, request: Request) -> dict[str, object]:
+    """Mark a training example as human-reviewed in Supabase."""
+    if request.state.user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only.")
+    url = (os.getenv("SUPABASE_URL") or "").rstrip("/")
+    key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or ""
+    if not url or not key:
+        raise HTTPException(status_code=503, detail="Supabase not configured")
+    try:
+        import httpx
+        headers = {
+            "apikey": key,
+            "Authorization": f"Bearer {key}",
+            "Content-Type": "application/json",
+            "Prefer": "return=minimal",
+        }
+        r = httpx.patch(
+            f"{url}/rest/v1/training_examples",
+            params={"id": f"eq.{example_id}"},
+            json={"human_reviewed": True},
+            headers=headers,
+            timeout=10,
+        )
+        if r.status_code not in (200, 204):
+            raise HTTPException(status_code=502, detail=f"Supabase error {r.status_code}")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)[:200]) from exc
+    record_audit_event(
+        action="training.example.reviewed",
+        actor_user_id=None,
+        actor_email=str(request.state.user["email"]),
+        entity_type="training_example",
+        entity_id=example_id,
+        metadata={"human_reviewed": True},
+        db_path=get_settings().database_path,
+    )
+    return {"ok": True, "id": example_id}
 
 
 @app.post("/api/rule-candidates/status")

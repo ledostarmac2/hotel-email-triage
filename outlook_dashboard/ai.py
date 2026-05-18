@@ -460,6 +460,9 @@ def analyze_email(email: dict[str, Any], settings: Settings) -> dict[str, Any]:
     return heuristic
 
 
+_CONFIDENCE_SKIP_AI_THRESHOLD = 78  # heuristic confidence ≥ this skips OpenAI/Google refresh
+
+
 def triage_email(
     email: dict[str, Any],
     settings: Settings | None = None,
@@ -467,22 +470,58 @@ def triage_email(
 ) -> dict[str, Any]:
     # Refresh triage uses fast lightweight models (OpenAI/Google) for bulk throughput.
     # Claude is reserved for single-email deep analysis via analyze_email().
-    if settings and settings.openai_configured:
+    #
+    # Confidence routing: if the heuristic is already high-confidence (≥78) we skip
+    # the external AI call entirely to save API cost and latency.
+    heuristic = heuristic_analysis(email, settings)
+    high_confidence = int(heuristic.get("confidence_score") or 0) >= _CONFIDENCE_SKIP_AI_THRESHOLD
+
+    # Try local classifier first — zero API cost, sub-millisecond.
+    body = email.get("body_text") or email.get("body_content") or email.get("body_preview") or ""
+    try:
+        from .local_classifier import predict as _classifier_predict
+        clf_result = _classifier_predict(body)
+        if clf_result:
+            analysis = dict(heuristic)
+            _PRIORITY_FROM_URGENCY = {1: "Low", 2: "Normal", 3: "Normal", 4: "High", 5: "Immediate"}
+            if "urgency" in clf_result:
+                try:
+                    u = int(clf_result["urgency"])
+                    analysis["priority_level"] = _PRIORITY_FROM_URGENCY.get(u, "Normal")
+                except (ValueError, TypeError):
+                    pass
+            if "owner" in clf_result:
+                analysis["recommended_department_owner"] = clf_result["owner"]
+            if "category" in clf_result:
+                analysis["category"] = clf_result["category"]
+            analysis["analysis_engine"] = "local-classifier"
+            analysis["model"] = "local-classifier"
+            _apply_shared_rules(analysis, str(email.get("sender_email") or "").lower())
+            if feedback_entries:
+                analysis = apply_adaptive_feedback(email, analysis, feedback_entries)
+            analysis["suggested_reply_draft"] = ""
+            return analysis
+    except Exception:
+        pass
+
+    if high_confidence or not settings:
+        analysis = heuristic
+    elif settings.openai_configured:
         try:
             analysis = _classify_refresh_with_openai(email, settings)
             analysis["analysis_engine"] = "openai-refresh"
         except Exception as exc:
-            analysis = heuristic_analysis(email, settings)
+            analysis = heuristic
             analysis["analysis_error"] = str(exc)[:500]
-    elif settings and settings.google_ai_configured:
+    elif settings.google_ai_configured:
         try:
             analysis = _classify_refresh_with_google(email, settings)
             analysis["analysis_engine"] = "google-refresh"
         except Exception as exc:
-            analysis = heuristic_analysis(email, settings)
+            analysis = heuristic
             analysis["analysis_error"] = str(exc)[:500]
     else:
-        analysis = heuristic_analysis(email, settings)
+        analysis = heuristic
 
     # Apply community-sourced Supabase rules promoted automatically from repeated
     # user corrections across all installations.
@@ -716,6 +755,31 @@ def heuristic_analysis(email: dict[str, Any], settings: Settings | None = None) 
     }
 
 
+def _resolve_system_prompt(shared_rules: list[dict] | None = None) -> str:
+    """Return the Claude Analyze system prompt.
+
+    If a prompt version with key 'claude_analyze_system' exists in the Supabase
+    prompt_versions cache, use that text (with the shared-rules block appended).
+    Falls back to the hardcoded prompt so deploys without a Supabase record work fine.
+    """
+    try:
+        from .supabase_client import get_cached_prompt_versions
+        for pv in get_cached_prompt_versions():
+            if str(pv.get("prompt_key") or "") == "claude_analyze_system":
+                base = str(pv.get("prompt_text") or "").strip()
+                if base:
+                    if shared_rules:
+                        lines = [
+                            f"- {r.get('pattern', '')} → {r.get('action', '')} ({r.get('correction_count', 0)} corrections)"
+                            for r in shared_rules[:20]
+                        ]
+                        base += "\n\nACTIVE SHARED LEARNING RULES:\n" + "\n".join(lines)
+                    return base
+    except Exception:
+        pass
+    return _build_system_prompt(shared_rules)
+
+
 def _build_system_prompt(shared_rules: list[dict] | None = None) -> str:
     rules_block = ""
     if shared_rules:
@@ -783,11 +847,12 @@ def _analyze_with_claude(email: dict[str, Any], settings: Settings) -> dict[str,
         "allowed_department_owners": DEPARTMENT_OWNERS,
         "allowed_contact_types": CONTACT_TYPES,
     }
+    system_prompt = _resolve_system_prompt(get_cached_rules())
     client = Anthropic(api_key=settings.anthropic_api_key)
     message = client.messages.create(
         model=settings.anthropic_model,
         max_tokens=1800,
-        system=_build_system_prompt(get_cached_rules()),
+        system=system_prompt,
         messages=[{"role": "user", "content": json.dumps(payload, ensure_ascii=True)}],
     )
     try:

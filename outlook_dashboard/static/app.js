@@ -748,12 +748,13 @@ async function renderAdminView() {
   if (!workspace) return;
   workspace.innerHTML = `<div class="admin-loading">Loading admin dashboard…</div>`;
 
-  let data, users, trainingStatus;
+  let data, users, trainingStatus, trainingExamples;
   try {
-    [data, users, trainingStatus] = await Promise.all([
+    [data, users, trainingStatus, trainingExamples] = await Promise.all([
       fetchJson("/api/admin/stats"),
       fetchJson("/api/auth/users"),
       fetchJson("/api/admin/training/status").catch(() => null),
+      fetchJson("/api/admin/training/examples?limit=10").catch(() => null),
     ]);
   } catch (err) {
     if (state.currentView !== "admin") return;
@@ -942,8 +943,30 @@ async function renderAdminView() {
             <button class="button primary" id="trainingRunBtn" onclick="adminRunTrainingPipeline()">
               Run Pipeline
             </button>
+            <button class="button secondary" id="classifierTrainBtn" onclick="adminTrainClassifier()" title="Train local scikit-learn models from uploaded examples (≥20 required)">
+              Train Classifier
+            </button>
           </div>
           <div id="trainingRunResult" style="margin-top:12px;"></div>
+        </section>
+
+        <section class="admin-card admin-card--wide" id="humanReviewCard">
+          <h3>Human Review Queue</h3>
+          <p class="muted" style="margin-bottom:12px;">Unreviewed training examples from Supabase. Check labels and mark correct ones as reviewed to build a high-quality training set.</p>
+          ${(trainingExamples?.examples?.length) ? `
+          <table class="admin-table">
+            <thead><tr><th>Domain</th><th>Subject tokens</th><th>Urgency</th><th>Owner</th><th>Engine</th><th>Action</th></tr></thead>
+            <tbody>${(trainingExamples.examples || []).map((ex) => `
+              <tr>
+                <td>${escapeHtml(ex.sender_domain || "—")}</td>
+                <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(ex.subject_tokens || "")}">${escapeHtml(ex.subject_tokens || "—")}</td>
+                <td>${ex.label_urgency ?? "—"}</td>
+                <td>${escapeHtml(ex.label_owner || "—")}</td>
+                <td>${escapeHtml(ex.labeling_engine || "—")}</td>
+                <td><button class="button small secondary" data-review-id="${escapeHtml(ex.id)}" onclick="adminMarkReviewed('${escapeHtml(ex.id)}', this)">Mark Reviewed</button></td>
+              </tr>`).join("")}
+            </tbody>
+          </table>` : `<p class="muted">${trainingExamples?.error ? escapeHtml(trainingExamples.error) : "No unreviewed examples. Run the training pipeline first."}</p>`}
         </section>
 
         <section class="admin-card admin-card--wide">
@@ -1015,6 +1038,41 @@ async function adminRunTrainingPipeline() {
     showToast(err.message || "Training pipeline failed.", "error");
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = "Run Pipeline"; }
+  }
+}
+
+async function adminTrainClassifier() {
+  const btn = document.getElementById("classifierTrainBtn");
+  const resultEl = document.getElementById("trainingRunResult");
+  if (btn) { btn.disabled = true; btn.textContent = "Training…"; }
+  try {
+    const result = await fetchJson("/api/admin/classifier/train", { method: "POST" });
+    const msg = result.trained
+      ? `Classifier trained on <strong>${result.examples}</strong> examples — targets: ${(result.targets || []).join(", ")}.`
+      : `Not enough data: ${result.reason || "need more examples"}`;
+    if (resultEl) {
+      resultEl.innerHTML = `<div style="padding:10px 14px;border-radius:6px;background:${result.trained ? "var(--success-bg,#ecfdf5)" : "var(--muted-bg,#f3f4f6)"};font-size:13px;">${msg}</div>`;
+    }
+    showToast(result.trained ? `Classifier trained on ${result.examples} examples.` : (result.reason || "Not enough training data."));
+  } catch (err) {
+    if (resultEl) resultEl.innerHTML = `<p class="error-msg">${escapeHtml(err.message || "Training failed.")}</p>`;
+    showToast(err.message || "Classifier training failed.", "error");
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "Train Classifier"; }
+  }
+}
+
+async function adminMarkReviewed(id, btn) {
+  if (!id) return;
+  if (btn) { btn.disabled = true; btn.textContent = "Saving…"; }
+  try {
+    await fetchJson(`/api/admin/training/examples/${encodeURIComponent(id)}/review`, { method: "PATCH" });
+    showToast("Marked as reviewed.");
+    const row = btn?.closest("tr");
+    if (row) row.remove();
+  } catch (err) {
+    showToast(err.message || "Mark reviewed failed.", "error");
+    if (btn) { btn.disabled = false; btn.textContent = "Mark Reviewed"; }
   }
 }
 
