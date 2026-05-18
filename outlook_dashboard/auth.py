@@ -16,6 +16,7 @@ _log = logging.getLogger(__name__)
 
 # ── Supabase connection helpers ───────────────────────────────────────────────
 
+
 def _supabase_url() -> str:
     return os.getenv("SUPABASE_URL", "").rstrip("/")
 
@@ -73,6 +74,7 @@ def _normalize_user(data: dict) -> dict:
 
 # ── Session encoding ──────────────────────────────────────────────────────────
 
+
 def encode_session(access_token: str, refresh_token: str) -> str:
     return f"{access_token}{_SESSION_SEP}{refresh_token}"
 
@@ -87,6 +89,7 @@ def _decode_session(cookie: str) -> tuple[str, str] | None:
 
 
 # ── Auth functions ────────────────────────────────────────────────────────────
+
 
 def authenticate_user(email: str, password: str, db_path: Path | None = None) -> dict | None:
     """Sign in with email/password. Returns user dict with _access_token/_refresh_token."""
@@ -212,6 +215,7 @@ def delete_user(user_id: str, db_path: Path | None = None) -> None:
 def create_reset_token(email: str, db_path: Path | None = None, hours: int = 1) -> str | None:
     """Generate a password-reset token stored locally pointing to Supabase UUID."""
     from .database import managed_connect
+
     normalized = email.lower().strip()
     user = _find_user_by_email(normalized)
     if not user:
@@ -221,6 +225,7 @@ def create_reset_token(email: str, db_path: Path | None = None, hours: int = 1) 
         return None
     token = secrets.token_urlsafe(32)
     from datetime import datetime, timedelta
+
     expires_at = (datetime.utcnow() + timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%S")
     with managed_connect(db_path) as db:
         db.execute(
@@ -237,14 +242,16 @@ def list_users(db_path: Path | None = None) -> list[dict]:
         result = []
         for u in users:
             meta = u.get("app_metadata") or {}
-            result.append({
-                "id": u.get("id", ""),
-                "email": u.get("email", ""),
-                "role": meta.get("role") or "user",
-                "created_at": u.get("created_at", ""),
-                "last_login": u.get("last_sign_in_at", ""),
-                "invited_by_email": None,
-            })
+            result.append(
+                {
+                    "id": u.get("id", ""),
+                    "email": u.get("email", ""),
+                    "role": meta.get("role") or "user",
+                    "created_at": u.get("created_at", ""),
+                    "last_login": u.get("last_sign_in_at", ""),
+                    "invited_by_email": None,
+                }
+            )
         return result
     except Exception as exc:
         _log.warning("list_users failed: %s", exc)
@@ -253,10 +260,12 @@ def list_users(db_path: Path | None = None) -> list[dict]:
 
 # ── Email helpers (SMTP remains local) ───────────────────────────────────────
 
+
 def send_invite_email(to_email: str, token: str, base_url: str, settings) -> None:
     import smtplib
     from email.mime.multipart import MIMEMultipart
     from email.mime.text import MIMEText
+
     if not settings.smtp_configured:
         _log.warning("send_invite_email: SMTP not configured, skipping email to %s", to_email)
         return
@@ -283,7 +292,9 @@ def send_invite_email(to_email: str, token: str, base_url: str, settings) -> Non
     msg.attach(MIMEText(text_body, "plain"))
     msg.attach(MIMEText(html_body, "html"))
     with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as smtp:
-        smtp.ehlo(); smtp.starttls(); smtp.ehlo()
+        smtp.ehlo()
+        smtp.starttls()
+        smtp.ehlo()
         smtp.login(settings.smtp_user, settings.smtp_password)
         smtp.sendmail(from_addr, [to_email], msg.as_string())
 
@@ -292,6 +303,7 @@ def send_reset_email(to_email: str, token: str, base_url: str, settings) -> None
     import smtplib
     from email.mime.multipart import MIMEMultipart
     from email.mime.text import MIMEText
+
     if not settings.smtp_configured:
         _log.warning("send_reset_email: SMTP not configured")
         return
@@ -317,12 +329,15 @@ def send_reset_email(to_email: str, token: str, base_url: str, settings) -> None
     msg.attach(MIMEText(text_body, "plain"))
     msg.attach(MIMEText(html_body, "html"))
     with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as smtp:
-        smtp.ehlo(); smtp.starttls(); smtp.ehlo()
+        smtp.ehlo()
+        smtp.starttls()
+        smtp.ehlo()
         smtp.login(settings.smtp_user, settings.smtp_password)
         smtp.sendmail(from_addr, [to_email], msg.as_string())
 
 
 # ── Private Supabase Admin helpers ────────────────────────────────────────────
+
 
 def _find_user_by_email(email: str) -> dict | None:
     try:

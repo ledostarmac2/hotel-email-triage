@@ -1,16 +1,15 @@
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
-from collections import defaultdict, deque
 import html as html_lib
-from pathlib import Path
 import secrets
+import time
+from collections import defaultdict, deque
+from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Literal
 
-import time
-
 from fastapi import FastAPI, Form, HTTPException, Query, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -19,7 +18,6 @@ from .ai import analyze_email, infer_feedback_corrections, triage_conversation, 
 from .auth import (
     authenticate_user,
     create_reset_token,
-    create_session,
     create_user,
     delete_session,
     delete_user,
@@ -44,15 +42,15 @@ from .database import (
     emails_without_analysis,
     get_email,
     initialize_database,
-    list_emails,
     list_conversation_emails,
+    list_emails,
     list_feedback_for_conversation,
     list_recent_triage_feedback,
-    record_sync_run,
     record_audit_event,
+    record_sync_run,
     save_analysis,
-    set_rule_candidate_status,
     save_triage_feedback,
+    set_rule_candidate_status,
     update_status,
     upsert_email,
 )
@@ -79,7 +77,6 @@ from .supabase_client import (
 )
 from .taxonomy import CATEGORIES, CONTACT_TYPES, DEPARTMENT_OWNERS, PRIORITY_LEVELS, RISK_FLAGS, STATUSES
 from .updater import get_update_status, start_update_check
-
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 _STATIC_VER = str(int(time.time()))
@@ -191,8 +188,12 @@ class _AuthMiddleware(BaseHTTPMiddleware):
         new_refresh = user.pop("_new_refresh_token", None)
         if new_access and new_refresh:
             response.set_cookie(
-                "rr_session", encode_session(new_access, new_refresh),
-                httponly=True, samesite="lax", max_age=60 * 60 * 24 * 30, path="/",
+                "rr_session",
+                encode_session(new_access, new_refresh),
+                httponly=True,
+                samesite="lax",
+                max_age=60 * 60 * 24 * 30,
+                path="/",
             )
         return response
 
@@ -206,7 +207,10 @@ class _RequestLogMiddleware(BaseHTTPMiddleware):
             elapsed_ms = (time.perf_counter() - start) * 1000
             _http_log.error(
                 "%s %s — UNHANDLED %s (%.0f ms)",
-                request.method, request.url.path, type(exc).__name__, elapsed_ms,
+                request.method,
+                request.url.path,
+                type(exc).__name__,
+                elapsed_ms,
                 exc_info=True,
             )
             raise
@@ -292,15 +296,21 @@ def login_form(email: str = Form(...), password: str = Form(...), remember_email
     settings = get_settings()
     user = authenticate_user(email, password, settings.database_path)
     if not user:
-        response = _login_response("Invalid email or password.", email, status_code=401, remember_checked=bool(remember_email))
+        response = _login_response(
+            "Invalid email or password.", email, status_code=401, remember_checked=bool(remember_email)
+        )
         _apply_remembered_email(response, email, bool(remember_email))
         return response
     access_token = user.pop("_access_token", "")
     refresh_token = user.pop("_refresh_token", "")
     response = RedirectResponse("/", status_code=303)
     response.set_cookie(
-        "rr_session", encode_session(access_token, refresh_token),
-        httponly=True, samesite="lax", max_age=60 * 60 * 24 * 30, path="/",
+        "rr_session",
+        encode_session(access_token, refresh_token),
+        httponly=True,
+        samesite="lax",
+        max_age=60 * 60 * 24 * 30,
+        path="/",
     )
     _apply_remembered_email(response, email, bool(remember_email))
     return response
@@ -327,9 +337,11 @@ def _login_response(
     )
     html = html.replace(
         '<input type="checkbox" id="rememberEmail" name="remember_email" value="1" />',
-        '<input type="checkbox" id="rememberEmail" name="remember_email" value="1" checked />'
-        if checked
-        else '<input type="checkbox" id="rememberEmail" name="remember_email" value="1" />',
+        (
+            '<input type="checkbox" id="rememberEmail" name="remember_email" value="1" checked />'
+            if checked
+            else '<input type="checkbox" id="rememberEmail" name="remember_email" value="1" />'
+        ),
     )
     return HTMLResponse(content=html, status_code=status_code, headers={"Cache-Control": "no-store"})
 
@@ -359,6 +371,7 @@ def dashboard() -> HTMLResponse:
 
 
 # ── Auth endpoints ────────────────────────────────────────────────────────────
+
 
 class LoginRequest(BaseModel):
     email: str
@@ -401,8 +414,11 @@ def api_login(payload: LoginRequest, request: Request):
     )
     response = JSONResponse({"ok": True, "role": user["role"], "email": user["email"]})
     response.set_cookie(
-        "rr_session", encode_session(access_token, refresh_token),
-        httponly=True, samesite="lax", max_age=60 * 60 * 24 * 30,
+        "rr_session",
+        encode_session(access_token, refresh_token),
+        httponly=True,
+        samesite="lax",
+        max_age=60 * 60 * 24 * 30,
     )
     return response
 
@@ -475,7 +491,9 @@ def api_invite(payload: InviteRequest, request: Request):
         send_invite_email(payload.email, token, base_url, settings)
     except Exception as exc:
         _log.error("Invite email failed for %s: %s", payload.email, exc)
-        raise HTTPException(status_code=503, detail="User created but invite email failed. Check SMTP settings.") from exc
+        raise HTTPException(
+            status_code=503, detail="User created but invite email failed. Check SMTP settings."
+        ) from exc
     return {"ok": True, "user_id": user_id}
 
 
@@ -505,6 +523,7 @@ def api_reset_password(user_id: str, payload: ResetPasswordRequest, request: Req
 
 
 # ── Admin analytics ───────────────────────────────────────────────────────────
+
 
 @app.get("/api/admin/stats")
 def api_admin_stats(request: Request):
@@ -782,7 +801,11 @@ def process_pending(limit: int = Query(default=25, ge=1, le=100)) -> dict[str, i
     feedback_entries = list_recent_triage_feedback(limit=200, db_path=settings.database_path)
     analyzed = 0
     for email in pending:
-        save_analysis(email["id"], triage_email(email, settings, feedback_entries=feedback_entries), db_path=settings.database_path)
+        save_analysis(
+            email["id"],
+            triage_email(email, settings, feedback_entries=feedback_entries),
+            db_path=settings.database_path,
+        )
         analyzed += 1
     return {"analyzed_count": analyzed}
 
@@ -925,9 +948,7 @@ def api_triage_feedback(email_id: int, payload: TriageFeedbackRequest, request: 
 
     conversation_id = str(email.get("conversation_id") or "")
     raw_messages = (
-        list_conversation_emails(conversation_id, db_path=settings.database_path)
-        if conversation_id
-        else [email]
+        list_conversation_emails(conversation_id, db_path=settings.database_path) if conversation_id else [email]
     )
     feedback_entries = list_recent_triage_feedback(limit=150, db_path=settings.database_path)
     decorated = _apply_conversation_triage(_decorate_email(email), raw_messages, settings, feedback_entries)
@@ -961,9 +982,12 @@ def api_update_status(email_id: int, update: StatusUpdate, request: Request) -> 
 
 def _desktop_message_to_email(message: DesktopOutlookMessage, mailbox: str, folder: str) -> dict[str, object]:
     data = message.model_dump() if hasattr(message, "model_dump") else message.dict()
-    raw_id = data.get("graph_message_id") or f"{mailbox}:{folder}:{data.get('conversation_id')}:{data.get('received_datetime')}:{data.get('subject')}"
-    body = data.get("body_text") or data.get("body_content") or data.get("body_preview") or ""
-    preview = data.get("body_preview") or body[:240]
+    raw_id = (
+        data.get("graph_message_id")
+        or f"{mailbox}:{folder}:{data.get('conversation_id')}:{data.get('received_datetime')}:{data.get('subject')}"
+    )
+    body = str(data.get("body_text") or data.get("body_content") or data.get("body_preview") or "")
+    preview = str(data.get("body_preview") or body[:240])
     return {
         **data,
         "graph_message_id": f"outlook-desktop:{raw_id}",
@@ -994,7 +1018,7 @@ def _validate_feedback_corrections(corrections: dict[str, object]) -> None:
         raise HTTPException(status_code=400, detail="Unsupported status correction.")
     if corrections.get("corrected_urgency") not in (None, ""):
         try:
-            score = int(corrections["corrected_urgency"])
+            score = int(str(corrections["corrected_urgency"]))
         except (TypeError, ValueError) as exc:
             raise HTTPException(status_code=400, detail="Unsupported urgency correction.") from exc
         if score < 1 or score > 5:
@@ -1051,7 +1075,10 @@ def _group_conversation_rows(
 
     rows: list[dict[str, object]] = []
     for key, conversation in grouped.items():
-        conversation.sort(key=lambda email: (str(email.get("received_datetime") or ""), int(email.get("id") or 0)), reverse=True)
+        conversation.sort(
+            key=lambda email: (str(email.get("received_datetime") or ""), int(str(email.get("id") or "0"))),
+            reverse=True,
+        )
         row = dict(conversation[0])
         row["conversation_id"] = row.get("conversation_id") or key
         row["conversation_email_count"] = len(conversation)
@@ -1075,6 +1102,10 @@ def _store_and_optionally_analyze(messages, settings, analyze: bool) -> dict[str
         if analyze:
             email = get_email(email_id, db_path=settings.database_path)
             if email:
-                save_analysis(email_id, triage_email(email, settings, feedback_entries=feedback_entries), db_path=settings.database_path)
+                save_analysis(
+                    email_id,
+                    triage_email(email, settings, feedback_entries=feedback_entries),
+                    db_path=settings.database_path,
+                )
                 analyzed += 1
     return {"inserted_count": inserted, "updated_count": updated, "analyzed_count": analyzed}

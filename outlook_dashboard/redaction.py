@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 
-
 CARD_CANDIDATE_RE = re.compile(r"\b(?:\d[ -]?){13,19}\b")
 CVV_RE = re.compile(
     r"\b(cvv|cvc|security code|card code)\s*[:#-]?\s*\d{3,4}\b",
@@ -13,9 +12,7 @@ EXPIRY_RE = re.compile(
     re.IGNORECASE,
 )
 EMAIL_RE = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE)
-PHONE_RE = re.compile(
-    r"(?<!\d)(?:\+?1[\s.\-]?)?(?:\(?\d{3}\)?[\s.\-]?)\d{3}[\s.\-]?\d{4}(?!\d)"
-)
+PHONE_RE = re.compile(r"(?<!\d)(?:\+?1[\s.\-]?)?(?:\(?\d{3}\)?[\s.\-]?)\d{3}[\s.\-]?\d{4}(?!\d)")
 PAYMENT_LINK_RE = re.compile(
     r"\bhttps?://[^\s<>]*(?:sertifi|payment|pay|checkout|invoice|folio)[^\s<>]*",
     re.IGNORECASE,

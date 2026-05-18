@@ -5,6 +5,7 @@ Strips HTML, removes quoted threads, signatures, legal disclaimers,
 confidentiality footers, and tracking noise before content reaches the LLM.
 Reduces token cost without losing the signal the LLM actually needs.
 """
+
 from __future__ import annotations
 
 import re
@@ -42,8 +43,7 @@ _SENT_FROM_RE = re.compile(
 
 # ── Legal disclaimers / confidentiality footers ──────────────────────────────
 _LEGAL_DISCLAIMER_RE = re.compile(
-    r"(This\s+(?:e[- ]?mail|message|communication)[\s\S]{0,80}"
-    r"(?:confidential|intended only|privileged))[\s\S]*",
+    r"(This\s+(?:e[- ]?mail|message|communication)[\s\S]{0,80}" r"(?:confidential|intended only|privileged))[\s\S]*",
     re.IGNORECASE,
 )
 _CONFIDENTIALITY_HEADER_RE = re.compile(
@@ -53,8 +53,7 @@ _CONFIDENTIALITY_HEADER_RE = re.compile(
 
 # ── Tracking / marketing footer noise ────────────────────────────────────────
 _TRACKING_FOOTER_RE = re.compile(
-    r"(Unsubscribe|View in browser|Update (?:your )?preferences"
-    r"|©\s*\d{4}|All rights reserved)[\s\S]*",
+    r"(Unsubscribe|View in browser|Update (?:your )?preferences" r"|©\s*\d{4}|All rights reserved)[\s\S]*",
     re.IGNORECASE,
 )
 
@@ -91,6 +90,7 @@ class ExecutiveSummaryPlugin:
 
 
 # ── Private helpers ───────────────────────────────────────────────────────────
+
 
 def _strip_html(text: str) -> str:
     text = _HTML_TAG_RE.sub(" ", text)

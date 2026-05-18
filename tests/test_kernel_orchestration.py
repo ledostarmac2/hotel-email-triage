@@ -3,6 +3,7 @@
 Uses a mocked Kernel / LLM response — no API credits consumed.
 Run with:  python -m unittest tests.test_kernel_orchestration
 """
+
 from __future__ import annotations
 
 import unittest
@@ -109,10 +110,7 @@ class TestOrchestrationPipeline(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(result["llm_error"])
 
     async def test_audit_catches_bad_llm_draft(self) -> None:
-        bad_draft = (
-            "We guarantee you will get an upgrade. "
-            "We were at fault. Card: 4111 1111 1111 1111."
-        )
+        bad_draft = "We guarantee you will get an upgrade. " "We were at fault. Card: 4111 1111 1111 1111."
         mock_kernel = _make_mock_kernel(bad_draft)
         with patch("replyright_kernel.demo.get_kernel_settings", return_value=_FAKE_KEY_SETTINGS):
             result = await run_pipeline(DEMO_EMAIL, kernel=mock_kernel)

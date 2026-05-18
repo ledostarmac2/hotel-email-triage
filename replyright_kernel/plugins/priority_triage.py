@@ -5,6 +5,7 @@ Runs before any LLM call. Uses regex rules, keyword matching, sender domain
 checks, importance markers, and escalation signals to score urgency 1-5.
 No API cost; safe to run on every message at bulk-refresh time.
 """
+
 from __future__ import annotations
 
 import re
@@ -58,18 +59,22 @@ _IMPORTANCE_KEYWORDS = re.compile(
     re.IGNORECASE,
 )
 
-_SENSITIVE_SENDER_DOMAINS: frozenset[str] = frozenset({
-    "tripadvisor.com",
-    "yelp.com",
-    "google.com",
-    "opentable.com",
-    "hvs.com",
-    "jll.com",
-})
-_INTERNAL_SENDER_DOMAINS: frozenset[str] = frozenset({
-    "hilton.com",
-    "waldorfastoria.com",
-})
+_SENSITIVE_SENDER_DOMAINS: frozenset[str] = frozenset(
+    {
+        "tripadvisor.com",
+        "yelp.com",
+        "google.com",
+        "opentable.com",
+        "hvs.com",
+        "jll.com",
+    }
+)
+_INTERNAL_SENDER_DOMAINS: frozenset[str] = frozenset(
+    {
+        "hilton.com",
+        "waldorfastoria.com",
+    }
+)
 
 _PRIORITY_LABELS: dict[int, str] = {
     1: "Low",

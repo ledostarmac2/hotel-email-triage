@@ -12,6 +12,7 @@ Pipeline (token-saving architecture):
 
 Steps 1, 2, 4 consume zero API tokens.
 """
+
 from __future__ import annotations
 
 import asyncio

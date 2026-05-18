@@ -4,6 +4,7 @@ import os
 import re
 import shutil
 import subprocess
+from contextlib import suppress
 from pathlib import Path
 
 from .platform_compat import IS_WINDOWS
@@ -102,10 +103,8 @@ def _export_mailbox_with_pywin32(mailbox_name: str, folder_name: str, export_roo
 
 def _read_mail_items(folder, export_dir: Path) -> tuple[list[dict[str, object]], int, int, int]:
     items = folder.Items
-    try:
+    with suppress(Exception):
         items.Sort("[ReceivedTime]", True)
-    except Exception:
-        pass
 
     checked_count = int(_com_get(items, "Count", 0) or 0)
     messages: list[dict[str, object]] = []
@@ -205,8 +204,7 @@ def _start_outlook_autorun(macro_name: str, reason: str) -> dict[str, object]:
     outlook_exe = _find_outlook_exe()
     if not outlook_exe:
         raise OutlookDesktopExportError(
-            "Could not locate classic Outlook for Windows. "
-            "Open classic Outlook once, then try Refresh Inbox again."
+            "Could not locate classic Outlook for Windows. " "Open classic Outlook once, then try Refresh Inbox again."
         )
 
     try:
@@ -240,7 +238,7 @@ def _find_outlook_exe() -> str | None:
     if command_path:
         candidates.append(command_path)
 
-    for base in (os.environ.get("ProgramFiles"), os.environ.get("ProgramFiles(x86)")):
+    for base in (os.environ.get("PROGRAMFILES"), os.environ.get("PROGRAMFILES(X86)")):
         if not base:
             continue
         for relative in (

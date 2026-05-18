@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import html
 import re
+from datetime import UTC
 from typing import Any
-
 
 TAG_RE = re.compile(r"<[^>]+>")
 WHITESPACE_RE = re.compile(r"\s+")
@@ -27,6 +27,6 @@ def graph_email_address(value: dict[str, Any] | None) -> tuple[str, str]:
 
 
 def utc_now_iso() -> str:
-    from datetime import datetime, timezone
+    from datetime import datetime
 
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()

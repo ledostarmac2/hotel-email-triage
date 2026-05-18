@@ -2,25 +2,24 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from datetime import date
 from pathlib import Path
 
-from datetime import date
-
+from outlook_dashboard import supabase_client
 from outlook_dashboard.ai import (
     _arrival_urgency_score,
     _gemini_schema,
     heuristic_analysis,
     infer_feedback_corrections,
     latest_message_text,
-    triage_email,
     triage_conversation,
+    triage_email,
 )
-from outlook_dashboard import supabase_client
-from outlook_dashboard.auth import authenticate_user, ensure_admin
 from outlook_dashboard.database import (
     cache_classification_rules,
     cache_known_senders,
     cache_prompt_versions,
+    consume_reset_token,
     delete_emails_not_in_graph_ids,
     detect_rule_candidates,
     enqueue_feedback_upload,
@@ -29,9 +28,10 @@ from outlook_dashboard.database import (
     list_cached_classification_rules,
     list_cached_known_senders,
     list_cached_prompt_versions,
+    list_emails,
     list_pending_feedback_uploads,
     list_recent_triage_feedback,
-    list_emails,
+    managed_connect,
     mark_feedback_upload_succeeded,
     save_analysis,
     save_triage_feedback,
@@ -235,15 +235,21 @@ class EmailDashboardTests(unittest.TestCase):
         self.assertNotIn("additionalProperties", cleaned)
         self.assertNotIn("additionalProperties", cleaned["properties"]["items"]["items"])
 
-    def test_ensure_admin_repairs_existing_password(self) -> None:
+    def test_password_reset_tokens_store_supabase_uuid(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "test.sqlite3"
             initialize_database(db_path)
-            ensure_admin("admin@example.com", "OldPassword123!", db_path)
-            self.assertIsNotNone(authenticate_user("admin@example.com", "OldPassword123!", db_path))
-            ensure_admin("admin@example.com", "NewPassword123!", db_path)
-            self.assertIsNone(authenticate_user("admin@example.com", "OldPassword123!", db_path))
-            self.assertIsNotNone(authenticate_user("admin@example.com", "NewPassword123!", db_path))
+            user_id = "6f70cf38-5321-4c3e-9b28-20d7b0972f60"
+            token = "reset-token"
+            with managed_connect(db_path) as db:
+                db.execute(
+                    """
+                    INSERT INTO password_reset_tokens (token, user_id, expires_at, created_at)
+                    VALUES (?, ?, datetime('now', '+1 hour'), datetime('now'))
+                    """,
+                    (token, user_id),
+                )
+            self.assertEqual(consume_reset_token(token, db_path), user_id)
 
     def test_rule_candidates_auto_promote_after_five_corrections(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

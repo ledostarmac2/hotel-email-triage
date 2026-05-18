@@ -100,21 +100,42 @@ def test_shared_inbox_workflow_with_mocked_import_feedback_and_reply(app_client:
     assert any(row["action"] == "triage.feedback" for row in admin["audit_logs"])
 
 
+def test_export_inbox_returns_clear_503_on_non_windows(app_client: TestClient, monkeypatch) -> None:
+    import outlook_dashboard.main as main
+
+    monkeypatch.setattr(main, "IS_WINDOWS", False)
+    response = app_client.post("/api/outlook-desktop/export-inbox")
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Outlook COM integration is Windows-only."
+
+
 def test_auth_rate_limit_returns_429(tmp_path, monkeypatch) -> None:
     db_path = tmp_path / "rate-limit.sqlite3"
     monkeypatch.setenv("SQLITE_DB_PATH", str(db_path))
     monkeypatch.setenv("REPLYRIGHT_ADMIN_EMAIL", "admin@example.com")
     monkeypatch.setenv("REPLYRIGHT_ADMIN_PASSWORD", "TestPassword123!")
     monkeypatch.setenv("RATE_LIMIT_PER_MINUTE", "2")
-    monkeypatch.delenv("SUPABASE_URL", raising=False)
-    monkeypatch.delenv("SUPABASE_KEY", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", " ")
+    monkeypatch.setenv("GOOGLE_AI_API_KEY", " ")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", " ")
+    monkeypatch.setenv("SUPABASE_URL", " ")
+    monkeypatch.setenv("SUPABASE_KEY", " ")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", " ")
 
+    import outlook_dashboard.main as main
     from outlook_dashboard.config import get_settings
-    from outlook_dashboard.main import _RATE_LIMIT_BUCKETS, app
 
     get_settings.cache_clear()
-    _RATE_LIMIT_BUCKETS.clear()
-    with TestClient(app) as client:
+    main._RATE_LIMIT_BUCKETS.clear()
+    monkeypatch.setattr(main, "ensure_admin", lambda *args, **kwargs: None)
+    monkeypatch.setattr(main, "authenticate_user", lambda *args, **kwargs: None)
+    monkeypatch.setattr(main, "download_approved_rules", lambda: [])
+    monkeypatch.setattr(main, "download_prompt_versions", lambda: [])
+    monkeypatch.setattr(main, "download_known_senders", lambda: [])
+    monkeypatch.setattr(main, "flush_feedback_queue", lambda: 0)
+    monkeypatch.setattr(main, "start_update_check", lambda: None)
+    with TestClient(main.app) as client:
         for _ in range(2):
             response = client.post(
                 "/api/auth/login",
@@ -127,4 +148,59 @@ def test_auth_rate_limit_returns_429(tmp_path, monkeypatch) -> None:
         )
         assert limited.status_code == 429
     get_settings.cache_clear()
-    _RATE_LIMIT_BUCKETS.clear()
+    main._RATE_LIMIT_BUCKETS.clear()
+
+
+def test_remember_email_survives_app_restart_style_login(tmp_path, monkeypatch) -> None:
+    db_path = tmp_path / "remember.sqlite3"
+    prefs_path = tmp_path / "preferences.json"
+    monkeypatch.setenv("SQLITE_DB_PATH", str(db_path))
+    monkeypatch.setenv("REPLYRIGHT_ADMIN_EMAIL", "admin@example.com")
+    monkeypatch.setenv("REPLYRIGHT_ADMIN_PASSWORD", "TestPassword123!")
+    monkeypatch.setenv("OPENAI_API_KEY", " ")
+    monkeypatch.setenv("GOOGLE_AI_API_KEY", " ")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", " ")
+    monkeypatch.setenv("SUPABASE_URL", " ")
+    monkeypatch.setenv("SUPABASE_KEY", " ")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", " ")
+
+    import outlook_dashboard.main as main
+    import outlook_dashboard.preferences as preferences
+    from outlook_dashboard.config import get_settings
+
+    get_settings.cache_clear()
+    main._RATE_LIMIT_BUCKETS.clear()
+    monkeypatch.setattr(preferences, "PREFERENCES_PATH", prefs_path)
+    monkeypatch.setattr(main, "ensure_admin", lambda *args, **kwargs: None)
+    monkeypatch.setattr(main, "download_approved_rules", lambda: [])
+    monkeypatch.setattr(main, "download_prompt_versions", lambda: [])
+    monkeypatch.setattr(main, "download_known_senders", lambda: [])
+    monkeypatch.setattr(main, "flush_feedback_queue", lambda: 0)
+    monkeypatch.setattr(main, "start_update_check", lambda: None)
+    monkeypatch.setattr(
+        main,
+        "authenticate_user",
+        lambda email, password, db_path=None: {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "email": email.lower(),
+            "role": "admin",
+            "_access_token": "test-access",
+            "_refresh_token": "test-refresh",
+        },
+    )
+
+    with TestClient(main.app) as client:
+        response = client.post(
+            "/login",
+            data={"email": "Admin@Example.com", "password": "TestPassword123!", "remember_email": "1"},
+            follow_redirects=False,
+        )
+        assert response.status_code == 303
+        assert prefs_path.read_text(encoding="utf-8")
+
+        login_page = client.get("/login")
+        assert 'value="admin@example.com" data-server-email' in login_page.text
+        assert 'id="rememberEmail" name="remember_email" value="1" checked' in login_page.text
+
+    get_settings.cache_clear()
+    main._RATE_LIMIT_BUCKETS.clear()

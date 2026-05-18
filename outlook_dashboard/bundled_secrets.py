@@ -11,10 +11,12 @@ To update credentials after acquiring new API keys, run:
 Bundled values are only injected if the corresponding environment variable is
 absent, so a local .env always takes precedence.
 """
+
 from __future__ import annotations
 
 import base64
 import os
+from contextlib import suppress
 
 _K = b"WaldorfAstoriaNYCWA"
 
@@ -36,7 +38,5 @@ def inject() -> None:
     """Inject bundled credentials into os.environ for any key not already set."""
     for name, encoded in _SECRETS.items():
         if not os.environ.get(name):
-            try:
+            with suppress(Exception):
                 os.environ[name] = _dec(encoded)
-            except Exception:
-                pass

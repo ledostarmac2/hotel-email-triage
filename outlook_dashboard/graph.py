@@ -16,7 +16,6 @@ from .database import (
 )
 from .text_utils import graph_email_address, html_to_text
 
-
 GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 GRAPH_FIELDS = [
     "id",

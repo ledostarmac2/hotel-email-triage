@@ -155,6 +155,7 @@ def _download_and_cache(
         return result
     try:
         import httpx
+
         with httpx.Client(timeout=10) as client:
             r = client.get(f"{_url()}/rest/v1/{table}", params=params, headers=_headers())
         if r.status_code == 200:
@@ -257,7 +258,9 @@ def promote_rule_candidates(candidates: list[dict]) -> None:
             try:
                 r = client.post(endpoint, json=payload, headers=headers)
                 if r.status_code in (200, 201, 204):
-                    _log.info("Supabase: upserted rule %s status=%s corrections=%s", c["key"], status, c["correction_count"])
+                    _log.info(
+                        "Supabase: upserted rule %s status=%s corrections=%s", c["key"], status, c["correction_count"]
+                    )
                     _rules_cache[:] = [rule for rule in _rules_cache if rule.get("rule_key") != c["key"]]
                     if status == "approved":
                         _rules_cache.append({**payload, "rule_key": c["key"]})

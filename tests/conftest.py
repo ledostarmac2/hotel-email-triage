@@ -6,19 +6,21 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-
 # ── Shared database fixture ───────────────────────────────────────────────────
+
 
 @pytest.fixture()
 def tmp_db(tmp_path: Path) -> Path:
     """Fresh, initialized SQLite database for each test — no real data."""
     from outlook_dashboard.database import initialize_database
+
     db_path = tmp_path / "test.sqlite3"
     initialize_database(db_path)
     return db_path
 
 
 # ── Sample email fixtures ─────────────────────────────────────────────────────
+
 
 @pytest.fixture()
 def plain_email() -> dict:
@@ -125,6 +127,7 @@ def thread_with_quoted_upset() -> str:
 
 # ── FastAPI test client ───────────────────────────────────────────────────────
 
+
 @pytest.fixture()
 def app_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     db_path = tmp_path / "replyright-test.sqlite3"
@@ -132,19 +135,71 @@ def app_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Test
     monkeypatch.setenv("REPLYRIGHT_ADMIN_EMAIL", "admin@example.com")
     monkeypatch.setenv("REPLYRIGHT_ADMIN_PASSWORD", "TestPassword123!")
     monkeypatch.setenv("RATE_LIMIT_PER_MINUTE", "500")
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    monkeypatch.delenv("GOOGLE_AI_API_KEY", raising=False)
-    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    monkeypatch.delenv("SUPABASE_URL", raising=False)
-    monkeypatch.delenv("SUPABASE_KEY", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", " ")
+    monkeypatch.setenv("GOOGLE_AI_API_KEY", " ")
+    monkeypatch.setenv("GEMINI_API_KEY", " ")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", " ")
+    monkeypatch.setenv("SUPABASE_URL", " ")
+    monkeypatch.setenv("SUPABASE_KEY", " ")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", " ")
 
+    import outlook_dashboard.main as main
     from outlook_dashboard.config import get_settings
-    from outlook_dashboard.main import _RATE_LIMIT_BUCKETS, app
 
     get_settings.cache_clear()
-    _RATE_LIMIT_BUCKETS.clear()
-    with TestClient(app) as client:
+    main._RATE_LIMIT_BUCKETS.clear()
+    monkeypatch.setattr(main, "ensure_admin", lambda *args, **kwargs: None)
+    monkeypatch.setattr(main, "download_approved_rules", lambda: [])
+    monkeypatch.setattr(main, "download_prompt_versions", lambda: [])
+    monkeypatch.setattr(main, "download_known_senders", lambda: [])
+    monkeypatch.setattr(main, "flush_feedback_queue", lambda: 0)
+    monkeypatch.setattr(main, "start_update_check", lambda: None)
+    monkeypatch.setattr(main, "upload_feedback_event", lambda *args, **kwargs: None)
+    monkeypatch.setattr(main, "promote_rule_candidates", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        main,
+        "authenticate_user",
+        lambda email, password, db_path=None: (
+            {
+                "id": "00000000-0000-4000-8000-000000000001",
+                "email": email.lower(),
+                "role": "admin",
+                "_access_token": "test-access",
+                "_refresh_token": "test-refresh",
+            }
+            if email.lower() == "admin@example.com" and password == "TestPassword123!"
+            else None
+        ),
+    )
+    monkeypatch.setattr(
+        main,
+        "get_session_user",
+        lambda cookie, db_path=None: (
+            {
+                "id": "00000000-0000-4000-8000-000000000001",
+                "email": "admin@example.com",
+                "role": "admin",
+            }
+            if cookie
+            else None
+        ),
+    )
+    monkeypatch.setattr(main, "delete_session", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        main,
+        "list_users",
+        lambda db_path=None: [
+            {
+                "id": "00000000-0000-4000-8000-000000000001",
+                "email": "admin@example.com",
+                "role": "admin",
+                "created_at": "",
+                "last_login": "",
+                "invited_by_email": None,
+            }
+        ],
+    )
+    with TestClient(main.app) as client:
         response = client.post(
             "/api/auth/login",
             json={"email": "admin@example.com", "password": "TestPassword123!"},
@@ -152,4 +207,4 @@ def app_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Test
         assert response.status_code == 200, response.text
         yield client
     get_settings.cache_clear()
-    _RATE_LIMIT_BUCKETS.clear()
+    main._RATE_LIMIT_BUCKETS.clear()

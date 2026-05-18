@@ -5,6 +5,7 @@ Call build_kernel() to get a fully configured Semantic Kernel instance
 with all native plugins registered and the OpenAI chat service attached
 (when OPENAI_API_KEY is present).
 """
+
 from __future__ import annotations
 
 import logging

@@ -13,9 +13,7 @@ except ImportError:  # pragma: no cover - optional until dependencies are instal
 
 
 ROOT_DIR = (
-    Path(sys.executable).resolve().parent
-    if getattr(sys, "frozen", False)
-    else Path(__file__).resolve().parent.parent
+    Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent.parent
 )
 DATA_DIR = ROOT_DIR / "data"
 
@@ -25,6 +23,7 @@ def _load_env() -> None:
         load_dotenv(ROOT_DIR / ".env")
     try:
         from .bundled_secrets import inject as _inject_bundled
+
         _inject_bundled()
     except Exception:
         pass
@@ -150,9 +149,7 @@ def get_settings() -> Settings:
         microsoft_client_id=os.getenv("MICROSOFT_CLIENT_ID", "").strip(),
         microsoft_client_secret=os.getenv("MICROSOFT_CLIENT_SECRET", "").strip(),
         microsoft_tenant_id=os.getenv("MICROSOFT_TENANT_ID", "common").strip(),
-        microsoft_redirect_uri=os.getenv(
-            "MICROSOFT_REDIRECT_URI", "http://localhost:8000/auth/callback"
-        ).strip(),
+        microsoft_redirect_uri=os.getenv("MICROSOFT_REDIRECT_URI", "http://localhost:8000/auth/callback").strip(),
         shared_mailbox_email=os.getenv("SHARED_MAILBOX_EMAIL", "").strip(),
         openai_api_key=os.getenv("OPENAI_API_KEY", "").strip(),
         openai_model=os.getenv("OPENAI_MODEL", "gpt-5.4-nano").strip(),
@@ -164,9 +161,7 @@ def get_settings() -> Settings:
         outlook_export_mailbox=os.getenv("OUTLOOK_EXPORT_MAILBOX", "NYCWA_Reservations").strip(),
         outlook_export_folder=os.getenv("OUTLOOK_EXPORT_FOLDER", "Inbox").strip(),
         outlook_export_dir=outlook_export_dir,
-        outlook_export_macro=os.getenv(
-            "OUTLOOK_EXPORT_MACRO", "ExportNYCWAReservationsInboxOnly"
-        ).strip(),
+        outlook_export_macro=os.getenv("OUTLOOK_EXPORT_MACRO", "ExportNYCWAReservationsInboxOnly").strip(),
         app_host=os.getenv("APP_HOST", "127.0.0.1").strip(),
         app_port=_int_env("APP_PORT", 8000),
         smtp_host=os.getenv("SMTP_HOST", "smtp.office365.com").strip(),

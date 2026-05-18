@@ -6,13 +6,14 @@ for post-hoc debugging without logging email body content, credentials, or token
 
 Log location: data/replyright-runtime.log  (rotates at 5 MB, keeps 3 backups)
 """
+
 from __future__ import annotations
 
 import logging
 import logging.handlers
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 _CONFIGURED = False
 _HANDLER: logging.handlers.RotatingFileHandler | None = None

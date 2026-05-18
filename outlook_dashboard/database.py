@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 from .config import get_settings
 from .taxonomy import STATUSES
@@ -236,7 +237,10 @@ def _ensure_column(db: sqlite3.Connection, table: str, column: str, definition: 
 
 def _ensure_password_reset_tokens_supabase_schema(db: sqlite3.Connection) -> None:
     """Migrate legacy local-user reset tokens to Supabase UUID-safe storage."""
-    columns = {row["name"]: str(row["type"] or "").upper() for row in db.execute("PRAGMA table_info(password_reset_tokens)").fetchall()}
+    columns = {
+        row["name"]: str(row["type"] or "").upper()
+        for row in db.execute("PRAGMA table_info(password_reset_tokens)").fetchall()
+    }
     foreign_keys = db.execute("PRAGMA foreign_key_list(password_reset_tokens)").fetchall()
     if columns.get("user_id") == "TEXT" and not foreign_keys:
         return
@@ -454,9 +458,7 @@ def list_emails(
         clauses.append("a.risk_flags LIKE ?")
         params.append(f"%{risk}%")
     if query:
-        clauses.append(
-            "(e.subject LIKE ? OR e.sender_email LIKE ? OR e.sender_name LIKE ? OR e.body_preview LIKE ?)"
-        )
+        clauses.append("(e.subject LIKE ? OR e.sender_email LIKE ? OR e.sender_name LIKE ? OR e.body_preview LIKE ?)")
         pattern = f"%{query}%"
         params.extend([pattern, pattern, pattern, pattern])
 
@@ -640,16 +642,18 @@ def detect_rule_candidates(db_path: Path | None = None) -> list[dict[str, Any]]:
             domain = dict(row)["domain"]
             owner = dict(row)["corrected_owner"]
             count = dict(row)["correction_count"]
-            candidates.append({
-                "key": f"owner_domain_{domain}_{owner.lower().replace(' ', '_')}",
-                "type": "owner_by_domain",
-                "pattern": f"Sender @{domain}",
-                "suggestion": f"Route to {owner}",
-                "correction_count": count,
-                "latest_feedback_at": dict(row)["latest_feedback_at"],
-                "confidence": min(95, 50 + count * 8),
-                "status": "auto_promoted" if count >= 5 else "candidate",
-            })
+            candidates.append(
+                {
+                    "key": f"owner_domain_{domain}_{owner.lower().replace(' ', '_')}",
+                    "type": "owner_by_domain",
+                    "pattern": f"Sender @{domain}",
+                    "suggestion": f"Route to {owner}",
+                    "correction_count": count,
+                    "latest_feedback_at": dict(row)["latest_feedback_at"],
+                    "confidence": min(95, 50 + count * 8),
+                    "status": "auto_promoted" if count >= 5 else "candidate",
+                }
+            )
 
         # Pattern 2 — category repeatedly corrected to the same value
         rows = db.execute(
@@ -669,16 +673,18 @@ def detect_rule_candidates(db_path: Path | None = None) -> list[dict[str, Any]]:
         for row in rows:
             cat = dict(row)["corrected_category"]
             count = dict(row)["correction_count"]
-            candidates.append({
-                "key": f"category_{cat.lower().replace(' ', '_').replace('/', '_')}",
-                "type": "category_correction",
-                "pattern": f"Category frequently corrected to: {cat}",
-                "suggestion": f"Improve {cat.lower()} detection rules",
-                "correction_count": count,
-                "latest_feedback_at": dict(row)["latest_feedback_at"],
-                "confidence": min(95, 45 + count * 8),
-                "status": "auto_promoted" if count >= 5 else "candidate",
-            })
+            candidates.append(
+                {
+                    "key": f"category_{cat.lower().replace(' ', '_').replace('/', '_')}",
+                    "type": "category_correction",
+                    "pattern": f"Category frequently corrected to: {cat}",
+                    "suggestion": f"Improve {cat.lower()} detection rules",
+                    "correction_count": count,
+                    "latest_feedback_at": dict(row)["latest_feedback_at"],
+                    "confidence": min(95, 45 + count * 8),
+                    "status": "auto_promoted" if count >= 5 else "candidate",
+                }
+            )
 
         # Pattern 3 — urgency systematically over- or under-scored
         rows = db.execute(
@@ -696,16 +702,18 @@ def detect_rule_candidates(db_path: Path | None = None) -> list[dict[str, Any]]:
         for row in rows:
             level = dict(row)["corrected_urgency"]
             count = dict(row)["correction_count"]
-            candidates.append({
-                "key": f"urgency_to_{level}",
-                "type": "urgency_correction",
-                "pattern": f"Urgency repeatedly corrected to level {level}",
-                "suggestion": "Review scoring rules that may be over- or under-scoring urgency",
-                "correction_count": count,
-                "latest_feedback_at": None,
-                "confidence": min(95, 40 + count * 8),
-                "status": "auto_promoted" if count >= 5 else "candidate",
-            })
+            candidates.append(
+                {
+                    "key": f"urgency_to_{level}",
+                    "type": "urgency_correction",
+                    "pattern": f"Urgency repeatedly corrected to level {level}",
+                    "suggestion": "Review scoring rules that may be over- or under-scoring urgency",
+                    "correction_count": count,
+                    "latest_feedback_at": None,
+                    "confidence": min(95, 40 + count * 8),
+                    "status": "auto_promoted" if count >= 5 else "candidate",
+                }
+            )
 
     statuses = _rule_candidate_statuses(db_path)
     for candidate in candidates:
@@ -775,9 +783,7 @@ def cache_classification_rules(rules: list[dict[str, Any]], db_path: Path | None
 def list_cached_classification_rules(db_path: Path | None = None) -> list[dict[str, Any]]:
     try:
         with managed_connect(db_path) as db:
-            rows = db.execute(
-                "SELECT payload FROM supabase_rule_cache ORDER BY cached_at DESC"
-            ).fetchall()
+            rows = db.execute("SELECT payload FROM supabase_rule_cache ORDER BY cached_at DESC").fetchall()
     except sqlite3.OperationalError:
         return []
     rules: list[dict[str, Any]] = []

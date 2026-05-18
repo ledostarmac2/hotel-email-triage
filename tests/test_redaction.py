@@ -5,17 +5,16 @@ All tests are deterministic — no AI calls, no external services.
 Covers: Luhn card validation, CVV, expiry, email address, phone,
 payment links, confirmation numbers, and combination scenarios.
 """
-from __future__ import annotations
 
-import pytest
+from __future__ import annotations
 
 from outlook_dashboard.redaction import (
     _luhn_valid,
     redact_sensitive_text,
 )
 
-
 # ── Luhn algorithm ────────────────────────────────────────────────────────────
+
 
 class TestLuhnValidation:
     def test_valid_visa_number(self) -> None:
@@ -51,6 +50,7 @@ class TestLuhnValidation:
 
 # ── Card number redaction ─────────────────────────────────────────────────────
 
+
 class TestCardRedaction:
     def test_luhn_valid_card_is_redacted(self) -> None:
         text = "Card number: 4111 1111 1111 1111"
@@ -85,6 +85,7 @@ class TestCardRedaction:
 
 # ── CVV redaction ─────────────────────────────────────────────────────────────
 
+
 class TestCVVRedaction:
     def test_cvv_colon_format_is_redacted(self) -> None:
         text = "CVV: 123"
@@ -111,6 +112,7 @@ class TestCVVRedaction:
 
 # ── Expiry date redaction ─────────────────────────────────────────────────────
 
+
 class TestExpiryRedaction:
     def test_expires_mm_yy_is_redacted(self) -> None:
         text = "expires 12/29"
@@ -130,6 +132,7 @@ class TestExpiryRedaction:
 
 
 # ── Email address redaction ───────────────────────────────────────────────────
+
 
 class TestEmailRedaction:
     def test_plain_email_address_is_redacted(self) -> None:
@@ -152,6 +155,7 @@ class TestEmailRedaction:
 
 # ── Phone number redaction ────────────────────────────────────────────────────
 
+
 class TestPhoneRedaction:
     def test_us_phone_with_dashes_is_redacted(self) -> None:
         text = "Call me at 212-555-0100"
@@ -171,6 +175,7 @@ class TestPhoneRedaction:
 
 
 # ── Payment link redaction ────────────────────────────────────────────────────
+
 
 class TestPaymentLinkRedaction:
     def test_sertifi_payment_link_is_redacted(self) -> None:
@@ -204,6 +209,7 @@ class TestPaymentLinkRedaction:
 
 # ── Confirmation number redaction ─────────────────────────────────────────────
 
+
 class TestConfirmationNumberRedaction:
     def test_confirmation_number_label_is_redacted(self) -> None:
         text = "Confirmation number: RES-88234"
@@ -228,6 +234,7 @@ class TestConfirmationNumberRedaction:
 
 
 # ── Combination / real-world scenarios ───────────────────────────────────────
+
 
 class TestCombinationScenarios:
     def test_full_payment_email_all_pii_redacted(self) -> None:

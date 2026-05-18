@@ -10,7 +10,6 @@ from typing import Any
 from . import __version__
 from .runtime_log import get_logger
 
-
 DEFAULT_RELEASES_URL = "https://api.github.com/repos/ledostarmac2/hotel-email-triage/releases/latest"
 
 _log = get_logger("updater")
@@ -29,14 +28,14 @@ class Version:
     parts: tuple[int, ...]
 
     @classmethod
-    def parse(cls, value: str) -> "Version":
+    def parse(cls, value: str) -> Version:
         digits = re.findall(r"\d+", value or "")
         return cls(tuple(int(part) for part in digits[:4]) or (0,))
 
     def _padded(self, length: int) -> tuple[int, ...]:
         return self.parts + (0,) * max(0, length - len(self.parts))
 
-    def __gt__(self, other: "Version") -> bool:
+    def __gt__(self, other: Version) -> bool:
         length = max(len(self.parts), len(other.parts))
         return self._padded(length) > other._padded(length)
 

@@ -6,11 +6,11 @@ from typing import Any
 
 from .config import DATA_DIR
 
-
 PREFERENCES_PATH = DATA_DIR / "preferences.json"
 
 
-def _read_preferences(path: Path = PREFERENCES_PATH) -> dict[str, Any]:
+def _read_preferences(path: Path | None = None) -> dict[str, Any]:
+    path = path or PREFERENCES_PATH
     try:
         if not path.exists():
             return {}
@@ -20,7 +20,8 @@ def _read_preferences(path: Path = PREFERENCES_PATH) -> dict[str, Any]:
         return {}
 
 
-def _write_preferences(data: dict[str, Any], path: Path = PREFERENCES_PATH) -> None:
+def _write_preferences(data: dict[str, Any], path: Path | None = None) -> None:
+    path = path or PREFERENCES_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, ensure_ascii=True, indent=2, sort_keys=True), encoding="utf-8")
 

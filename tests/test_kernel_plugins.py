@@ -3,6 +3,7 @@
 All tests are pure-local — no LLM calls, no API key required.
 Run with:  python -m unittest tests.test_kernel_plugins
 """
+
 from __future__ import annotations
 
 import unittest
@@ -11,8 +12,8 @@ from replyright_kernel.plugins.audit_compliance import AuditCompliancePlugin
 from replyright_kernel.plugins.executive_summary import ExecutiveSummaryPlugin
 from replyright_kernel.plugins.priority_triage import PriorityTriagePlugin
 
-
 # ── PriorityTriagePlugin ──────────────────────────────────────────────────────
+
 
 class TestPriorityTriagePlugin(unittest.TestCase):
     def setUp(self) -> None:
@@ -132,6 +133,7 @@ class TestPriorityTriagePlugin(unittest.TestCase):
 
 # ── ExecutiveSummaryPlugin ────────────────────────────────────────────────────
 
+
 class TestExecutiveSummaryPlugin(unittest.TestCase):
     def setUp(self) -> None:
         self.plugin = ExecutiveSummaryPlugin()
@@ -214,6 +216,7 @@ class TestExecutiveSummaryPlugin(unittest.TestCase):
 
 # ── AuditCompliancePlugin ─────────────────────────────────────────────────────
 
+
 class TestAuditCompliancePlugin(unittest.TestCase):
     def setUp(self) -> None:
         self.plugin = AuditCompliancePlugin()
@@ -269,10 +272,7 @@ class TestAuditCompliancePlugin(unittest.TestCase):
         self.assertNotIn("We guarantee", r["sanitized_draft"])
 
     def test_multiple_violations_all_captured(self) -> None:
-        draft = (
-            "We guarantee an upgrade. We were at fault. "
-            "Card: 4111 1111 1111 1111."
-        )
+        draft = "We guarantee an upgrade. We were at fault. " "Card: 4111 1111 1111 1111."
         r = self.plugin.audit(draft=draft)
         self.assertIn("guarantee_or_concession", r["violations"])
         self.assertIn("admission_of_fault", r["violations"])

@@ -5,14 +5,14 @@
 
 .USAGE
     # From PowerShell (run as standard user, no admin required):
-    irm https://raw.githubusercontent.com/[OWNER]/hotel-email-triage/main/setup.ps1 | iex
+    irm https://raw.githubusercontent.com/ledostarmac2/hotel-email-triage/main/setup.ps1 | iex
 
     # Or if you already have the repo cloned:
     .\setup.ps1
 #>
 
 $ErrorActionPreference = "Stop"
-$REPO_URL = "https://github.com/[OWNER]/hotel-email-triage.git"
+$REPO_URL = "https://github.com/ledostarmac2/hotel-email-triage.git"
 $INSTALL_DIR = Join-Path $env:USERPROFILE "ReplyRight"
 $PYTHON_VERSION = "3.11"
 

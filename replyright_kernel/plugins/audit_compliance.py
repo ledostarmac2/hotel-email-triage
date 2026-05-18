@@ -6,6 +6,7 @@ Runs entirely locally with no LLM cost. Blocks or sanitises drafts
 that contain guarantees, fault admissions, payment data, legal/medical
 risk language, discrimination risk, or unapproved promises.
 """
+
 from __future__ import annotations
 
 import re
@@ -40,8 +41,7 @@ _RULES: list[tuple[str, re.Pattern[str], str]] = [
     (
         "payment_leakage",
         re.compile(
-            r"\b(\d{4}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}"
-            r"|cvv|card number|security code|full card)\b",
+            r"\b(\d{4}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}" r"|cvv|card number|security code|full card)\b",
             re.IGNORECASE,
         ),
         "Remove any payment card data from the draft before sharing.",
