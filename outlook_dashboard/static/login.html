@@ -287,7 +287,7 @@
           </div>
           <div class="remember-row">
             <label class="remember-label">
-              <input type="checkbox" id="rememberEmail" /> Remember my email
+              <input type="checkbox" id="rememberEmail" name="remember_email" value="1" /> Remember my email
             </label>
             <a href="#" class="forgot-link" id="forgotLink">Forgot password?</a>
           </div>
@@ -330,8 +330,28 @@
         errorText.textContent = "";
       });
 
-      // Pre-fill remembered email
-      const saved = localStorage.getItem("rr_remembered_email");
+      function readCookie(name) {
+        return document.cookie
+          .split(";")
+          .map((part) => part.trim())
+          .find((part) => part.startsWith(`${name}=`))
+          ?.split("=")
+          .slice(1)
+          .join("=") || "";
+      }
+
+      function writeRememberedEmail(value) {
+        const expires = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toUTCString();
+        document.cookie = `rr_remembered_email=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax`;
+      }
+
+      function clearRememberedEmail() {
+        document.cookie = "rr_remembered_email=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax";
+      }
+
+      // Pre-fill remembered email. The server-backed preference is the durable
+      // fallback for pywebview profiles that clear localStorage on close.
+      const saved = localStorage.getItem("rr_remembered_email") || decodeURIComponent(readCookie("rr_remembered_email"));
       if (!emailInput.value && saved) { emailInput.value = saved; rememberCheckbox.checked = true; }
 
       // Show server-side error from the response or legacy URL param.
@@ -349,8 +369,10 @@
       document.getElementById("loginForm").addEventListener("submit", () => {
         if (rememberCheckbox.checked) {
           localStorage.setItem("rr_remembered_email", emailInput.value.trim());
+          writeRememberedEmail(emailInput.value.trim());
         } else {
           localStorage.removeItem("rr_remembered_email");
+          clearRememberedEmail();
         }
       });
 

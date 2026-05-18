@@ -6,6 +6,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from .platform_compat import IS_WINDOWS
+
 try:
     import winreg
 except ImportError:  # pragma: no cover - Windows-only module
@@ -21,7 +23,7 @@ class OutlookDesktopExportError(RuntimeError):
     pass
 
 
-class _PyWin32Unavailable(RuntimeError):
+class _PyWin32Unavailable(OutlookDesktopExportError):
     pass
 
 
@@ -31,6 +33,8 @@ def export_mailbox_folder_to_msg(
     export_root: Path,
     macro_name: str,
 ) -> dict[str, object]:
+    if not IS_WINDOWS:
+        raise OutlookDesktopExportError("Outlook COM integration is Windows-only.")
     export_root.mkdir(parents=True, exist_ok=True)
     try:
         return _export_mailbox_with_pywin32(mailbox_name, folder_name, export_root)
@@ -48,7 +52,7 @@ def _export_mailbox_with_pywin32(mailbox_name: str, folder_name: str, export_roo
         import pythoncom
         import win32com.client
     except ImportError as exc:
-        raise _PyWin32Unavailable("pywin32 is not installed in this environment.") from exc
+        raise _PyWin32Unavailable("Outlook COM not available on this platform.") from exc
 
     pythoncom.CoInitialize()
     try:

@@ -1,5 +1,330 @@
 # Handoff Log
 
+## 2026-05-17 — v0.1.0 code optimization pass
+
+Summary:
+
+- Removed dead `"rooming list"` branch from `_category_for` secondary group/block check (unreachable after the earlier fix added an explicit check higher up).
+- Wrapped bare `message.content[0].text` / `json.loads()` in `_analyze_with_claude` with `try/except (IndexError, json.JSONDecodeError)` that raises a descriptive `ValueError`.
+- Extracted `_send_via_smtp()` helper in `auth.py` to eliminate ~15 lines of duplicated SMTP connection code between `send_invite_email` and `send_reset_email`.
+- Extracted `_download_and_cache()` in `supabase_client.py` to replace three near-identical 30-line download functions (`download_approved_rules`, `download_prompt_versions`, `download_known_senders`).
+- Moved `httpx.Client` creation out of the per-iteration loop in `promote_rule_candidates` — one client now shared across all candidates in the batch.
+- Moved `secrets` from a local function import (`import secrets as _sec` inside `api_invite`) to top-level `import secrets` in `main.py`.
+- Added TTL pruning of stale `_RATE_LIMIT_BUCKETS` keys in `main.py` to prevent unbounded dict growth on long-running servers.
+- Replaced three identical `kernel.add_plugin()` + `logger.debug()` blocks in `registry.py` with a data-driven `_PLUGINS` list and a loop. Removed large boilerplate future-tier comment blocks.
+- Wrote `CHANGELOG.md` capturing the full v0.1.0 feature set, bug fixes, and optimizations.
+- Updated `docs/CURRENT_STATE.md` timestamp and optimization summary.
+
+Files changed:
+
+- `outlook_dashboard/ai.py` (dead branch removal, JSON error handling)
+- `outlook_dashboard/auth.py` (_send_via_smtp helper)
+- `outlook_dashboard/supabase_client.py` (_download_and_cache, Client reuse)
+- `outlook_dashboard/main.py` (top-level secrets, rate-limit TTL pruning)
+- `replyright_kernel/registry.py` (loop-based registration)
+- `CHANGELOG.md` (new)
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+
+Verification:
+
+- `python -m pytest tests/` passed: **160 tests OK** (0 failures, 0 errors) after all changes.
+
+Phase status:
+
+- Phases 1-6: **Complete**. v0.1.0 is ready to commit.
+- Phase 7 (local classifier training): Not started. Staged in `docs/FUTURE_ROADMAP_SUPABASE_ADAPTIVE_LEARNING.md` and summarized in `CHANGELOG.md`.
+
+---
+
+## 2026-05-17 - Testing infrastructure, bug fixes, Phase 1-6 audit
+
+Summary:
+
+- Installed `semantic-kernel>=1.15`, `pytest>=8.3`, `pytest-cov>=5.0`, `pytest-asyncio>=0.25`, `beautifulsoup4>=4.12` to requirements.txt and verified installed on system Python.
+- Added `pytest.ini` with asyncio auto-mode, short tracebacks, and deprecation warning suppression.
+- Expanded `tests/conftest.py` with shared fixtures: `tmp_db`, `plain_email`, `urgent_email`, `complaint_email`, `cca_completion_email`, `accessibility_email`, `thread_with_quoted_upset`. Existing `app_client` fixture retained.
+- Created `tests/test_redaction.py`: 40 tests covering Luhn validation, card/CVV/expiry/email/phone/payment-link/confirmation-number redaction, combination scenarios, and idempotency. All pass.
+- Created `tests/test_malformed_emails.py`: 37 tests covering empty/None/whitespace inputs, malformed field types, oversized text, unicode/emoji/null-byte content, HTML bodies, reply thread isolation, urgency boundary enforcement, and conversation-level triage. All pass.
+- Fixed two bugs found by pre-existing `test_business_logic_pytest.py`:
+  1. `_refresh_classification_payload` in `ai.py`: was calling `latest_message_text()` before `redact_sensitive_text()`, so URLs (including payment links) were stripped before redaction counts were taken. Fixed order: redact first, then clean. This is the correct security order.
+  2. `_category_for()` in `ai.py`: `"rooming list"` check appeared after `"billing"` check, so external-domain group emails that mentioned billing instructions (e.g. "please confirm names and billing") were miscategorized as "Billing dispute". Added an explicit `"rooming list"` check before the billing check for external domains.
+- Wrote `docs/TESTING.md`: full testing guide with commands, test file table, fixture reference, coverage targets, design rules, and Phase 7 considerations.
+- Updated `README.md` with a Testing section showing `python -m pytest tests/` and `--cov` commands.
+
+Files changed:
+
+- `requirements.txt`
+- `pytest.ini` (new)
+- `tests/conftest.py`
+- `tests/test_redaction.py` (new)
+- `tests/test_malformed_emails.py` (new)
+- `outlook_dashboard/ai.py` (two bug fixes)
+- `docs/TESTING.md` (new)
+- `docs/HANDOFF.md`
+- `README.md`
+
+Verification:
+
+- `python -m pytest tests/` passed: **160 tests OK** (0 failures, 0 errors).
+- `python -m unittest discover -s tests` passed: **76 tests OK**.
+- Both runners agree: no regressions from the two ai.py bug fixes.
+
+Phase status after this pass:
+
+- Phase 1 (core Outlook import): Complete.
+- Phase 2 (local triage): Complete. Two classification bugs fixed.
+- Phase 3 (AI classification): Complete. Redaction-before-clean order now correct.
+- Phase 4 (adaptive feedback): Complete.
+- Phase 5 (Semantic Kernel orchestration): Complete; `semantic-kernel` now installed and verified.
+- Phase 6 (testing): **Complete**. pytest stack installed; 160 deterministic tests covering redaction, triage, malformed inputs, API workflow, kernel plugins, and kernel orchestration.
+
+Remaining work / Phase 7 prep:
+
+- Live Supabase sync still needs verification after key rotation.
+- Live Gemini and OpenAI classification still needs verification after key rotation.
+- Phase 7 local classifier training not yet started. See `docs/FUTURE_ROADMAP_SUPABASE_ADAPTIVE_LEARNING.md` Phase 7 section for the planned approach.
+- When Phase 7 work begins, add the test categories listed in `docs/TESTING.md` under "Phase 7 Testing Considerations."
+
+## 2026-05-17 - Phases 1-4 hardening and edge-test pass
+
+Summary:
+
+- Ran a broader cleanup pass after the Google AI Studio setup work.
+- Added Supabase startup sync for active prompt versions and known sender mappings, with durable SQLite cache fallback.
+- Applied known sender mappings during local triage so sender domains can correct owner/contact type before external AI is needed.
+- Added Admin Suggested Rules `Reject` and `Dismiss` controls. Dismiss hides a candidate locally; Reject leaves it visible as rejected and prevents Supabase auto-promotion.
+- Added `prompt_versions` to `docs/supabase_schema.sql`.
+- Added import-smoke coverage for active dashboard/kernel modules and regressions for prompt cache, known sender cache, known-sender triage application, and rule candidate dismissal.
+
+Files changed:
+
+- `docs/supabase_schema.sql`
+- `outlook_dashboard/ai.py`
+- `outlook_dashboard/database.py`
+- `outlook_dashboard/main.py`
+- `outlook_dashboard/static/app.js`
+- `outlook_dashboard/static/styles.css`
+- `outlook_dashboard/supabase_client.py`
+- `tests/test_ai_and_database.py`
+- `tests/test_import_smoke.py`
+- `docs/ARCHITECTURE.md`
+- `docs/CURRENT_STATE.md`
+- `docs/DECISIONS.md`
+- `docs/CHANGELOG_AI.md`
+- `docs/HANDOFF.md`
+
+Verification:
+
+- `python -m unittest discover -s tests` passed: 76 tests OK.
+- `py_compile` passed for active project Python files outside reference/build/data/venv folders.
+- FastAPI `TestClient` startup/health smoke passed; `/api/health` returned `ok=true`, `read_only_outlook=true`, and the Google AI configuration fields.
+- `git diff --check` passed.
+- PowerShell parsed `scripts\configure_google_ai_studio.ps1` successfully.
+
+Remaining work:
+
+- Node.js is not installed on this machine, so `node --check outlook_dashboard/static/app.js` could not be run.
+- Live Supabase sync for `prompt_versions` and `known_senders` still needs verification after keys are rotated and the updated schema is applied.
+- Live Gemini refresh classification still needs verification after Brian rotates and stores a new Google AI Studio key.
+
+## 2026-05-17 - Google AI Studio secure local setup and fallback
+
+Summary:
+
+- Added Google AI Studio/Gemini as an optional Refresh Inbox classification fallback when OpenAI is not configured.
+- Corrected the Gemini REST structured-output request to use `generationConfig.responseMimeType` and `generationConfig.responseJsonSchema`.
+- Added `scripts/configure_google_ai_studio.ps1`, which prompts for a newly rotated Google AI Studio key and writes it to ignored `.env` without printing the secret.
+- Exposed non-secret AI configuration status in `/api/health`, `/api/config`, and the Admin dashboard AI Configuration card.
+- Added `.env.local`, `.env.development`, and `.env.production` to `.gitignore` while preserving `.env.example`.
+- Updated README and docs to make clear that Google AI Studio does not host/display the local repository; the API key lets ReplyRight call Gemini from the local app.
+
+Files changed:
+
+- `.gitignore`
+- `.env.example`
+- `README.md`
+- `scripts/configure_google_ai_studio.ps1`
+- `outlook_dashboard/ai.py`
+- `outlook_dashboard/config.py`
+- `outlook_dashboard/main.py`
+- `outlook_dashboard/static/app.js`
+- `tests/test_ai_and_database.py`
+- `docs/ARCHITECTURE.md`
+- `docs/CURRENT_STATE.md`
+- `docs/DECISIONS.md`
+- `docs/CHANGELOG_AI.md`
+- `docs/HANDOFF.md`
+
+Verification:
+
+- `py_compile` passed for `outlook_dashboard\ai.py`, `config.py`, `main.py`, `database.py`, and `supabase_client.py` using the installed WindowsApps Python plus `.build-venv-codex-site` dependency target.
+- `python -m unittest tests.test_ai_and_database` passed: 13 tests OK.
+- `python -m unittest tests.test_kernel_plugins tests.test_kernel_orchestration` passed: 59 tests OK.
+- PowerShell parsed `scripts\configure_google_ai_studio.ps1` successfully.
+
+Remaining work:
+
+- Brian must rotate the Google AI Studio key that was pasted in chat before use.
+- Run `.\scripts\configure_google_ai_studio.ps1` with the new key, restart ReplyRight, then check `/api/health` or the Admin AI Configuration card for `Google AI Studio` configured.
+- No live Gemini call was made because no safe rotated key was stored locally in this session.
+
+## 2026-05-17 - Claude pickup note: Phases 1-4 in progress
+
+Current state for next agent:
+
+- Brian asked to begin completing roadmap Phases 1-4 after adding the full Phase 7 local model training roadmap.
+- This session implemented the first Phases 1-4 slice, but the work has **not been committed** yet.
+- Working tree has intentional edits across docs, backend, frontend, Supabase schema, and tests.
+- Do not revert these edits. Continue from them.
+
+Implemented in this slice:
+
+- Phase 1:
+  - `triage_email()` now attempts OpenAI refresh classification when `OPENAI_API_KEY` is configured.
+  - If OpenAI errors or is unconfigured, it falls back to deterministic local triage.
+  - Dashboard `OPENAI_MODEL` default changed to `gpt-5.4-nano`.
+  - Official OpenAI docs were checked on 2026-05-17; `gpt-5.4-nano` was selected because docs describe it as a low-cost model suitable for classification/extraction.
+- Phase 2:
+  - Feedback UI now includes corrected category, contact type, sentiment, status, summary quality rating, and reply quality rating.
+  - Local `triage_feedback` now stores `corrected_status`, `summary_quality_rating`, and `reply_quality_rating`.
+  - Feedback status correction updates local SQLite status only; it does not mutate Outlook.
+- Phase 3:
+  - Approved Supabase rules are cached in local SQLite via `supabase_rule_cache`.
+  - Failed configured Supabase feedback uploads are queued in `supabase_feedback_queue` and retried on startup.
+  - Supabase feedback payload now includes original/corrected status and 1-5 summary/reply ratings.
+- Phase 4:
+  - Rule candidates are visible after 3 matching corrections.
+  - 5+ matching corrections are marked as `auto_promoted` locally and upserted to Supabase as `approved`.
+
+Files intentionally changed:
+
+- `.env.example`
+- `docs/ARCHITECTURE.md`
+- `docs/CHANGELOG_AI.md`
+- `docs/CURRENT_STATE.md`
+- `docs/DECISIONS.md`
+- `docs/FUTURE_ROADMAP_SUPABASE_ADAPTIVE_LEARNING.md`
+- `docs/HANDOFF.md`
+- `docs/supabase_schema.sql`
+- `outlook_dashboard/ai.py`
+- `outlook_dashboard/config.py`
+- `outlook_dashboard/database.py`
+- `outlook_dashboard/main.py`
+- `outlook_dashboard/static/app.js`
+- `outlook_dashboard/static/styles.css`
+- `outlook_dashboard/supabase_client.py`
+- `tests/test_ai_and_database.py`
+
+Verification blocker:
+
+- No working Python interpreter was available in this shell.
+- `python` was not recognized.
+- `py` was not recognized.
+- `.venv\Scripts\python.exe` exists but points to a missing Windows Store Python path:
+  `C:\Users\brian\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\python.exe`
+- Before trusting this slice, restore/rebuild Python or the venv and run:
+  ```powershell
+  python -m unittest tests.test_ai_and_database
+  python -m unittest tests.test_kernel_plugins tests.test_kernel_orchestration
+  python -m py_compile outlook_dashboard\ai.py outlook_dashboard\database.py outlook_dashboard\main.py outlook_dashboard\supabase_client.py outlook_dashboard\config.py
+  ```
+
+Recommended next steps:
+
+1. Fix/rebuild the local Python environment.
+2. Run the tests and py_compile commands above.
+3. Fix any test or syntax failures.
+4. Launch the app and manually verify the expanded feedback controls save and recompute the selected conversation.
+5. Verify Refresh Inbox with no `OPENAI_API_KEY`: local fallback should still work.
+6. Verify Refresh Inbox with a valid `OPENAI_API_KEY`: OpenAI refresh classification should run and should not populate reply drafts during bulk refresh.
+7. Continue Phase 1 by splitting OpenAI refresh classification into explicit staged steps instead of one structured prompt.
+8. Continue Phase 3 by adding durable prompt-version sync and known-sender sync.
+9. Continue Phase 4 by adding admin emergency reject/dismiss controls for bad auto-promoted rules.
+
+Safety reminders:
+
+- Preserve read-only Outlook behavior. Do not send, delete, archive, move, mark read, or categorize Outlook messages.
+- Do not commit `.env`, `dist\.env`, local SQLite data, exported `.msg` files, build output, virtualenvs, or logs.
+- Do not store raw hotel email bodies, guest PII, reservation numbers, payment details, or attachments in Supabase.
+- Keep `outlook_dashboard/` as the active runnable app unless Brian explicitly requests a migration.
+
+## 2026-05-17 - Phases 1-4 implementation pass
+
+Summary:
+
+- Started completing Phases 1-4 after the Phase 7 roadmap expansion.
+- Phase 1: Refresh Inbox now attempts OpenAI classification when `OPENAI_API_KEY` is configured, then falls back to local deterministic triage on errors or missing config. The dashboard default `OPENAI_MODEL` is now `gpt-5.4-nano`, selected after checking official OpenAI docs on 2026-05-17 for low-cost classification/extraction suitability.
+- Phase 2: Feedback UI now exposes corrected category, contact type, sentiment, status, summary quality rating, and reply quality rating in addition to urgency and owner.
+- Phase 2: `triage_feedback` now stores `corrected_status`, `summary_quality_rating`, and `reply_quality_rating`.
+- Phase 3: Added durable local SQLite caching for approved Supabase rules and a local retry queue for failed configured feedback uploads.
+- Phase 3: Supabase feedback payloads now include original/corrected status plus 1-5 summary/reply quality ratings.
+- Phase 4: Rule candidates remain visible at three matching corrections, while five or more matching corrections are marked as auto-promoted/approved for hands-off shared learning.
+
+Files changed:
+
+- `.env.example`
+- `outlook_dashboard/ai.py`
+- `outlook_dashboard/config.py`
+- `outlook_dashboard/database.py`
+- `outlook_dashboard/main.py`
+- `outlook_dashboard/supabase_client.py`
+- `outlook_dashboard/static/app.js`
+- `outlook_dashboard/static/styles.css`
+- `tests/test_ai_and_database.py`
+- `docs/supabase_schema.sql`
+- `docs/ARCHITECTURE.md`
+- `docs/CURRENT_STATE.md`
+- `docs/DECISIONS.md`
+- `docs/CHANGELOG_AI.md`
+- `docs/HANDOFF.md`
+
+Verification:
+
+- Attempted `python -m unittest tests.test_ai_and_database` and `python -m py_compile ...`, but `python` is not on PATH in this shell.
+- Attempted `py -m unittest ...`, but `py` is not installed or not on PATH.
+- Attempted `.venv\Scripts\python.exe`, but the venv points to a missing Windows Store Python path: `C:\Users\brian\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\python.exe`.
+- No executable verification completed in this environment because no working Python interpreter was available.
+
+Remaining work:
+
+- Restore a working Python interpreter or rebuild `.venv`, then run `python -m unittest tests.test_ai_and_database` and `python -m unittest tests.test_kernel_plugins tests.test_kernel_orchestration`.
+- Launch the app and manually verify the expanded feedback controls in the detail pane.
+- With a valid `OPENAI_API_KEY`, click Refresh Inbox and confirm OpenAI refresh classification succeeds; without a key, confirm local fallback still works.
+- Continue Phase 1 refinement by splitting OpenAI refresh classification into explicit staged steps instead of one structured prompt.
+- Continue Phase 3 by adding prompt-version and known-sender durable sync.
+- Continue Phase 4 by adding admin emergency reject/dismiss controls for bad auto-promoted rules.
+
+## 2026-05-17 - Phase 7 local hotel-specific model training roadmap
+
+Summary:
+
+- Expanded Phase 7 in `docs/FUTURE_ROADMAP_SUPABASE_ADAPTIVE_LEARNING.md` into a full long-term local intelligence roadmap.
+- Phase 7 now targets a hybrid learning system: deterministic rules, Supabase feedback, sanitized historical completed emails, embeddings, lightweight local classifiers, and external AI fallback.
+- The roadmap explicitly avoids training a full LLM from scratch as the first approach. The preferred first local training target is structured classification: urgency, owner, category, status, missing information, reply required, and escalation required.
+- Added privacy-first training requirements: raw hotel emails, guest PII, reservation numbers, payment details, attachments, VIP identifiers, and similar sensitive content must not be stored in Supabase training tables by default.
+- Added Phase 7 Supabase table targets: `training_emails`, `training_labels`, `model_versions`, `model_metrics`, `prediction_logs`, and `human_review_queue`.
+- Added Phase 7 subphases: historical import/redaction, AI-assisted labeling, human review queue, local classifier training, runtime local prediction, continuous learning, and optional local LLM support.
+
+Files changed:
+
+- `docs/FUTURE_ROADMAP_SUPABASE_ADAPTIVE_LEARNING.md`
+- `docs/ARCHITECTURE.md`
+- `docs/CURRENT_STATE.md`
+- `docs/DECISIONS.md`
+- `docs/CHANGELOG_AI.md`
+- `docs/HANDOFF.md`
+
+Verification:
+
+- Documentation-only change. No app tests were run.
+- Reviewed git diff for the changed docs.
+
+Remaining work:
+
+- Next implementation should still start with nearer-term roadmap blanks unless Brian explicitly jumps to Phase 7: direct feedback controls, 1-5 summary/reply quality ratings, Supabase durable sync/cache, hands-off rule auto-promotion, and staged OpenAI refresh classification.
+- When Phase 7 begins, implement incrementally in the documented order: Supabase training tables, sanitized training records, PII redaction, historical importer, AI batch labeler, human review queue, local classifier training, runtime prediction, admin controls, model activation/rollback, and metrics.
+
 ## 2026-05-16 - Brian roadmap answers for tomorrow
 
 Summary:

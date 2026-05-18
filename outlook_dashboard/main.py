@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from collections import defaultdict, deque
 import html as html_lib
 from pathlib import Path
+import secrets
 from typing import Literal
 
 import time
@@ -21,6 +23,7 @@ from .auth import (
     create_user,
     delete_session,
     delete_user,
+    encode_session,
     ensure_admin,
     get_session_user,
     list_users,
@@ -32,7 +35,9 @@ from .config import DATA_DIR, get_settings
 from .database import (
     admin_correction_stats,
     admin_low_confidence_emails,
+    admin_misclassification_drilldowns,
     admin_overview_stats,
+    admin_recent_audit_logs,
     consume_reset_token,
     delete_emails_not_in_graph_ids,
     detect_rule_candidates,
@@ -44,7 +49,9 @@ from .database import (
     list_feedback_for_conversation,
     list_recent_triage_feedback,
     record_sync_run,
+    record_audit_event,
     save_analysis,
+    set_rule_candidate_status,
     save_triage_feedback,
     update_status,
     upsert_email,
@@ -58,10 +65,20 @@ from .graph import (
     fetch_recent_messages,
 )
 from .outlook_desktop import OutlookDesktopExportError, export_mailbox_folder_to_msg
+from .platform_compat import HAS_OUTLOOK_COM, HAS_WEBVIEW, HAS_WEBVIEW2_RUNTIME, IS_WINDOWS
+from .preferences import clear_remembered_email, remembered_email, save_remembered_email
 from .runtime_log import configure as _configure_runtime_log
 from .runtime_log import get_logger
-from .supabase_client import download_approved_rules, promote_rule_candidates, upload_feedback_event
+from .supabase_client import (
+    download_approved_rules,
+    download_known_senders,
+    download_prompt_versions,
+    flush_feedback_queue,
+    promote_rule_candidates,
+    upload_feedback_event,
+)
 from .taxonomy import CATEGORIES, CONTACT_TYPES, DEPARTMENT_OWNERS, PRIORITY_LEVELS, RISK_FLAGS, STATUSES
+from .updater import get_update_status, start_update_check
 
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -75,11 +92,12 @@ async def lifespan(_: FastAPI):
     _configure_runtime_log(DATA_DIR)
     settings = get_settings()
     _log.info(
-        "Server starting: host=%s port=%s db=%s openai=%s graph=%s",
+        "Server starting: host=%s port=%s db=%s openai=%s google_ai=%s graph=%s",
         settings.app_host,
         settings.app_port,
         settings.database_path,
         settings.openai_configured,
+        settings.google_ai_configured,
         settings.graph_configured,
     )
     initialize_database(settings.database_path)
@@ -90,6 +108,16 @@ async def lifespan(_: FastAPI):
     rules = download_approved_rules()
     if rules:
         _log.info("Supabase: loaded %s approved classification rules", len(rules))
+    prompts = download_prompt_versions()
+    if prompts:
+        _log.info("Supabase: loaded %s prompt versions", len(prompts))
+    senders = download_known_senders()
+    if senders:
+        _log.info("Supabase: loaded %s known sender mappings", len(senders))
+    flushed = flush_feedback_queue()
+    if flushed:
+        _log.info("Supabase: flushed %s queued feedback events", flushed)
+    start_update_check()
     yield
     _log.info("Server shutdown.")
 
@@ -107,6 +135,42 @@ _AUTH_SKIP = {
     "/api/auth/reset-password",
 }
 _AUTH_SKIP_PREFIX = ("/static/",)
+_RATE_LIMIT_PATHS = {
+    "/login",
+    "/api/auth/login",
+    "/api/auth/forgot-password",
+    "/api/auth/reset-password",
+}
+_RATE_LIMIT_WINDOW_SECONDS = 60
+_RATE_LIMIT_BUCKETS: dict[tuple[str, str], deque[float]] = defaultdict(deque)
+
+
+class _RateLimitMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+        if path not in _RATE_LIMIT_PATHS:
+            return await call_next(request)
+        settings = get_settings()
+        limit = max(0, int(settings.rate_limit_per_minute))
+        if limit <= 0:
+            return await call_next(request)
+        client_host = request.client.host if request.client else "unknown"
+        key = (client_host, path)
+        now = time.monotonic()
+        bucket = _RATE_LIMIT_BUCKETS[key]
+        while bucket and now - bucket[0] > _RATE_LIMIT_WINDOW_SECONDS:
+            bucket.popleft()
+        # Prune keys whose window has fully expired to prevent unbounded dict growth.
+        stale = [k for k, b in _RATE_LIMIT_BUCKETS.items() if b and now - b[-1] > _RATE_LIMIT_WINDOW_SECONDS]
+        for k in stale:
+            del _RATE_LIMIT_BUCKETS[k]
+        if len(bucket) >= limit:
+            return JSONResponse(
+                {"detail": "Too many attempts. Please wait before trying again."},
+                status_code=429,
+            )
+        bucket.append(now)
+        return await call_next(request)
 
 
 class _AuthMiddleware(BaseHTTPMiddleware):
@@ -114,15 +178,23 @@ class _AuthMiddleware(BaseHTTPMiddleware):
         path = request.url.path
         if path in _AUTH_SKIP or any(path.startswith(p) for p in _AUTH_SKIP_PREFIX):
             return await call_next(request)
-        session_id = request.cookies.get("rr_session", "")
+        session_cookie = request.cookies.get("rr_session", "")
         settings = get_settings()
-        user = get_session_user(session_id, settings.database_path) if session_id else None
+        user = get_session_user(session_cookie, settings.database_path) if session_cookie else None
         if not user:
             if path.startswith("/api/"):
                 return JSONResponse({"detail": "Authentication required."}, status_code=401)
             return RedirectResponse("/login")
         request.state.user = user
-        return await call_next(request)
+        response = await call_next(request)
+        new_access = user.pop("_new_access_token", None)
+        new_refresh = user.pop("_new_refresh_token", None)
+        if new_access and new_refresh:
+            response.set_cookie(
+                "rr_session", encode_session(new_access, new_refresh),
+                httponly=True, samesite="lax", max_age=60 * 60 * 24 * 30, path="/",
+            )
+        return response
 
 
 class _RequestLogMiddleware(BaseHTTPMiddleware):
@@ -157,6 +229,7 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+app.add_middleware(_RateLimitMiddleware)
 app.add_middleware(_AuthMiddleware)
 app.add_middleware(_RequestLogMiddleware)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -173,6 +246,17 @@ class TriageFeedbackRequest(BaseModel):
     corrected_owner: str | None = None
     corrected_contact_type: str | None = None
     corrected_sentiment: str | None = None
+    corrected_status: str | None = None
+    summary_quality_rating: int | None = Field(default=None, ge=1, le=5)
+    reply_quality_rating: int | None = Field(default=None, ge=1, le=5)
+
+
+class RuleCandidateStatusRequest(BaseModel):
+    key: str = Field(min_length=1, max_length=240)
+    status: str = Field(min_length=1, max_length=40)
+    type: str | None = Field(default=None, max_length=80)
+    pattern: str | None = Field(default=None, max_length=500)
+    suggestion: str | None = Field(default=None, max_length=500)
 
 
 class DesktopOutlookMessage(BaseModel):
@@ -204,31 +288,60 @@ def login_page() -> HTMLResponse:
 
 
 @app.post("/login")
-def login_form(email: str = Form(...), password: str = Form(...)):
+def login_form(email: str = Form(...), password: str = Form(...), remember_email: str | None = Form(None)):
     settings = get_settings()
     user = authenticate_user(email, password, settings.database_path)
     if not user:
-        return _login_response("Invalid email or password.", email, status_code=401)
-    session_id = create_session(user["id"], settings.database_path)
+        response = _login_response("Invalid email or password.", email, status_code=401, remember_checked=bool(remember_email))
+        _apply_remembered_email(response, email, bool(remember_email))
+        return response
+    access_token = user.pop("_access_token", "")
+    refresh_token = user.pop("_refresh_token", "")
     response = RedirectResponse("/", status_code=303)
     response.set_cookie(
-        "rr_session", session_id,
+        "rr_session", encode_session(access_token, refresh_token),
         httponly=True, samesite="lax", max_age=60 * 60 * 24 * 30, path="/",
     )
+    _apply_remembered_email(response, email, bool(remember_email))
     return response
 
 
-def _login_response(error_message: str = "", email: str = "", status_code: int = 200) -> HTMLResponse:
+def _login_response(
+    error_message: str = "",
+    email: str = "",
+    status_code: int = 200,
+    *,
+    remember_checked: bool | None = None,
+) -> HTMLResponse:
     html = (STATIC_DIR / "login.html").read_text(encoding="utf-8")
+    stored_email = remembered_email()
+    display_email = email.strip() or stored_email
+    checked = bool(display_email) if remember_checked is None else remember_checked
     html = html.replace(
         'data-server-error=""',
         f'data-server-error="{html_lib.escape(error_message, quote=True)}"',
     )
     html = html.replace(
         'value="" data-server-email',
-        f'value="{html_lib.escape(email.strip(), quote=True)}" data-server-email',
+        f'value="{html_lib.escape(display_email, quote=True)}" data-server-email',
+    )
+    html = html.replace(
+        '<input type="checkbox" id="rememberEmail" name="remember_email" value="1" />',
+        '<input type="checkbox" id="rememberEmail" name="remember_email" value="1" checked />'
+        if checked
+        else '<input type="checkbox" id="rememberEmail" name="remember_email" value="1" />',
     )
     return HTMLResponse(content=html, status_code=status_code, headers={"Cache-Control": "no-store"})
+
+
+def _apply_remembered_email(response, email: str, should_remember: bool) -> None:
+    normalized = email.lower().strip()
+    if should_remember and normalized:
+        save_remembered_email(normalized)
+        response.set_cookie("rr_remembered_email", normalized, max_age=60 * 60 * 24 * 365, samesite="lax", path="/")
+    else:
+        clear_remembered_email()
+        response.delete_cookie("rr_remembered_email", path="/")
 
 
 @app.get("/reset-password")
@@ -275,10 +388,20 @@ def api_login(payload: LoginRequest, request: Request):
     user = authenticate_user(payload.email, payload.password, settings.database_path)
     if not user:
         raise HTTPException(status_code=401, detail="Invalid email or password.")
-    session_id = create_session(user["id"], settings.database_path)
+    access_token = user.pop("_access_token", "")
+    refresh_token = user.pop("_refresh_token", "")
+    record_audit_event(
+        action="auth.login",
+        actor_user_id=None,
+        actor_email=str(user["email"]),
+        entity_type="user",
+        entity_id=str(user["id"]),
+        metadata={"role": user["role"]},
+        db_path=settings.database_path,
+    )
     response = JSONResponse({"ok": True, "role": user["role"], "email": user["email"]})
     response.set_cookie(
-        "rr_session", session_id,
+        "rr_session", encode_session(access_token, refresh_token),
         httponly=True, samesite="lax", max_age=60 * 60 * 24 * 30,
     )
     return response
@@ -286,9 +409,9 @@ def api_login(payload: LoginRequest, request: Request):
 
 @app.post("/api/auth/logout")
 def api_logout(request: Request):
-    session_id = request.cookies.get("rr_session", "")
-    if session_id:
-        delete_session(session_id, get_settings().database_path)
+    session_cookie = request.cookies.get("rr_session", "")
+    if session_cookie:
+        delete_session(session_cookie, get_settings().database_path)
     response = JSONResponse({"ok": True})
     response.delete_cookie("rr_session")
     return response
@@ -334,11 +457,10 @@ def api_invite(payload: InviteRequest, request: Request):
     settings = get_settings()
     if not settings.smtp_configured:
         raise HTTPException(status_code=503, detail="Email service not configured. Add SMTP settings to .env.")
-    import secrets as _sec
     try:
         user_id = create_user(
             payload.email,
-            _sec.token_hex(32),  # placeholder — user sets their own password via invite link
+            secrets.token_hex(32),  # placeholder — user sets their own password via invite link
             role="user",
             invited_by_id=request.state.user["id"],
             db_path=settings.database_path,
@@ -365,7 +487,7 @@ def api_list_users(request: Request):
 
 
 @app.delete("/api/auth/users/{user_id}")
-def api_delete_user(user_id: int, request: Request):
+def api_delete_user(user_id: str, request: Request):
     if request.state.user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin only.")
     if user_id == request.state.user["id"]:
@@ -375,7 +497,7 @@ def api_delete_user(user_id: int, request: Request):
 
 
 @app.post("/api/auth/users/{user_id}/reset-password")
-def api_reset_password(user_id: int, payload: ResetPasswordRequest, request: Request):
+def api_reset_password(user_id: str, payload: ResetPasswordRequest, request: Request):
     if request.state.user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin only.")
     reset_password(user_id, payload.new_password, get_settings().database_path)
@@ -392,9 +514,40 @@ def api_admin_stats(request: Request):
     return {
         "overview": admin_overview_stats(settings.database_path),
         "corrections": admin_correction_stats(settings.database_path),
+        "misclassification_drilldowns": admin_misclassification_drilldowns(settings.database_path),
         "low_confidence": admin_low_confidence_emails(db_path=settings.database_path),
         "rule_candidates": detect_rule_candidates(settings.database_path),
+        "audit_logs": admin_recent_audit_logs(db_path=settings.database_path),
     }
+
+
+@app.post("/api/rule-candidates/status")
+def api_set_rule_candidate_status(payload: RuleCandidateStatusRequest, request: Request) -> dict[str, object]:
+    if request.state.user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only.")
+    settings = get_settings()
+    try:
+        set_rule_candidate_status(
+            payload.key,
+            payload.status,
+            candidate_type=payload.type or "manual",
+            pattern=payload.pattern or "",
+            suggestion=payload.suggestion or "",
+            db_path=settings.database_path,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    record_audit_event(
+        action="rule_candidate.status",
+        actor_user_id=None,
+        actor_email=str(request.state.user["email"]),
+        entity_type="rule_candidate",
+        entity_id=payload.key,
+        metadata={"status": payload.status, "type": payload.type or "manual"},
+        db_path=settings.database_path,
+    )
+    candidates = detect_rule_candidates(settings.database_path)
+    return {"ok": True, "rule_candidates": candidates, "count": len(candidates)}
 
 
 @app.get("/api/health")
@@ -405,7 +558,19 @@ def health() -> dict[str, object]:
         "read_only_outlook": True,
         "graph_configured": settings.graph_configured,
         "openai_configured": settings.openai_configured,
+        "openai_model": settings.openai_model if settings.openai_configured else "",
+        "google_ai_configured": settings.google_ai_configured,
+        "google_ai_model": settings.google_ai_model if settings.google_ai_configured else "",
+        "anthropic_configured": settings.anthropic_configured,
+        "anthropic_model": settings.anthropic_model if settings.anthropic_configured else "",
         "database_path": str(settings.database_path),
+        "platform": {
+            "is_windows": IS_WINDOWS,
+            "has_outlook_com": HAS_OUTLOOK_COM,
+            "has_webview": HAS_WEBVIEW,
+            "has_webview2_runtime": HAS_WEBVIEW2_RUNTIME,
+        },
+        "config_warnings": settings.runtime_warnings,
     }
 
 
@@ -416,14 +581,37 @@ def config() -> dict[str, object]:
         "shared_mailbox_email": settings.shared_mailbox_email,
         "graph_configured": settings.graph_configured,
         "openai_configured": settings.openai_configured,
+        "openai_model": settings.openai_model if settings.openai_configured else "",
+        "google_ai_configured": settings.google_ai_configured,
+        "google_ai_model": settings.google_ai_model if settings.google_ai_configured else "",
+        "anthropic_configured": settings.anthropic_configured,
+        "anthropic_model": settings.anthropic_model if settings.anthropic_configured else "",
         "required_graph_fields": GRAPH_FIELDS,
         "required_graph_permissions": ["Mail.Read", "Mail.Read.Shared"],
         "read_only_outlook": True,
+        "platform": {
+            "is_windows": IS_WINDOWS,
+            "has_outlook_com": HAS_OUTLOOK_COM,
+            "has_webview": HAS_WEBVIEW,
+            "has_webview2_runtime": HAS_WEBVIEW2_RUNTIME,
+        },
         "outlook_desktop_export": {
             "mailbox": settings.outlook_export_mailbox,
             "folder": settings.outlook_export_folder,
             "export_dir": str(settings.outlook_export_dir),
         },
+        "config_warnings": settings.runtime_warnings,
+    }
+
+
+@app.get("/api/update-available")
+def update_available() -> dict[str, object]:
+    status = get_update_status()
+    return {
+        "available": bool(status.get("available")),
+        "version": status.get("version") or "",
+        "url": status.get("url") or "",
+        "checked": bool(status.get("checked")),
     }
 
 
@@ -441,7 +629,7 @@ def taxonomy() -> dict[str, list[str]]:
 
 @app.get("/api/rule-candidates")
 def rule_candidates() -> dict[str, object]:
-    candidates = detect_rule_candidates()
+    candidates = detect_rule_candidates(get_settings().database_path)
     return {"rule_candidates": candidates, "count": len(candidates)}
 
 
@@ -470,6 +658,8 @@ def auth_callback(code: str | None = None, state: str | None = None, error: str 
 
 @app.post("/api/outlook-desktop/export-inbox")
 def export_outlook_desktop_inbox() -> dict[str, object]:
+    if not IS_WINDOWS:
+        raise HTTPException(status_code=503, detail="Outlook COM integration is Windows-only.")
     settings = get_settings()
     _log.info(
         "Outlook export requested: mailbox=%s folder=%s macro=%s",
@@ -675,7 +865,7 @@ def api_analyze_email(email_id: int) -> dict[str, object]:
 
 
 @app.post("/api/emails/{email_id}/feedback")
-def api_triage_feedback(email_id: int, payload: TriageFeedbackRequest) -> dict[str, object]:
+def api_triage_feedback(email_id: int, payload: TriageFeedbackRequest, request: Request) -> dict[str, object]:
     settings = get_settings()
     email = get_email(email_id, db_path=settings.database_path)
     if not email:
@@ -688,6 +878,7 @@ def api_triage_feedback(email_id: int, payload: TriageFeedbackRequest) -> dict[s
         "corrected_owner": payload.corrected_owner,
         "corrected_contact_type": payload.corrected_contact_type,
         "corrected_sentiment": payload.corrected_sentiment,
+        "corrected_status": payload.corrected_status,
     }
     for key, value in explicit.items():
         if value not in (None, ""):
@@ -703,10 +894,34 @@ def api_triage_feedback(email_id: int, payload: TriageFeedbackRequest) -> dict[s
         corrected_owner=corrections.get("corrected_owner"),
         corrected_contact_type=corrections.get("corrected_contact_type"),
         corrected_sentiment=corrections.get("corrected_sentiment"),
+        corrected_status=corrections.get("corrected_status"),
+        summary_quality_rating=payload.summary_quality_rating,
+        reply_quality_rating=payload.reply_quality_rating,
         db_path=settings.database_path,
     )
-    upload_feedback_event(_decorate_email(email), corrections, payload.feedback_text)
-    promote_rule_candidates(detect_rule_candidates())
+    upload_feedback_event(
+        _decorate_email(email),
+        corrections,
+        payload.feedback_text,
+        summary_quality_rating=payload.summary_quality_rating,
+        reply_quality_rating=payload.reply_quality_rating,
+    )
+    promote_rule_candidates(detect_rule_candidates(settings.database_path))
+    if corrections.get("corrected_status"):
+        update_status(email_id, str(corrections["corrected_status"]), db_path=settings.database_path)
+    record_audit_event(
+        action="triage.feedback",
+        actor_user_id=None,
+        actor_email=str(request.state.user["email"]),
+        entity_type="email",
+        entity_id=email_id,
+        metadata={
+            "correction_keys": sorted(k for k, v in corrections.items() if v not in (None, "")),
+            "summary_quality_rating": payload.summary_quality_rating,
+            "reply_quality_rating": payload.reply_quality_rating,
+        },
+        db_path=settings.database_path,
+    )
 
     conversation_id = str(email.get("conversation_id") or "")
     raw_messages = (
@@ -723,7 +938,7 @@ def api_triage_feedback(email_id: int, payload: TriageFeedbackRequest) -> dict[s
 
 
 @app.patch("/api/emails/{email_id}/status")
-def api_update_status(email_id: int, update: StatusUpdate) -> dict[str, object]:
+def api_update_status(email_id: int, update: StatusUpdate, request: Request) -> dict[str, object]:
     settings = get_settings()
     try:
         update_status(email_id, update.status, db_path=settings.database_path)
@@ -732,6 +947,15 @@ def api_update_status(email_id: int, update: StatusUpdate) -> dict[str, object]:
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Email not found.") from exc
     email = get_email(email_id, db_path=settings.database_path)
+    record_audit_event(
+        action="email.status",
+        actor_user_id=str(request.state.user["id"]),
+        actor_email=str(request.state.user["email"]),
+        entity_type="email",
+        entity_id=email_id,
+        metadata={"status": update.status},
+        db_path=settings.database_path,
+    )
     return {"email": _decorate_email(email or {}), "read_only_outlook": True}
 
 
@@ -759,6 +983,15 @@ def _validate_feedback_corrections(corrections: dict[str, object]) -> None:
         raise HTTPException(status_code=400, detail="Unsupported owner correction.")
     if corrections.get("corrected_contact_type") and corrections["corrected_contact_type"] not in CONTACT_TYPES:
         raise HTTPException(status_code=400, detail="Unsupported contact correction.")
+    if corrections.get("corrected_sentiment") and corrections["corrected_sentiment"] not in {
+        "Positive",
+        "Neutral",
+        "Concerned",
+        "Upset",
+    }:
+        raise HTTPException(status_code=400, detail="Unsupported sentiment correction.")
+    if corrections.get("corrected_status") and corrections["corrected_status"] not in STATUSES:
+        raise HTTPException(status_code=400, detail="Unsupported status correction.")
     if corrections.get("corrected_urgency") not in (None, ""):
         try:
             score = int(corrections["corrected_urgency"])

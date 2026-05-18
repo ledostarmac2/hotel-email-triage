@@ -1,0 +1,98 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "replyright"
+version = "0.1.0"
+description = "Read-only hotel email triage desktop app for Outlook shared inbox operations."
+requires-python = ">=3.11"
+readme = "README.md"
+
+[tool.setuptools.packages.find]
+include = ["outlook_dashboard*", "replyright_kernel*"]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = [
+  "-ra",
+  "--strict-markers",
+  "--strict-config",
+]
+filterwarnings = [
+  "ignore::DeprecationWarning:semantic_kernel.*",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["outlook_dashboard", "replyright_kernel"]
+omit = [
+  "*/__pycache__/*",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
+fail_under = 50
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+extend-exclude = [
+  "app",
+  "reference",
+  "build",
+  "dist",
+  "dist2",
+  "data",
+  ".venv",
+  ".build-venv-codex",
+  ".build-venv-codex-site",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+ignore = [
+  "E501",
+]
+
+[tool.black]
+target-version = ["py311"]
+line-length = 120
+extend-exclude = '''
+(
+  /(
+      app
+    | reference
+    | build
+    | dist
+    | dist2
+    | data
+    | \.venv
+    | \.build-venv-codex
+    | \.build-venv-codex-site
+  )/
+)
+'''
+
+[tool.mypy]
+python_version = "3.11"
+files = ["outlook_dashboard", "replyright_kernel"]
+ignore_missing_imports = true
+follow_imports = "silent"
+allow_redefinition = true
+disable_error_code = [
+  "annotation-unchecked",
+  "arg-type",
+  "assignment",
+  "attr-defined",
+  "call-arg",
+  "index",
+  "misc",
+  "no-any-return",
+  "operator",
+  "return-value",
+  "union-attr",
+  "var-annotated",
+]

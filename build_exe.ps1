@@ -1,15 +1,22 @@
 $ErrorActionPreference = "Stop"
 
-# VS Code auto-activates project venvs, which may not have PyInstaller.
-# Skip any python inside a .venv or .build-venv folder; use the first system Python.
+# Prefer the project venv if it has PyInstaller (avoids Windows App Store Python --target restriction).
+# Fall back to the first non-venv system Python if the venv lacks PyInstaller.
 $PYTHON = $null
-$candidates = Get-Command python -All -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source
-foreach ($c in $candidates) {
-    if ($c -match '[\\/]\.(venv|build-venv)[\\/]') { continue }
-    $PYTHON = $c
-    break
+$venvPython = Join-Path (Get-Location) ".venv\Scripts\python.exe"
+if (Test-Path $venvPython) {
+    $pyiCheck = & $venvPython -m PyInstaller --version 2>&1
+    if ($LASTEXITCODE -eq 0) { $PYTHON = $venvPython }
 }
-if (-not $PYTHON) { throw "Could not find a system Python. Ensure Python is installed outside any virtual environment." }
+if (-not $PYTHON) {
+    $candidates = Get-Command python -All -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source
+    foreach ($c in $candidates) {
+        if ($c -match '[\\/]\.(venv|build-venv)[\\/]') { continue }
+        $PYTHON = $c
+        break
+    }
+}
+if (-not $PYTHON) { throw "Could not find a Python with PyInstaller. Run: pip install pyinstaller" }
 Write-Host "Using Python: $PYTHON"
 
 # If the previous EXE is locked (e.g. by Windows Defender scanning it),
@@ -43,13 +50,25 @@ if (-not (Test-Path $vendorPath)) {
     $env:TMP = $env:TEMP
     New-Item -ItemType Directory -Force -Path $env:TEMP | Out-Null
     New-Item -ItemType Directory -Force -Path $vendorPath | Out-Null
-    # Keep runtime dependencies in .vendor so the EXE can be rebuilt on a
-    # machine that does not already have the same packages globally installed.
-    # Ignore pip resolver warnings about globally-installed packages (e.g. semantic-kernel)
-    # that are not part of this vendor install — they do not affect the EXE.
     & $PYTHON -m pip install --no-cache-dir --target $vendorPath $runtimePackages 2>&1 | Where-Object { $_ -notmatch "^ERROR: pip" -and $_ -notmatch "dependency resolver" -and $_ -notmatch "behaviour is the source" -and $_ -notmatch "incompatible" } | Write-Host
-} elseif (-not (Test-Path (Join-Path $vendorPath "win32com"))) {
-    & $PYTHON -m pip install --no-cache-dir --upgrade --target $vendorPath pywin32 2>&1 | Write-Host
+} else {
+    # Check for packages that may have been added since .vendor was last built
+    $vendorChecks = @{
+        "win32com"  = "pywin32"
+        "anthropic" = "anthropic"
+        "httpx"     = "httpx"
+        "openai"    = "openai"
+    }
+    $toInstall = @()
+    foreach ($dir in $vendorChecks.Keys) {
+        if (-not (Test-Path (Join-Path $vendorPath $dir))) {
+            $toInstall += $vendorChecks[$dir]
+        }
+    }
+    if ($toInstall.Count -gt 0) {
+        Write-Host "Installing missing vendor packages: $($toInstall -join ', ')"
+        & $PYTHON -m pip install --no-cache-dir --upgrade --target $vendorPath $toInstall 2>&1 | Write-Host
+    }
 }
 
 & $PYTHON -m PyInstaller `
@@ -62,6 +81,7 @@ if (-not (Test-Path $vendorPath)) {
     --collect-all webview `
     --collect-all pythonnet `
     --collect-all outlook_dashboard `
+    --collect-all anthropic `
     --collect-submodules win32com `
     --hidden-import webview.platforms.edgechromium `
     --hidden-import webview.platforms.winforms `

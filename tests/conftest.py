@@ -1,0 +1,155 @@
+from __future__ import annotations
+
+from collections.abc import Iterator
+from pathlib import Path
+
+import pytest
+from fastapi.testclient import TestClient
+
+
+# ── Shared database fixture ───────────────────────────────────────────────────
+
+@pytest.fixture()
+def tmp_db(tmp_path: Path) -> Path:
+    """Fresh, initialized SQLite database for each test — no real data."""
+    from outlook_dashboard.database import initialize_database
+    db_path = tmp_path / "test.sqlite3"
+    initialize_database(db_path)
+    return db_path
+
+
+# ── Sample email fixtures ─────────────────────────────────────────────────────
+
+@pytest.fixture()
+def plain_email() -> dict:
+    """Minimal valid email with no special urgency signals."""
+    return {
+        "graph_message_id": "test-plain-001",
+        "subject": "Room inquiry",
+        "sender_name": "Jane Guest",
+        "sender_email": "jane@example.com",
+        "body_text": "I would like to inquire about room availability next month.",
+        "body_preview": "I would like to inquire about room availability next month.",
+        "conversation_id": "conv-plain-001",
+        "importance": "normal",
+        "source": "test",
+    }
+
+
+@pytest.fixture()
+def urgent_email() -> dict:
+    """Same-day arrival with VIP, accessibility, and follow-up urgency signals."""
+    return {
+        "graph_message_id": "test-urgent-001",
+        "subject": "URGENT - CEO arriving tonight, need accessible room",
+        "sender_name": "Marcus Chen",
+        "sender_email": "marcus@corp.example",
+        "body_text": (
+            "Our CEO is arriving tonight and requires a wheelchair-accessible suite "
+            "with a roll-in shower. This is urgent and we are following up for the "
+            "third time. Please confirm ASAP."
+        ),
+        "body_preview": "Our CEO is arriving tonight and requires a wheelchair-accessible suite.",
+        "conversation_id": "conv-urgent-001",
+        "importance": "high",
+        "source": "test",
+    }
+
+
+@pytest.fixture()
+def complaint_email() -> dict:
+    """Email with complaint and legal escalation language."""
+    return {
+        "graph_message_id": "test-complaint-001",
+        "subject": "Extremely disappointed - need resolution",
+        "sender_name": "Upset Guest",
+        "sender_email": "upset@example.com",
+        "body_text": (
+            "I am furious and completely disappointed with the service. "
+            "I will contact my attorney and pursue legal action if this is not resolved. "
+            "This is absolutely unacceptable."
+        ),
+        "body_preview": "I am furious and completely disappointed with the service.",
+        "conversation_id": "conv-complaint-001",
+        "importance": "high",
+        "source": "test",
+    }
+
+
+@pytest.fixture()
+def cca_completion_email() -> dict:
+    """Travel agent has completed a CCA form — should be low urgency, Reservations."""
+    return {
+        "graph_message_id": "test-cca-001",
+        "subject": "Re: CCA form for reservation",
+        "sender_name": "Travel Advisor",
+        "sender_email": "advisor@travelagency.example",
+        "body_text": "Thank you, I completed the credit card authorization form and sent it back.",
+        "body_preview": "Thank you, I completed the credit card authorization form.",
+        "conversation_id": "conv-cca-001",
+        "importance": "normal",
+        "source": "test",
+    }
+
+
+@pytest.fixture()
+def accessibility_email() -> dict:
+    """ADA accommodation request — should trigger accessibility risk flag."""
+    return {
+        "graph_message_id": "test-ada-001",
+        "subject": "Accessible room with roll-in shower",
+        "sender_name": "Priya Shah",
+        "sender_email": "priya@example.com",
+        "body_text": (
+            "Please confirm an accessible room with a roll-in shower and shower chair "
+            "for our guest who uses a wheelchair."
+        ),
+        "body_preview": "Please confirm an accessible room with a roll-in shower.",
+        "conversation_id": "conv-ada-001",
+        "importance": "normal",
+        "source": "test",
+    }
+
+
+@pytest.fixture()
+def thread_with_quoted_upset() -> str:
+    """Full Outlook thread where the latest reply is positive but quoted history is upset."""
+    return (
+        "Hi Brian,\n\nThank you very much for sending that. I have just completed it.\n"
+        "We appreciate your help!\n\nKindest Regards,\nStephanie\n\n"
+        "-----Original Message-----\n"
+        "From: Guest\nSent: Monday\n"
+        "I am furious and want a manager immediately. This is unacceptable."
+    )
+
+
+# ── FastAPI test client ───────────────────────────────────────────────────────
+
+@pytest.fixture()
+def app_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
+    db_path = tmp_path / "replyright-test.sqlite3"
+    monkeypatch.setenv("SQLITE_DB_PATH", str(db_path))
+    monkeypatch.setenv("REPLYRIGHT_ADMIN_EMAIL", "admin@example.com")
+    monkeypatch.setenv("REPLYRIGHT_ADMIN_PASSWORD", "TestPassword123!")
+    monkeypatch.setenv("RATE_LIMIT_PER_MINUTE", "500")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_AI_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("SUPABASE_URL", raising=False)
+    monkeypatch.delenv("SUPABASE_KEY", raising=False)
+
+    from outlook_dashboard.config import get_settings
+    from outlook_dashboard.main import _RATE_LIMIT_BUCKETS, app
+
+    get_settings.cache_clear()
+    _RATE_LIMIT_BUCKETS.clear()
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/auth/login",
+            json={"email": "admin@example.com", "password": "TestPassword123!"},
+        )
+        assert response.status_code == 200, response.text
+        yield client
+    get_settings.cache_clear()
+    _RATE_LIMIT_BUCKETS.clear()

@@ -135,13 +135,47 @@ textarea {
   min-height: 0;
   height: 100vh;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   gap: 14px;
   padding: 20px;
   overflow: hidden;
 }
 
+.update-banner {
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: #17324d;
+  color: #fff;
+  font-size: 0.9rem;
+}
+
+.update-banner[hidden] {
+  display: none;
+}
+
+.update-banner a {
+  color: #fff4c2;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.update-banner button {
+  margin-left: auto;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  cursor: pointer;
+}
+
 .topbar {
+  grid-row: 2;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -208,6 +242,12 @@ h1 {
   border-color: var(--accent);
 }
 
+.button.small {
+  min-height: 30px;
+  padding: 5px 9px;
+  font-size: 12px;
+}
+
 .icon-button {
   width: 36px;
   padding: 0;
@@ -226,6 +266,7 @@ textarea:focus-visible {
 }
 
 .metrics {
+  grid-row: 3;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
@@ -258,6 +299,7 @@ textarea:focus-visible {
 }
 
 .workspace {
+  grid-row: 4;
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(420px, 0.88fr) minmax(520px, 1.12fr);
@@ -569,6 +611,17 @@ textarea {
   gap: 8px;
 }
 
+.rating-field {
+  display: grid;
+  gap: 5px;
+}
+
+.rating-field span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .section h3 {
   color: var(--muted);
   font-size: 12px;
@@ -659,6 +712,18 @@ textarea {
 }
 .admin-table tr:last-child td { border-bottom: none; }
 .admin-table tr:hover td { background: var(--surface-soft); }
+
+.admin-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.admin-split {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
 
 .admin-invite-row {
   display: flex;

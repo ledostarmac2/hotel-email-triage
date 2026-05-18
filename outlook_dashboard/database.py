@@ -124,6 +124,9 @@ def initialize_database(db_path: Path | None = None) -> None:
                 corrected_owner TEXT,
                 corrected_contact_type TEXT,
                 corrected_sentiment TEXT,
+                corrected_status TEXT,
+                summary_quality_rating INTEGER,
+                reply_quality_rating INTEGER,
                 applied_short_term INTEGER NOT NULL DEFAULT 1,
                 created_at TEXT NOT NULL,
                 FOREIGN KEY(email_id) REFERENCES emails(id) ON DELETE SET NULL
@@ -144,6 +147,44 @@ def initialize_database(db_path: Path | None = None) -> None:
                 latest_feedback_at TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS supabase_rule_cache (
+                rule_key TEXT PRIMARY KEY,
+                payload TEXT NOT NULL,
+                cached_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS supabase_feedback_queue (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                payload TEXT NOT NULL,
+                attempt_count INTEGER NOT NULL DEFAULT 0,
+                last_error TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS supabase_prompt_cache (
+                prompt_key TEXT PRIMARY KEY,
+                payload TEXT NOT NULL,
+                cached_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS supabase_known_sender_cache (
+                sender_domain TEXT PRIMARY KEY,
+                payload TEXT NOT NULL,
+                cached_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS audit_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                actor_user_id INTEGER,
+                actor_email TEXT,
+                action TEXT NOT NULL,
+                entity_type TEXT,
+                entity_id TEXT,
+                metadata TEXT,
+                created_at TEXT NOT NULL
             );
             """
         )
@@ -171,22 +212,55 @@ def initialize_database(db_path: Path | None = None) -> None:
             """
             CREATE TABLE IF NOT EXISTS password_reset_tokens (
                 token TEXT PRIMARY KEY,
-                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                user_id TEXT NOT NULL,
                 expires_at TEXT NOT NULL,
                 used INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL
             );
             """
         )
+        _ensure_password_reset_tokens_supabase_schema(db)
         _ensure_column(db, "email_analysis", "contact_type", "TEXT")
         _ensure_column(db, "email_analysis", "confidence_score", "INTEGER")
         _ensure_column(db, "email_analysis", "confidence_reason", "TEXT")
+        _ensure_column(db, "triage_feedback", "corrected_status", "TEXT")
+        _ensure_column(db, "triage_feedback", "summary_quality_rating", "INTEGER")
+        _ensure_column(db, "triage_feedback", "reply_quality_rating", "INTEGER")
 
 
 def _ensure_column(db: sqlite3.Connection, table: str, column: str, definition: str) -> None:
     columns = {row["name"] for row in db.execute(f"PRAGMA table_info({table})").fetchall()}
     if column not in columns:
         db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+
+def _ensure_password_reset_tokens_supabase_schema(db: sqlite3.Connection) -> None:
+    """Migrate legacy local-user reset tokens to Supabase UUID-safe storage."""
+    columns = {row["name"]: str(row["type"] or "").upper() for row in db.execute("PRAGMA table_info(password_reset_tokens)").fetchall()}
+    foreign_keys = db.execute("PRAGMA foreign_key_list(password_reset_tokens)").fetchall()
+    if columns.get("user_id") == "TEXT" and not foreign_keys:
+        return
+
+    db.execute("ALTER TABLE password_reset_tokens RENAME TO password_reset_tokens_legacy")
+    db.execute(
+        """
+        CREATE TABLE password_reset_tokens (
+            token TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+            used INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    db.execute(
+        """
+        INSERT OR IGNORE INTO password_reset_tokens (token, user_id, expires_at, used, created_at)
+        SELECT token, CAST(user_id AS TEXT), expires_at, used, created_at
+        FROM password_reset_tokens_legacy
+        """
+    )
+    db.execute("DROP TABLE password_reset_tokens_legacy")
 
 
 def row_to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:
@@ -469,6 +543,9 @@ def save_triage_feedback(
     corrected_owner: str | None = None,
     corrected_contact_type: str | None = None,
     corrected_sentiment: str | None = None,
+    corrected_status: str | None = None,
+    summary_quality_rating: int | None = None,
+    reply_quality_rating: int | None = None,
     db_path: Path | None = None,
 ) -> int:
     with managed_connect(db_path) as db:
@@ -477,9 +554,10 @@ def save_triage_feedback(
             INSERT INTO triage_feedback (
                 conversation_id, email_id, feedback_text, corrected_urgency,
                 corrected_category, corrected_owner, corrected_contact_type,
-                corrected_sentiment, applied_short_term, created_at
+                corrected_sentiment, corrected_status, summary_quality_rating,
+                reply_quality_rating, applied_short_term, created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
             """,
             (
                 conversation_id,
@@ -490,6 +568,9 @@ def save_triage_feedback(
                 corrected_owner,
                 corrected_contact_type,
                 corrected_sentiment,
+                corrected_status,
+                summary_quality_rating,
+                reply_quality_rating,
                 utc_now_iso(),
             ),
         )
@@ -567,7 +648,7 @@ def detect_rule_candidates(db_path: Path | None = None) -> list[dict[str, Any]]:
                 "correction_count": count,
                 "latest_feedback_at": dict(row)["latest_feedback_at"],
                 "confidence": min(95, 50 + count * 8),
-                "status": "pending_review",
+                "status": "auto_promoted" if count >= 5 else "candidate",
             })
 
         # Pattern 2 — category repeatedly corrected to the same value
@@ -596,7 +677,7 @@ def detect_rule_candidates(db_path: Path | None = None) -> list[dict[str, Any]]:
                 "correction_count": count,
                 "latest_feedback_at": dict(row)["latest_feedback_at"],
                 "confidence": min(95, 45 + count * 8),
-                "status": "pending_review",
+                "status": "auto_promoted" if count >= 5 else "candidate",
             })
 
         # Pattern 3 — urgency systematically over- or under-scored
@@ -623,11 +704,203 @@ def detect_rule_candidates(db_path: Path | None = None) -> list[dict[str, Any]]:
                 "correction_count": count,
                 "latest_feedback_at": None,
                 "confidence": min(95, 40 + count * 8),
-                "status": "pending_review",
+                "status": "auto_promoted" if count >= 5 else "candidate",
             })
 
+    statuses = _rule_candidate_statuses(db_path)
+    for candidate in candidates:
+        override = statuses.get(candidate["key"])
+        if override:
+            candidate["status"] = override
+    candidates = [candidate for candidate in candidates if candidate.get("status") != "dismissed"]
     candidates.sort(key=lambda c: c["correction_count"], reverse=True)
     return candidates
+
+
+def _rule_candidate_statuses(db_path: Path | None = None) -> dict[str, str]:
+    try:
+        with managed_connect(db_path) as db:
+            rows = db.execute("SELECT candidate_key, status FROM rule_candidates").fetchall()
+    except sqlite3.OperationalError:
+        return {}
+    return {str(row["candidate_key"]): str(row["status"]) for row in rows}
+
+
+def set_rule_candidate_status(
+    candidate_key: str,
+    status: str,
+    *,
+    candidate_type: str = "manual",
+    pattern: str = "",
+    suggestion: str = "",
+    db_path: Path | None = None,
+) -> None:
+    if status not in {"candidate", "auto_promoted", "rejected", "dismissed"}:
+        raise ValueError(f"Unsupported rule candidate status: {status}")
+    now = utc_now_iso()
+    with managed_connect(db_path) as db:
+        db.execute(
+            """
+            INSERT INTO rule_candidates (
+                candidate_key, candidate_type, pattern, suggestion,
+                correction_count, confidence, status, latest_feedback_at,
+                created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, 0, 0, ?, NULL, ?, ?)
+            ON CONFLICT(candidate_key)
+            DO UPDATE SET status = excluded.status, updated_at = excluded.updated_at
+            """,
+            (candidate_key, candidate_type, pattern, suggestion, status, now, now),
+        )
+
+
+def cache_classification_rules(rules: list[dict[str, Any]], db_path: Path | None = None) -> None:
+    now = utc_now_iso()
+    with managed_connect(db_path) as db:
+        for rule in rules:
+            rule_key = str(rule.get("rule_key") or rule.get("key") or "")
+            if not rule_key:
+                continue
+            db.execute(
+                """
+                INSERT INTO supabase_rule_cache (rule_key, payload, cached_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(rule_key)
+                DO UPDATE SET payload = excluded.payload, cached_at = excluded.cached_at
+                """,
+                (rule_key, _encode_json(rule), now),
+            )
+
+
+def list_cached_classification_rules(db_path: Path | None = None) -> list[dict[str, Any]]:
+    try:
+        with managed_connect(db_path) as db:
+            rows = db.execute(
+                "SELECT payload FROM supabase_rule_cache ORDER BY cached_at DESC"
+            ).fetchall()
+    except sqlite3.OperationalError:
+        return []
+    rules: list[dict[str, Any]] = []
+    for row in rows:
+        payload = _decode_json(row["payload"])
+        if isinstance(payload, dict):
+            rules.append(payload)
+    return rules
+
+
+def cache_prompt_versions(prompts: list[dict[str, Any]], db_path: Path | None = None) -> None:
+    now = utc_now_iso()
+    with managed_connect(db_path) as db:
+        for prompt in prompts:
+            prompt_key = str(prompt.get("prompt_key") or prompt.get("name") or prompt.get("id") or "")
+            if not prompt_key:
+                continue
+            db.execute(
+                """
+                INSERT INTO supabase_prompt_cache (prompt_key, payload, cached_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(prompt_key)
+                DO UPDATE SET payload = excluded.payload, cached_at = excluded.cached_at
+                """,
+                (prompt_key, _encode_json(prompt), now),
+            )
+
+
+def list_cached_prompt_versions(db_path: Path | None = None) -> list[dict[str, Any]]:
+    try:
+        with managed_connect(db_path) as db:
+            rows = db.execute("SELECT payload FROM supabase_prompt_cache ORDER BY cached_at DESC").fetchall()
+    except sqlite3.OperationalError:
+        return []
+    return [payload for row in rows if isinstance((payload := _decode_json(row["payload"])), dict)]
+
+
+def cache_known_senders(senders: list[dict[str, Any]], db_path: Path | None = None) -> None:
+    now = utc_now_iso()
+    with managed_connect(db_path) as db:
+        for sender in senders:
+            domain = str(sender.get("sender_domain") or "").lower().strip()
+            if not domain:
+                continue
+            db.execute(
+                """
+                INSERT INTO supabase_known_sender_cache (sender_domain, payload, cached_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(sender_domain)
+                DO UPDATE SET payload = excluded.payload, cached_at = excluded.cached_at
+                """,
+                (domain, _encode_json({**sender, "sender_domain": domain}), now),
+            )
+
+
+def list_cached_known_senders(db_path: Path | None = None) -> list[dict[str, Any]]:
+    try:
+        with managed_connect(db_path) as db:
+            rows = db.execute("SELECT payload FROM supabase_known_sender_cache ORDER BY sender_domain").fetchall()
+    except sqlite3.OperationalError:
+        return []
+    return [payload for row in rows if isinstance((payload := _decode_json(row["payload"])), dict)]
+
+
+def enqueue_feedback_upload(
+    payload: dict[str, Any],
+    *,
+    error: str | None = None,
+    db_path: Path | None = None,
+) -> None:
+    now = utc_now_iso()
+    with managed_connect(db_path) as db:
+        db.execute(
+            """
+            INSERT INTO supabase_feedback_queue (payload, attempt_count, last_error, created_at, updated_at)
+            VALUES (?, 0, ?, ?, ?)
+            """,
+            (_encode_json(payload), (error or "")[:500], now, now),
+        )
+
+
+def list_pending_feedback_uploads(
+    *,
+    limit: int = 25,
+    db_path: Path | None = None,
+) -> list[dict[str, Any]]:
+    with managed_connect(db_path) as db:
+        rows = db.execute(
+            """
+            SELECT id, payload, attempt_count, last_error, created_at, updated_at
+            FROM supabase_feedback_queue
+            ORDER BY created_at ASC, id ASC
+            LIMIT ?
+            """,
+            (max(1, min(limit, 100)),),
+        ).fetchall()
+    pending: list[dict[str, Any]] = []
+    for row in rows:
+        item = dict(row)
+        item["payload"] = _decode_json(item["payload"])
+        pending.append(item)
+    return pending
+
+
+def mark_feedback_upload_succeeded(upload_id: int, db_path: Path | None = None) -> None:
+    with managed_connect(db_path) as db:
+        db.execute("DELETE FROM supabase_feedback_queue WHERE id = ?", (upload_id,))
+
+
+def mark_feedback_upload_failed(
+    upload_id: int,
+    error: str,
+    db_path: Path | None = None,
+) -> None:
+    with managed_connect(db_path) as db:
+        db.execute(
+            """
+            UPDATE supabase_feedback_queue
+            SET attempt_count = attempt_count + 1, last_error = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            ((error or "")[:500], utc_now_iso(), upload_id),
+        )
 
 
 def emails_without_analysis(limit: int = 25, db_path: Path | None = None) -> list[dict[str, Any]]:
@@ -790,6 +1063,45 @@ def admin_correction_stats(db_path: Path | None = None) -> list[dict[str, Any]]:
     )
 
 
+def admin_misclassification_drilldowns(db_path: Path | None = None) -> dict[str, list[dict[str, Any]]]:
+    with managed_connect(db_path) as db:
+        owner_by_domain = db.execute(
+            """
+            SELECT
+                LOWER(SUBSTR(e.sender_email, INSTR(e.sender_email, '@') + 1)) AS sender_domain,
+                COALESCE(a.recommended_department_owner, '') AS original_owner,
+                tf.corrected_owner,
+                COUNT(*) AS count
+            FROM triage_feedback tf
+            JOIN emails e ON e.id = tf.email_id
+            LEFT JOIN email_analysis a ON a.email_id = e.id
+            WHERE tf.corrected_owner IS NOT NULL
+              AND e.sender_email LIKE '%@%'
+            GROUP BY sender_domain, original_owner, tf.corrected_owner
+            ORDER BY count DESC
+            LIMIT 15
+            """
+        ).fetchall()
+        urgency = db.execute(
+            """
+            SELECT
+                COALESCE(a.priority_level, '') AS original_priority,
+                tf.corrected_urgency,
+                COUNT(*) AS count
+            FROM triage_feedback tf
+            LEFT JOIN email_analysis a ON a.email_id = tf.email_id
+            WHERE tf.corrected_urgency IS NOT NULL
+            GROUP BY original_priority, tf.corrected_urgency
+            ORDER BY count DESC
+            LIMIT 15
+            """
+        ).fetchall()
+    return {
+        "owner_by_domain": [dict(row) for row in owner_by_domain],
+        "urgency": [dict(row) for row in urgency],
+    }
+
+
 def admin_low_confidence_emails(limit: int = 20, db_path: Path | None = None) -> list[dict[str, Any]]:
     with managed_connect(db_path) as db:
         rows = db.execute(
@@ -806,7 +1118,59 @@ def admin_low_confidence_emails(limit: int = 20, db_path: Path | None = None) ->
     return [dict(r) for r in rows]
 
 
-def consume_reset_token(token: str, db_path: Path | None = None) -> int | None:
+def record_audit_event(
+    *,
+    action: str,
+    actor_user_id: str | int | None = None,
+    actor_email: str | None = None,
+    entity_type: str | None = None,
+    entity_id: str | int | None = None,
+    metadata: dict[str, Any] | None = None,
+    db_path: Path | None = None,
+) -> None:
+    safe_metadata = metadata or {}
+    with managed_connect(db_path) as db:
+        db.execute(
+            """
+            INSERT INTO audit_logs (
+                actor_user_id, actor_email, action, entity_type,
+                entity_id, metadata, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                actor_user_id,
+                actor_email,
+                action,
+                entity_type,
+                str(entity_id) if entity_id is not None else None,
+                _encode_json(safe_metadata),
+                utc_now_iso(),
+            ),
+        )
+
+
+def admin_recent_audit_logs(limit: int = 25, db_path: Path | None = None) -> list[dict[str, Any]]:
+    with managed_connect(db_path) as db:
+        rows = db.execute(
+            """
+            SELECT id, actor_user_id, actor_email, action, entity_type,
+                   entity_id, metadata, created_at
+            FROM audit_logs
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?
+            """,
+            (max(1, min(limit, 100)),),
+        ).fetchall()
+    logs: list[dict[str, Any]] = []
+    for row in rows:
+        item = dict(row)
+        item["metadata"] = _decode_json(item.get("metadata"))
+        logs.append(item)
+    return logs
+
+
+def consume_reset_token(token: str, db_path: Path | None = None) -> str | None:
     """Validate and mark a password-reset token used. Returns user_id or None."""
     with managed_connect(db_path) as db:
         row = db.execute(
@@ -816,7 +1180,7 @@ def consume_reset_token(token: str, db_path: Path | None = None) -> int | None:
         ).fetchone()
         if not row:
             return None
-        user_id = int(row["user_id"])
+        user_id = str(row["user_id"])
         db.execute("UPDATE password_reset_tokens SET used = 1 WHERE token = ?", (token,))
     return user_id
 

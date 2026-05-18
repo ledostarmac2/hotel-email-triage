@@ -9,6 +9,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+import webbrowser
 
 
 ROOT_DIR = (
@@ -41,6 +42,13 @@ def _show_error(message: str) -> None:
         print(message)
 
 
+def _show_info(message: str) -> None:
+    try:
+        ctypes.windll.user32.MessageBoxW(None, message, WINDOW_TITLE, 0x40)
+    except Exception:
+        print(message)
+
+
 def _wait_for_server(url: str, timeout_seconds: float = 15.0) -> None:
     _log(f"Waiting for server at {url}")
     deadline = time.time() + timeout_seconds
@@ -58,6 +66,26 @@ def _wait_for_server(url: str, timeout_seconds: float = 15.0) -> None:
     )
 
 
+def _open_browser_fallback(url: str, reason: str) -> None:
+    _log(f"Opening system browser fallback: {reason}")
+    webbrowser.open(url)
+    message = (
+        f"ReplyRight is running in your system browser at {url}.\n\n"
+        f"Reason: {reason}\n\n"
+        "Close this message when you are ready to stop the local ReplyRight server."
+    )
+    if sys.platform.startswith("win"):
+        _show_info(message)
+        return
+    print(message)
+    print("Press Ctrl+C in this terminal to stop ReplyRight.")
+    try:
+        while True:
+            time.sleep(3600)
+    except KeyboardInterrupt:
+        _log("Browser fallback stopped by keyboard interrupt")
+
+
 def _open_window(url: str) -> None:
     """Open the ReplyRight UI in a standalone embedded WebView2 window.
 
@@ -66,12 +94,27 @@ def _open_window(url: str) -> None:
     taskbar as its own app with no address bar, tabs, or browser chrome.
     """
     try:
+        from outlook_dashboard.platform_compat import HAS_WEBVIEW, HAS_WEBVIEW2_RUNTIME, IS_WINDOWS
+    except Exception:
+        HAS_WEBVIEW = False
+        HAS_WEBVIEW2_RUNTIME = False
+        IS_WINDOWS = sys.platform.startswith("win")
+
+    if not IS_WINDOWS:
+        _open_browser_fallback(url, "The embedded WebView2 desktop window is Windows-only.")
+        return
+    if not HAS_WEBVIEW:
+        _open_browser_fallback(url, "pywebview is not installed.")
+        return
+    if not HAS_WEBVIEW2_RUNTIME:
+        _open_browser_fallback(url, "Microsoft Edge WebView2 Runtime was not detected.")
+        return
+
+    try:
         import webview  # noqa: PLC0415
-    except ImportError as exc:
-        raise RuntimeError(
-            "pywebview is not installed. Run:  pip install pywebview\n"
-            "Or rebuild the EXE from source with build_exe.ps1."
-        ) from exc
+    except ImportError:
+        _open_browser_fallback(url, "pywebview is not installed.")
+        return
 
     _log("pywebview imported OK")
     _log(f"pywebview version: {getattr(webview, '__version__', 'unknown')}")
@@ -82,11 +125,8 @@ def _open_window(url: str) -> None:
         import clr as _clr  # noqa: F401
         _log("pythonnet (clr) imported OK")
     except ImportError as exc:
-        raise RuntimeError(
-            f"pythonnet (clr) is not available: {exc}\n\n"
-            "pywebview needs pythonnet to drive the Windows Forms window.\n"
-            "Rebuild from source with build_exe.ps1 to include it."
-        ) from exc
+        _open_browser_fallback(url, f"pythonnet (clr) is not available: {exc}")
+        return
 
     window = webview.create_window(
         title=WINDOW_TITLE,
@@ -103,11 +143,8 @@ def _open_window(url: str) -> None:
         # pre-installed on Windows 10 21H1+ and all Windows 11 machines.
         webview.start(gui="edgechromium", debug=False)
     except Exception as exc:
-        raise RuntimeError(
-            f"Could not open the WebView2 window: {exc}\n\n"
-            "Ensure the Microsoft Edge WebView2 Runtime is installed:\n"
-            "https://developer.microsoft.com/microsoft-edge/webview2/"
-        ) from exc
+        _open_browser_fallback(url, f"Could not open the WebView2 window: {exc}")
+        return
 
     _log("WebView2 window closed by user")
 

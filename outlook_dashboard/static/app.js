@@ -4,6 +4,7 @@ const state = {
   selectedId: null,
   currentView: "inbox",
   user: null,
+  config: {},
   filters: {
     category: "",
     status: "",
@@ -33,6 +34,10 @@ const els = {
   replyBox: document.getElementById("replyBox"),
   closeReplyModal: document.getElementById("closeReplyModal"),
   copyReplyButton: document.getElementById("copyReplyButton"),
+  updateBanner: document.getElementById("updateBanner"),
+  updateBannerText: document.getElementById("updateBannerText"),
+  updateBannerLink: document.getElementById("updateBannerLink"),
+  dismissUpdateBanner: document.getElementById("dismissUpdateBanner"),
 };
 
 const INBOX_WORKSPACE_HTML = els.workspace ? els.workspace.innerHTML : "";
@@ -51,6 +56,7 @@ async function boot() {
   // Show user email in sidebar
   const userEmailEl = document.getElementById("currentUserEmail");
   if (userEmailEl) userEmailEl.textContent = me.user.email;
+  checkForUpdate();
 
   // Show Admin nav for admins
   if (me.user.role === "admin") {
@@ -62,6 +68,7 @@ async function boot() {
     fetchJson("/api/config"),
     fetchJson("/api/taxonomy"),
   ]);
+  state.config = config;
   state.taxonomy = taxonomy;
   els.mailboxLabel.textContent =
     config.outlook_desktop_export?.mailbox || config.shared_mailbox_email || "NYCWA_Reservations";
@@ -79,6 +86,11 @@ function bindEvents() {
     if (event.target === els.replyModal) closeReplyModal();
   });
   els.copyReplyButton.addEventListener("click", copyReply);
+  els.dismissUpdateBanner?.addEventListener("click", () => {
+    const version = els.updateBanner?.dataset.version || "";
+    if (version) localStorage.setItem(`rr_update_dismissed_${version}`, "1");
+    if (els.updateBanner) els.updateBanner.hidden = true;
+  });
 
   document.getElementById("logoutBtn")?.addEventListener("click", async () => {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -101,6 +113,20 @@ function bindEvents() {
       }
     });
   });
+}
+
+async function checkForUpdate() {
+  try {
+    const data = await fetchJson("/api/update-available");
+    if (!data.available || !data.version || !els.updateBanner) return;
+    if (localStorage.getItem(`rr_update_dismissed_${data.version}`) === "1") return;
+    els.updateBanner.dataset.version = data.version;
+    els.updateBannerText.textContent = `ReplyRight v${data.version} is available`;
+    els.updateBannerLink.href = data.url || "#";
+    els.updateBanner.hidden = false;
+  } catch {
+    // Update checks should never interrupt inbox work.
+  }
 }
 
 function bindWorkspaceEvents() {
@@ -179,21 +205,35 @@ function renderAdminShell() {
 }
 
 async function refreshInbox() {
-  setSyncStatus("Starting Outlook refresh");
-  const result = await fetchJson("/api/outlook-desktop/export-inbox", { method: "POST" });
-  if (result.launched_macro) {
-    if (result.launch_method === "vbscript-com") {
-      showToast("Inbox refreshed from Outlook.");
-      await loadEmails();
-      setSyncStatus("Ready");
+  if (els.refreshButton) els.refreshButton.disabled = true;
+  let elapsed = 0;
+  setSyncStatus("Connecting to Outlook…");
+  const timer = setInterval(() => {
+    elapsed++;
+    setSyncStatus(`Importing from Outlook… ${elapsed}s`);
+  }, 1000);
+  try {
+    const result = await fetchJson("/api/outlook-desktop/export-inbox", { method: "POST" });
+    clearInterval(timer);
+    if (result.launched_macro) {
+      if (result.launch_method === "vbscript-com") {
+        showToast("Inbox refreshed from Outlook.");
+        await loadEmails();
+        setSyncStatus("Ready");
+        return;
+      }
+      showToast("Outlook refresh started. The queue will update when the macro finishes.");
+      await pollInboxImport({ maxAttempts: 30 });
       return;
     }
-    showToast("Outlook refresh started. The queue will update when the macro finishes.");
-    await pollInboxImport({ maxAttempts: 30 });
-    return;
+    const count = result.fetched_count || result.exported_count || 0;
+    showToast(`Inbox refreshed. ${count} messages loaded.`);
+    await loadEmails();
+    setSyncStatus("Ready");
+  } finally {
+    clearInterval(timer);
+    if (els.refreshButton) els.refreshButton.disabled = false;
   }
-  showToast(`Inbox refreshed. ${result.fetched_count || result.exported_count || 0} messages loaded.`);
-  await loadEmails();
 }
 
 async function pollInboxImport(options = {}) {
@@ -380,6 +420,12 @@ async function submitTriageFeedback(emailId) {
   const text = document.getElementById("triageFeedbackText").value.trim();
   const urgencyValue = document.getElementById("feedbackUrgency").value;
   const ownerValue = document.getElementById("feedbackOwner").value;
+  const categoryValue = document.getElementById("feedbackCategory").value;
+  const contactValue = document.getElementById("feedbackContact").value;
+  const sentimentValue = document.getElementById("feedbackSentiment").value;
+  const statusValue = document.getElementById("feedbackStatus").value;
+  const summaryRating = document.getElementById("feedbackSummaryRating").value;
+  const replyRating = document.getElementById("feedbackReplyRating").value;
   if (!text) {
     showToast("Add a correction note first.");
     return;
@@ -387,6 +433,12 @@ async function submitTriageFeedback(emailId) {
   const payload = { feedback_text: text };
   if (urgencyValue) payload.corrected_urgency = Number(urgencyValue);
   if (ownerValue) payload.corrected_owner = ownerValue;
+  if (categoryValue) payload.corrected_category = categoryValue;
+  if (contactValue) payload.corrected_contact_type = contactValue;
+  if (sentimentValue) payload.corrected_sentiment = sentimentValue;
+  if (statusValue) payload.corrected_status = statusValue;
+  if (summaryRating) payload.summary_quality_rating = Number(summaryRating);
+  if (replyRating) payload.reply_quality_rating = Number(replyRating);
   await fetchJson(`/api/emails/${emailId}/feedback`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -450,11 +502,30 @@ function confidenceBadge(email) {
 
 function feedbackForm(email) {
   const owners = state.taxonomy.department_owners || [];
+  const categories = state.taxonomy.categories || [];
+  const contacts = state.taxonomy.contact_types || [];
+  const statuses = state.taxonomy.statuses || [];
+  const sentiments = ["Positive", "Neutral", "Concerned", "Upset"];
   const urgencyOptions = [1, 2, 3, 4, 5]
     .map((score) => `<option value="${score}">Urgency ${score}</option>`)
     .join("");
   const ownerOptions = owners
     .map((owner) => `<option value="${escapeHtml(owner)}">${escapeHtml(owner)}</option>`)
+    .join("");
+  const categoryOptions = categories
+    .map((category) => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`)
+    .join("");
+  const contactOptions = contacts
+    .map((contact) => `<option value="${escapeHtml(contact)}">${escapeHtml(contact)}</option>`)
+    .join("");
+  const statusOptions = statuses
+    .map((status) => `<option value="${escapeHtml(status)}">${escapeHtml(status)}</option>`)
+    .join("");
+  const sentimentOptions = sentiments
+    .map((sentiment) => `<option value="${escapeHtml(sentiment)}">${escapeHtml(sentiment)}</option>`)
+    .join("");
+  const ratingOptions = [1, 2, 3, 4, 5]
+    .map((score) => `<option value="${score}">${score}</option>`)
     .join("");
   const applied = email.feedback_applied
     ? `<p class="muted">Learning applied: ${escapeHtml(email.adaptive_explanation || "Feedback")}</p>`
@@ -473,6 +544,36 @@ function feedbackForm(email) {
           <option value="">Keep owner</option>
           ${ownerOptions}
         </select>
+        <select id="feedbackCategory">
+          <option value="">Keep category</option>
+          ${categoryOptions}
+        </select>
+        <select id="feedbackContact">
+          <option value="">Keep contact type</option>
+          ${contactOptions}
+        </select>
+        <select id="feedbackSentiment">
+          <option value="">Keep sentiment</option>
+          ${sentimentOptions}
+        </select>
+        <select id="feedbackStatus">
+          <option value="">Keep status</option>
+          ${statusOptions}
+        </select>
+        <label class="rating-field">
+          <span>Summary quality</span>
+          <select id="feedbackSummaryRating">
+            <option value="">No rating</option>
+            ${ratingOptions}
+          </select>
+        </label>
+        <label class="rating-field">
+          <span>Reply quality</span>
+          <select id="feedbackReplyRating">
+            <option value="">No rating</option>
+            ${ratingOptions}
+          </select>
+        </label>
         <button class="button primary" id="triageFeedbackButton" type="button">Apply Feedback</button>
       </div>
     </section>
@@ -684,8 +785,53 @@ async function renderAdminView() {
       <td>${escapeHtml(r.suggestion)}</td>
       <td>${r.correction_count}</td>
       <td>${r.confidence}%</td>
+      <td>${escapeHtml(r.status || "")}</td>
+      <td>
+        <div class="admin-action-row">
+          <button class="button small secondary" type="button"
+            data-rule-key="${escapeHtml(r.key)}"
+            data-rule-status="rejected"
+            data-rule-type="${escapeHtml(r.type || "")}"
+            data-rule-pattern="${escapeHtml(r.pattern || "")}"
+            data-rule-suggestion="${escapeHtml(r.suggestion || "")}">Reject</button>
+          <button class="button small ghost" type="button"
+            data-rule-key="${escapeHtml(r.key)}"
+            data-rule-status="dismissed"
+            data-rule-type="${escapeHtml(r.type || "")}"
+            data-rule-pattern="${escapeHtml(r.pattern || "")}"
+            data-rule-suggestion="${escapeHtml(r.suggestion || "")}">Dismiss</button>
+        </div>
+      </td>
     </tr>`
   ).join("");
+
+  const ownerDrilldownRows = (data.misclassification_drilldowns?.owner_by_domain || []).map((r) =>
+    `<tr>
+      <td>${escapeHtml(r.sender_domain || "")}</td>
+      <td>${escapeHtml(r.original_owner || "Unlabeled")}</td>
+      <td>${escapeHtml(r.corrected_owner || "")}</td>
+      <td><strong>${r.count}</strong></td>
+    </tr>`
+  ).join("");
+
+  const urgencyDrilldownRows = (data.misclassification_drilldowns?.urgency || []).map((r) =>
+    `<tr>
+      <td>${escapeHtml(r.original_priority || "Unlabeled")}</td>
+      <td>${escapeHtml(r.corrected_urgency || "")}</td>
+      <td><strong>${r.count}</strong></td>
+    </tr>`
+  ).join("");
+
+  const aiConfigRows = [
+    ["OpenAI refresh", state.config.openai_configured, state.config.openai_model],
+    ["Google AI Studio", state.config.google_ai_configured, state.config.google_ai_model],
+    ["Claude suggestions", state.config.anthropic_configured, state.config.anthropic_model],
+  ].map(([label, configured, model]) => `
+    <div class="admin-engine-row">
+      <span>${escapeHtml(label)}</span>
+      <strong>${configured ? escapeHtml(model || "Configured") : "Off"}</strong>
+    </div>
+  `).join("");
 
   const userRows = (users.users || []).map((u) =>
     `<tr>
@@ -699,6 +845,15 @@ async function renderAdminView() {
           <button class="icon-button" onclick="adminDeleteUser(${u.id}, '${escapeHtml(u.email)}')" title="Remove user">✕</button>
         ` : ""}
       </td>
+    </tr>`
+  ).join("");
+
+  const auditRows = (data.audit_logs || []).map((r) =>
+    `<tr>
+      <td>${escapeHtml(formatDate(r.created_at))}</td>
+      <td>${escapeHtml(r.actor_email || "system")}</td>
+      <td>${escapeHtml(r.action || "")}</td>
+      <td>${escapeHtml(r.entity_type || "")}</td>
     </tr>`
   ).join("");
 
@@ -716,6 +871,10 @@ async function renderAdminView() {
           <h3>Engine Performance</h3>
           <div class="admin-engine">${engineRows || "<p class='muted'>No analysis data yet.</p>"}</div>
         </section>
+        <section class="admin-card">
+          <h3>AI Configuration</h3>
+          <div class="admin-engine">${aiConfigRows}</div>
+        </section>
 
         <section class="admin-card">
           <h3>Most Corrected Classifications</h3>
@@ -728,8 +887,20 @@ async function renderAdminView() {
         </section>
 
         <section class="admin-card admin-card--wide">
+          <h3>Misclassification Drilldowns</h3>
+          <div class="admin-split">
+            <div>
+              ${ownerDrilldownRows ? `<table class="admin-table"><thead><tr><th>Sender Domain</th><th>Original</th><th>Corrected</th><th>Count</th></tr></thead><tbody>${ownerDrilldownRows}</tbody></table>` : "<p class='muted'>No owner corrections yet.</p>"}
+            </div>
+            <div>
+              ${urgencyDrilldownRows ? `<table class="admin-table"><thead><tr><th>Original Priority</th><th>Corrected</th><th>Count</th></tr></thead><tbody>${urgencyDrilldownRows}</tbody></table>` : "<p class='muted'>No urgency corrections yet.</p>"}
+            </div>
+          </div>
+        </section>
+
+        <section class="admin-card admin-card--wide">
           <h3>Suggested Rules</h3>
-          ${ruleRows ? `<table class="admin-table"><thead><tr><th>Pattern</th><th>Suggestion</th><th>Corrections</th><th>Confidence</th></tr></thead><tbody>${ruleRows}</tbody></table>` : "<p class='muted'>No rule candidates yet.</p>"}
+          ${ruleRows ? `<table class="admin-table"><thead><tr><th>Pattern</th><th>Suggestion</th><th>Corrections</th><th>Confidence</th><th>Status</th><th>Actions</th></tr></thead><tbody>${ruleRows}</tbody></table>` : "<p class='muted'>No rule candidates yet.</p>"}
         </section>
 
         <section class="admin-card admin-card--wide">
@@ -743,9 +914,45 @@ async function renderAdminView() {
             <tbody>${userRows}</tbody>
           </table>
         </section>
+
+        <section class="admin-card admin-card--wide">
+          <h3>Audit Log</h3>
+          ${auditRows ? `<table class="admin-table"><thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Entity</th></tr></thead><tbody>${auditRows}</tbody></table>` : "<p class='muted'>No audit events yet.</p>"}
+        </section>
       </div>
     </div>
   `;
+  bindAdminRuleButtons();
+}
+
+function bindAdminRuleButtons() {
+  document.querySelectorAll("[data-rule-key][data-rule-status]").forEach((button) => {
+    if (button.dataset.bound === "true") return;
+    button.addEventListener("click", async () => {
+      const status = button.dataset.ruleStatus;
+      const key = button.dataset.ruleKey;
+      if (!key || !status) return;
+      if (!confirm(`${status === "dismissed" ? "Dismiss" : "Reject"} this rule candidate?`)) return;
+      try {
+        await fetchJson("/api/rule-candidates/status", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            key,
+            status,
+            type: button.dataset.ruleType || "",
+            pattern: button.dataset.rulePattern || "",
+            suggestion: button.dataset.ruleSuggestion || "",
+          }),
+        });
+        showToast(`Rule candidate ${status}.`);
+        renderAdminView();
+      } catch (err) {
+        showToast(err.message || "Rule update failed.", "error");
+      }
+    });
+    button.dataset.bound = "true";
+  });
 }
 
 async function adminInviteUser() {

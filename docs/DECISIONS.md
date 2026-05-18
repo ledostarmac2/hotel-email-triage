@@ -1,5 +1,53 @@
 # Decisions
 
+## 2026-05-17: Dashboard Refresh Uses GPT-5.4 Nano By Default
+
+Decision: Refresh Inbox now attempts OpenAI classification when `OPENAI_API_KEY` is configured, with `OPENAI_MODEL` defaulting to `gpt-5.4-nano`. Local deterministic triage remains the fallback when OpenAI is unavailable or errors.
+
+Rationale: Official OpenAI docs checked on 2026-05-17 describe GPT-5.4 nano as the cheapest GPT-5.4-class model and recommend it for speed/cost-sensitive classification and extraction. That fits ReplyRight's bulk refresh-classification workload better than using a larger drafting/reasoning model for every email.
+
+## 2026-05-17: Google AI Studio As Optional Refresh Fallback
+
+Decision: ReplyRight supports `GOOGLE_AI_API_KEY` / `GOOGLE_AI_MODEL` as an optional Google AI Studio/Gemini refresh-classification fallback when OpenAI is not configured. The integration uses Gemini REST structured output and stores keys only in local ignored environment files or machine environment variables.
+
+Rationale: Brian has a Google AI Studio key available and wants the app prepared for it, but API secrets shared in chat must be treated as exposed. A local `.env` prompt script allows setup without printing or committing the key, and the app can still fall back to deterministic local triage if Google AI errors.
+
+## 2026-05-17: Phase 2-4 Feedback And Rule Learning Slice
+
+Decision: Structured feedback now captures corrected category, contact type, sentiment, status, and 1-5 summary/reply quality ratings in addition to urgency and owner. Rule candidates appear after three matching corrections, while five or more matching corrections are treated as auto-promoted.
+
+Rationale: Brian requested 1-5 ratings and hands-off learning. The three-correction threshold provides visibility; the five-correction threshold gives stronger signal for automatic shared-rule promotion.
+
+## 2026-05-17: Durable Supabase Learning Cache
+
+Decision: Approved Supabase rules are cached locally in SQLite, and failed configured feedback uploads are stored in a local retry queue.
+
+Rationale: Shared learning should remain useful when offline or when Supabase is temporarily unavailable. Feedback should not be lost just because a network call fails.
+
+## 2026-05-17: Supabase Startup Metadata Sync
+
+Decision: Startup sync now includes approved classification rules, active prompt versions, and known sender mappings. All three are cached in local SQLite, and known sender mappings are applied to local triage by sender domain.
+
+Rationale: Shared learning needs more than classification rules. Prompt metadata and sender-domain knowledge should survive offline starts and should influence routine owner/contact-type classification without waiting for external AI.
+
+## 2026-05-17: Admin Rule Emergency Overrides
+
+Decision: Admin Suggested Rules includes emergency `Reject` and `Dismiss` actions. Dismiss hides a candidate locally; Reject keeps the candidate visible as rejected and skips Supabase auto-promotion.
+
+Rationale: Brian wants hands-off rule promotion, but the system still needs a fast way to stop bad repeated-learning patterns without requiring routine approval for every good rule.
+
+## 2026-05-17: Phase 7 Local Hotel-Specific Model Training Roadmap
+
+Decision: Phase 7 should evolve ReplyRight toward a privacy-preserving local learning system that uses sanitized historical completed emails, AI-assisted labeling, human review sampling, Supabase training tables, lightweight local classifiers, confidence-based routing, and external AI fallback.
+
+Rationale: Brian wants ReplyRight to become hotel-specific and reduce API usage over time. The practical path is not training a full LLM from scratch; it is training local classifiers for structured labels such as urgency, owner, category, status, missing information, reply required, and escalation required, while keeping OpenAI/Claude for low-confidence, complex, sensitive, summary, and reply-drafting work.
+
+## 2026-05-17: Phase 7 Privacy-First Training Data
+
+Decision: Phase 7 training data must be sanitized by default. Raw hotel email bodies, guest PII, reservation numbers, payment details, attachments, VIP identifiers, and similar sensitive content must not be stored in Supabase training tables unless Brian explicitly approves a future developer/admin override.
+
+Rationale: Historical completed emails are valuable training data, but hotel email contains sensitive guest and operational information. ReplyRight should store operational patterns, hashes, metadata, sanitized text, labels, metrics, and feedback, not raw private guest records.
+
 ## 2026-05-16: OpenAI Refresh Classification, Claude Opus AI Suggestion
 
 Decision: Refresh Inbox should use OpenAI to assign all triage metadata for imported emails, including urgency, owner, category, contact type, sentiment, missing information, executive summary, and required actions. Future implementation must check current official OpenAI model/pricing docs and choose the best available free-tier or lowest-cost suitable OpenAI model. Claude Opus is reserved for explicit `AI Suggestion` response drafting/refinement only.

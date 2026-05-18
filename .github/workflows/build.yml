@@ -1,0 +1,91 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  lint:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt -r requirements-dev.txt
+      - name: Compile active Python source
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem -Recurse -File -Filter *.py |
+            Where-Object {
+              $_.FullName -notmatch '\\reference\\|\\app\\|\\.venv\\|\\.build-venv|\\build\\|\\dist\\|\\dist2\\|\\data\\|\\__pycache__\\'
+            } |
+            ForEach-Object { $_.FullName }
+          python -m py_compile $files
+      - name: Pytest
+        shell: pwsh
+        run: python -m pytest tests/ -x --timeout=30
+
+  build-exe:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Write CI .env
+        shell: pwsh
+        run: |
+          @"
+          ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
+          SUPABASE_URL=${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          "@ | Set-Content -Path .env -Encoding UTF8
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+      - name: Build EXE
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File .\build_exe.ps1
+      - name: Upload EXE artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ReplyRight-${{ github.sha }}.exe
+          path: dist/ReplyRight.exe
+          if-no-files-found: error
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Write CI .env
+        run: |
+          cat > .env <<EOF
+          ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
+          SUPABASE_URL=${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          EOF
+      - name: Build Docker image
+        run: docker build -t replyright-ci .
+      - name: Run health check
+        run: |
+          docker run --rm -d --name replyright-ci --env-file .env -p 8000:8000 replyright-ci
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8000/api/health; then
+              docker stop replyright-ci
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs replyright-ci
+          docker stop replyright-ci
+          exit 1

@@ -1,4 +1,13 @@
+# ── Credentials — raw keys NEVER committed ────────────────────────────────────
 .env
+.env.local
+.env.development
+.env.production
+!.env.example
+.claude/
+
+# bundled_secrets.py is intentionally committed (XOR-encrypted, safe for GitHub)
+!outlook_dashboard/bundled_secrets.py
 .venv/
 .pip-tmp/
 .pip-tmp*/
@@ -17,6 +26,10 @@ py-created-dir/
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
 
 data/
 

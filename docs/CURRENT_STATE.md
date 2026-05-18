@@ -1,6 +1,6 @@
 # Current State
 
-Last updated: 2026-05-16 (roadmap direction decisions)
+Last updated: 2026-05-17 (v0.1.0 — Phases 1-6 complete, optimization and test pass)
 
 ## Status
 
@@ -8,7 +8,7 @@ Last updated: 2026-05-16 (roadmap direction decisions)
 - Current runnable app is `outlook_dashboard/` plus `run_desktop.py`.
 - The UI has ReplyRight branding, provided logo/icon assets, an urgency-ranked conversation queue, summary/steps panels, local status changes, and an on-demand AI response modal.
 - Outlook refresh is designed around classic Outlook for Windows and now uses read-only `pywin32` COM import as the primary path. The legacy `ExportNYCWAReservationsInboxOnly` VBA macro remains a fallback when direct import dependencies are unavailable.
-- Current bulk imports use local rules for speed, but the target direction changed: Refresh Inbox should use OpenAI to assign all triage metadata for imported emails. Claude Opus should be reserved for explicit `AI Suggestion` drafting/refinement.
+- Refresh Inbox now attempts OpenAI classification when `OPENAI_API_KEY` is configured. The dashboard `OPENAI_MODEL` default is `gpt-5.4-nano`, selected after checking official OpenAI docs on 2026-05-17 for low-cost classification/extraction suitability. If OpenAI is not configured and `GOOGLE_AI_API_KEY` is present, Refresh Inbox attempts Google AI Studio/Gemini classification with structured JSON output. Local deterministic triage remains the fallback when external AI is unavailable or errors.
 - Microsoft Graph OAuth code exists but is not the active path because the user hit enterprise access restrictions in Microsoft Entra.
 - `build_exe.ps1` builds `dist\ReplyRight.exe` and attempts Desktop/Start Menu shortcuts. The latest source uses **pywebview** (WebView2/edgechromium backend) for the desktop window.
 - The rebuilt `dist\ReplyRight.exe` was launch-tested by the user: the pywebview window opens, the dashboard loads, and the sidebar tabs work.
@@ -19,16 +19,17 @@ Last updated: 2026-05-16 (roadmap direction decisions)
 - Queue urgency is now computed at the conversation level from the latest few messages, rather than taking the highest score from stale messages in the thread.
 - Latest-message sentiment ignores quoted Outlook history where possible, so old upset text does not override a friendly/completed latest reply.
 - Local adaptive feedback is implemented:
-  - `triage_feedback` stores per-conversation correction notes and optional corrected urgency/owner/category/contact/sentiment.
+  - `triage_feedback` stores per-conversation correction notes plus optional corrected urgency, owner, category, contact type, sentiment, status, summary quality rating, and reply quality rating.
   - `POST /api/emails/{email_id}/feedback` applies feedback immediately to the selected conversation.
   - Similar future messages can reuse stored local feedback patterns.
 - A CCA/completed-form pattern now routes to Reservations with concise steps to apply the form and confirm completion.
 - Urgency is deliberately more conservative: level 5 is reserved for same/next-day operational blockers or serious risk, while completed/thank-you/form-submission updates are lowered unless a high-risk signal is present.
-- `python -m unittest tests.test_ai_and_database` and `python -m unittest tests.test_kernel_plugins tests.test_kernel_orchestration` pass with the project-local temp workaround.
+- `python -m unittest discover -s tests` passes with 76 tests using the project-local dependency target and the installed WindowsApps Python. Python compile checks for active source files and a FastAPI health smoke also pass.
 - `dist\ReplyRight.exe` was rebuilt after adaptive triage changes. Packaged health check succeeded, and current packaged data rendered 28 conversation groups with urgency distribution `2:14, 3:4, 4:7, 5:3`.
 - `docs/FUTURE_ROADMAP_SUPABASE_ADAPTIVE_LEARNING.md` captures the broader Supabase/shared-learning roadmap.
 - Confidence scoring (10–95%) is computed per email and shown as a color-coded pill in the UI.
-- Rule candidate engine mines local feedback for recurring correction patterns and surfaces them as a dismissable banner.
+- Rule candidate engine mines local feedback for recurring correction patterns. Three matching corrections create visible candidates; five or more mark the rule as auto-promoted for hands-off shared learning.
+- Admin Suggested Rules now includes emergency `Reject` and `Dismiss` controls. Dismissed candidates are hidden locally; rejected candidates stay visible as rejected and are skipped by Supabase auto-promotion.
 - Login is gated by local ReplyRight accounts. The configured admin account is read from `REPLYRIGHT_ADMIN_EMAIL` / `REPLYRIGHT_ADMIN_PASSWORD` in `.env`; startup creates or repairs that admin hash if it already exists.
 - Login failures render a persistent static error message with an X close button and preserve the typed email address. Dashboard action failures such as invite/reset errors now use a persistent dismissable error toast.
 - Auth middleware protects `/api/auth/me` and admin endpoints again. Public auth routes are limited to login/logout/forgot-password/reset-password, fixing the post-login dashboard boot loop.
@@ -36,7 +37,12 @@ Last updated: 2026-05-16 (roadmap direction decisions)
 - `dist\ReplyRight.exe` was rebuilt after the admin navigation fix and shortcuts were refreshed. A headless Edge/Selenium check verified Admin -> Inbox -> Urgent navigation, including Refresh Inbox visibility.
 - Roadmap audit completed and recorded in `docs/HANDOFF.md`. Phase 1 is mostly complete; the next blanks are structured feedback controls, Supabase durable sync/cache, hands-off rule auto-promotion, and a true staged AI pipeline.
 - Brian answered the roadmap questions: summary quality and reply quality should be 1-5 ratings; shared learning rules should auto-promote hands-off with no required admin monitoring; multi-property/cross-property support is irrelevant and should be removed from the roadmap because ReplyRight is only for this hotel.
-- For the OpenAI refresh-classification work, future agents must verify current official OpenAI model/pricing docs and choose the best available free-tier or lowest-cost suitable OpenAI model. Do not hard-code a stale model assumption in docs or code.
+- Supabase approved rules are cached durably in local SQLite, and failed feedback uploads are queued locally for retry on the next configured startup.
+- Supabase startup sync now also downloads and durably caches active prompt versions and known sender mappings. Known sender mappings are applied during local triage by sender domain for owner/contact-type corrections.
+- A dedicated import smoke test now imports the active dashboard and Semantic Kernel modules so missing optional dependencies or broken import-time assumptions are caught earlier.
+- Phase 7 of `docs/FUTURE_ROADMAP_SUPABASE_ADAPTIVE_LEARNING.md` now defines the long-term local hotel-specific training direction: import historical completed emails, redact/sanitize PII, AI-label sanitized examples, human-review samples, store a Supabase training dataset, train lightweight local classifiers, route by confidence, and use external AI only for low-confidence, complex, sensitive, summary, or reply-drafting work.
+- Phase 7 should start with local classification targets only: urgency, owner, category, status, missing information, reply required, and escalation required. Do not try to train local polished reply writing first.
+- **v0.1.0 optimization pass (2026-05-17):** All code optimizations applied — dead category-check branch removed from `ai.py`, bare JSON parse in `_analyze_with_claude` wrapped with proper error handling, SMTP code deduplicated in `auth.py`, three near-identical Supabase download functions unified in `supabase_client.py`, httpx.Client reused across `promote_rule_candidates` loop, `secrets` moved to top-level import in `main.py`, rate-limit bucket TTL pruning added, `registry.py` plugin loop introduced. 160 pytest tests pass after all changes.
 
 ## Known Local Build/Launch Notes
 
@@ -56,7 +62,8 @@ Copy `.env.example` to `.env` for local runs. `.env` must not be committed.
 Important variables:
 
 - `OPENAI_API_KEY` for on-demand AI responses.
-- `OPENAI_MODEL`, default `gpt-4.1-mini`.
+- `OPENAI_MODEL`, default `gpt-5.4-nano`.
+- Optional `GOOGLE_AI_API_KEY` / `GOOGLE_AI_MODEL`, default `gemini-3-flash-preview`, for Google AI Studio refresh-classification fallback. Use `.\scripts\configure_google_ai_studio.ps1` to prompt for a new rotated key and write it to ignored `.env` without printing it.
 - `APP_HOST=127.0.0.1`
 - `APP_PORT=8000`
 - `REPLYRIGHT_ADMIN_EMAIL` and `REPLYRIGHT_ADMIN_PASSWORD` for the local ReplyRight admin account.
@@ -72,9 +79,11 @@ Important variables:
 - Outlook direct COM import depends on classic Outlook for Windows and bundled `pywin32`; if unavailable, ReplyRight falls back to the legacy `/autorun` VBA macro path.
 - AI drafts are suggestions only and require human review.
 - Supabase integration is wired: `upload_feedback_event()` fires after every correction and `download_approved_rules()` runs on startup. Uploads are a no-op until `SUPABASE_URL`/`SUPABASE_KEY` are set in `.env` and the schema is created (paste `docs/supabase_schema.sql` into the Supabase SQL Editor). **Both Supabase keys shared in session chat must be rotated before use.**
+- The Google AI Studio key shared in session chat must also be rotated before use. Do not store pasted/shared keys in tracked files or docs.
 - `.env` and `dist\.env` currently contain local admin/SMTP credentials and must not be committed or shared.
 - This app intentionally does not mutate Outlook messages; adding send/archive/move/category actions requires a new design and approval.
 - Local mailbox exports and SQLite data are ignored for privacy and are not portable through git.
+- Phase 7 training must remain privacy-preserving by default. Do not store raw hotel email bodies, guest PII, reservation numbers, payment details, or attachments in Supabase training tables unless Brian explicitly approves a new override.
 
 ## Semantic Kernel Orchestration Layer
 
@@ -90,17 +99,19 @@ The layer is additive. It does not touch the existing FastAPI dashboard, Next.js
 
 Tests: `python -m unittest tests.test_kernel_plugins tests.test_kernel_orchestration` (59 tests, no API key required).
 
-`OPENAI_MODEL` defaults to `gpt-5.5` in the kernel layer; the dashboard still uses `gpt-4.1-mini` unless overridden. `KERNEL_LOG_LEVEL` controls kernel log verbosity.
+`OPENAI_MODEL` defaults to `gpt-5.5` in the kernel layer; the dashboard uses `gpt-5.4-nano` unless overridden. `KERNEL_LOG_LEVEL` controls kernel log verbosity.
 
 ## Recommended Next Steps
 
 1. **Packaged UI check**: launch the rebuilt Desktop shortcut and confirm Admin -> Inbox/Urgent/VIP/Missing Info leaves Admin correctly and restores the Refresh Inbox button only outside Admin.
-2. **Roadmap blanks**: start with direct feedback controls for category/contact/sentiment, then 1-5 summary/reply quality ratings.
-3. **Supabase sync**: add durable local cache/queue for approved rules, prompt versions, known senders, and failed feedback uploads.
-4. **AI pipeline**: make Refresh Inbox use staged OpenAI classification for imported messages, with local triage as fallback and Claude Opus reserved for `AI Suggestion`.
+2. **Verify expanded feedback**: launch the app and confirm direct feedback controls for category/contact/sentiment/status plus 1-5 summary/reply ratings save and recompute the selected conversation.
+3. **Supabase live check**: prompt-version and known-sender durable sync are implemented locally; next verify against a live Supabase project after rotating keys and applying the latest `docs/supabase_schema.sql`.
+4. **AI pipeline**: Refresh Inbox now uses OpenAI when configured with local fallback; next refinement is splitting it into explicit staged OpenAI classification steps.
 5. **Refresh check**: click Refresh Inbox once and visually confirm the feedback box, resized window behavior, and Outlook-like independent scrolling.
 6. **Login check**: use the local ReplyRight admin credentials from `dist\.env`; bad credentials should show a persistent error with an X, good credentials should enter the app.
 7. **Spot-check triage**: review conversations formerly over-scored as urgency 4/5, especially completed CCA/payment form threads and friendly travel-agent replies.
 8. **If launch fails**: inspect `dist\data\replyright-startup.log`. Look for `pythonnet (clr) is not available`; if seen, delete `.vendor` and re-run `.\build_exe.ps1` so pip re-installs pythonnet.
 9. **Use the roadmap**: read `docs/FUTURE_ROADMAP_SUPABASE_ADAPTIVE_LEARNING.md` before broad architecture work, especially Supabase shared learning and staged AI pipeline. Ignore multi-property/cross-property ideas unless Brian reopens them.
 10. **Wire `replyright_kernel`** into `outlook_dashboard/ai.py` only where it supports the new split: OpenAI refresh classification, local fallback/tests, and Claude Opus `AI Suggestion`.
+11. **Admin rules check**: after entering real feedback, confirm Suggested Rules shows Reject/Dismiss and that Dismiss removes a candidate from the local admin view.
+12. **Phase 7 local learning**: when ready, implement incrementally in the documented order: Supabase training tables, sanitized training records, PII redaction, historical importer, AI batch labeler, human review queue, local classifier training, runtime prediction, admin controls, model activation/rollback, and metrics.

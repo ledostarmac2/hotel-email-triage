@@ -1,5 +1,31 @@
 # AI Change Log
 
+## 2026-05-17 - Phases 1-4 implementation pass
+
+- Changed refresh triage so `triage_email()` attempts OpenAI classification when configured, with local deterministic triage as the fallback.
+- Updated dashboard `OPENAI_MODEL` default to `gpt-5.4-nano` after checking official OpenAI docs for low-cost classification/extraction suitability.
+- Added optional Google AI Studio/Gemini refresh-classification fallback through `GOOGLE_AI_API_KEY` / `GOOGLE_AI_MODEL`.
+- Added a safe local setup script, `scripts/configure_google_ai_studio.ps1`, that prompts for a rotated Google AI Studio key and writes it to ignored `.env` without printing it.
+- Added Google AI Studio configuration status to `/api/health`, `/api/config`, and the Admin AI Configuration card.
+- Expanded structured feedback controls to include category, contact type, sentiment, status, and 1-5 summary/reply quality ratings.
+- Added local SQLite columns for feedback status and quality ratings, and included those fields in Supabase `feedback_events`.
+- Added durable local caching for approved Supabase rules and a retry queue for failed feedback uploads.
+- Added durable local caching and startup sync for Supabase prompt versions and known sender mappings.
+- Applied known sender mappings during local triage so sender-domain knowledge can correct owner/contact type without an external AI call.
+- Adjusted rule learning thresholds: three matching corrections create visible candidates; five or more corrections are marked as auto-promoted/approved for shared learning.
+- Added Admin Suggested Rules `Reject` and `Dismiss` controls for emergency override of bad rule candidates.
+- Added `tests/test_import_smoke.py` and edge regressions for known sender cache, prompt cache, and rule-candidate dismissal.
+- Updated `docs/supabase_schema.sql` with feedback rating/status fields and safe `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` statements for existing Supabase projects.
+- Updated `docs/supabase_schema.sql` with a `prompt_versions` table and active-prompt read policy.
+
+## 2026-05-17 - Phase 7 local model training roadmap
+
+- Expanded `docs/FUTURE_ROADMAP_SUPABASE_ADAPTIVE_LEARNING.md` with a full Phase 7 plan for local hotel-specific model training.
+- Added the hybrid learning architecture: rules, Supabase feedback, sanitized historical examples, embeddings, lightweight local classifiers, and optional external AI fallback.
+- Documented Phase 7 subphases from historical import/redaction through AI-assisted labeling, human review, classifier training, runtime prediction, continuous learning, and optional local LLM support.
+- Added Supabase table targets for `training_emails`, `training_labels`, `model_versions`, `model_metrics`, `prediction_logs`, and `human_review_queue`.
+- Updated `docs/ARCHITECTURE.md`, `docs/CURRENT_STATE.md`, and `docs/DECISIONS.md` to make privacy-preserving local classifier training part of the long-term ReplyRight direction.
+
 ## 2026-05-16 - Roadmap audit handoff
 
 - Recorded a seven-phase roadmap completion checklist in `docs/HANDOFF.md`.

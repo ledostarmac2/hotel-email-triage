@@ -50,7 +50,7 @@ pip install -r requirements.txt
 Copy-Item .env.example .env
 ```
 
-Update `.env` with your Microsoft and OpenAI values:
+Update `.env` with your Microsoft, OpenAI, or Google AI Studio values:
 
 ```env
 MICROSOFT_CLIENT_ID=
@@ -59,7 +59,17 @@ MICROSOFT_TENANT_ID=
 MICROSOFT_REDIRECT_URI=http://localhost:8000/auth/callback
 SHARED_MAILBOX_EMAIL=
 OPENAI_API_KEY=
+GOOGLE_AI_API_KEY=
+GOOGLE_AI_MODEL=gemini-3-flash-preview
 ```
+
+For Google AI Studio, use your own freshly generated key and keep it local. You can let the project update the ignored `.env` file without printing the key:
+
+```powershell
+.\scripts\configure_google_ai_studio.ps1
+```
+
+Restart ReplyRight after running the script. `/api/health` will show `google_ai_configured: true` when the key is loaded. Google AI Studio will not display your local repository as a hosted project; the key connects ReplyRight to Gemini from your machine.
 
 Run the app:
 
@@ -182,6 +192,30 @@ dist\ReplyRight.exe
 ```
 
 The executable starts the local FastAPI server inside a standalone desktop window. It does not open the default browser.
+
+## Testing
+
+Tests require no live credentials. All external services are mocked or disabled.
+
+Run all 160 tests:
+
+```powershell
+python -m pytest tests/
+```
+
+Run with coverage report:
+
+```powershell
+python -m pytest tests/ --cov=outlook_dashboard --cov=replyright_kernel --cov-report=term-missing
+```
+
+Run a specific test file:
+
+```powershell
+python -m pytest tests/test_redaction.py -v
+```
+
+See `docs/TESTING.md` for the full testing guide, fixture reference, and coverage targets.
 
 ## Notes Before Live Use
 

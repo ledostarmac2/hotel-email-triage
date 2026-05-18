@@ -23,6 +23,18 @@ DATA_DIR = ROOT_DIR / "data"
 def _load_env() -> None:
     if load_dotenv is not None:
         load_dotenv(ROOT_DIR / ".env")
+    try:
+        from .bundled_secrets import inject as _inject_bundled
+        _inject_bundled()
+    except Exception:
+        pass
+
+
+def _int_env(name: str, default: int) -> int:
+    try:
+        return int(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        return default
 
 
 @dataclass(frozen=True)
@@ -34,6 +46,8 @@ class Settings:
     shared_mailbox_email: str
     openai_api_key: str
     openai_model: str
+    google_ai_api_key: str
+    google_ai_model: str
     anthropic_api_key: str
     anthropic_model: str
     database_path: Path
@@ -50,6 +64,10 @@ class Settings:
     smtp_from: str
     replyright_admin_email: str
     replyright_admin_password: str
+    rate_limit_per_minute: int
+    supabase_url: str
+    supabase_key: str
+    supabase_service_role_key: str
 
     @property
     def graph_scopes(self) -> tuple[str, ...]:
@@ -79,12 +97,42 @@ class Settings:
         return bool(self.openai_api_key)
 
     @property
+    def google_ai_configured(self) -> bool:
+        return bool(self.google_ai_api_key)
+
+    @property
     def anthropic_configured(self) -> bool:
         return bool(self.anthropic_api_key)
 
     @property
     def ai_configured(self) -> bool:
-        return self.anthropic_configured or self.openai_configured
+        return self.anthropic_configured or self.openai_configured or self.google_ai_configured
+
+    @property
+    def refresh_ai_configured(self) -> bool:
+        return self.openai_configured or self.google_ai_configured
+
+    @property
+    def runtime_warnings(self) -> list[str]:
+        warnings: list[str] = []
+        if not self.replyright_admin_email or not self.replyright_admin_password:
+            warnings.append("Local admin seed is not configured.")
+        if not self.refresh_ai_configured:
+            warnings.append("Refresh classification will use local deterministic fallback only.")
+        graph_values = [
+            self.microsoft_client_id,
+            self.microsoft_client_secret,
+            self.microsoft_tenant_id,
+            self.microsoft_redirect_uri,
+        ]
+        if any(graph_values) and not self.graph_configured:
+            warnings.append("Microsoft Graph configuration is incomplete.")
+        smtp_values = [self.smtp_host, self.smtp_user, self.smtp_password, self.smtp_from]
+        if any(smtp_values) and not self.smtp_configured:
+            warnings.append("SMTP configuration is incomplete; invite/reset email may fail.")
+        if self.rate_limit_per_minute <= 0:
+            warnings.append("Auth rate limiting is disabled.")
+        return warnings
 
 
 @lru_cache(maxsize=1)
@@ -107,7 +155,9 @@ def get_settings() -> Settings:
         ).strip(),
         shared_mailbox_email=os.getenv("SHARED_MAILBOX_EMAIL", "").strip(),
         openai_api_key=os.getenv("OPENAI_API_KEY", "").strip(),
-        openai_model=os.getenv("OPENAI_MODEL", "gpt-4.1").strip(),
+        openai_model=os.getenv("OPENAI_MODEL", "gpt-5.4-nano").strip(),
+        google_ai_api_key=(os.getenv("GOOGLE_AI_API_KEY") or os.getenv("GEMINI_API_KEY") or "").strip(),
+        google_ai_model=os.getenv("GOOGLE_AI_MODEL", "gemini-3-flash-preview").strip(),
         anthropic_api_key=os.getenv("ANTHROPIC_API_KEY", "").strip(),
         anthropic_model=os.getenv("ANTHROPIC_MODEL", "claude-opus-4-7").strip(),
         database_path=database_path,
@@ -118,12 +168,16 @@ def get_settings() -> Settings:
             "OUTLOOK_EXPORT_MACRO", "ExportNYCWAReservationsInboxOnly"
         ).strip(),
         app_host=os.getenv("APP_HOST", "127.0.0.1").strip(),
-        app_port=int(os.getenv("APP_PORT", "8000")),
+        app_port=_int_env("APP_PORT", 8000),
         smtp_host=os.getenv("SMTP_HOST", "smtp.office365.com").strip(),
-        smtp_port=int(os.getenv("SMTP_PORT", "587")),
+        smtp_port=_int_env("SMTP_PORT", 587),
         smtp_user=os.getenv("SMTP_USER", "").strip(),
         smtp_password=os.getenv("SMTP_PASSWORD", "").strip(),
         smtp_from=os.getenv("SMTP_FROM", "").strip(),
         replyright_admin_email=os.getenv("REPLYRIGHT_ADMIN_EMAIL", "").strip(),
         replyright_admin_password=os.getenv("REPLYRIGHT_ADMIN_PASSWORD", "").strip(),
+        rate_limit_per_minute=_int_env("RATE_LIMIT_PER_MINUTE", 30),
+        supabase_url=os.getenv("SUPABASE_URL", "").strip(),
+        supabase_key=os.getenv("SUPABASE_KEY", "").strip(),
+        supabase_service_role_key=os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip(),
     )
