@@ -76,6 +76,8 @@ from .supabase_client import (
     upload_feedback_event,
 )
 from .taxonomy import CATEGORIES, CONTACT_TYPES, DEPARTMENT_OWNERS, PRIORITY_LEVELS, RISK_FLAGS, STATUSES
+from .local_classifier import feature_importance as classifier_feature_importance
+from .local_classifier import get_model_meta
 from .local_classifier import invalidate_cache as invalidate_classifier_cache
 from .local_classifier import train as train_local_classifier
 from .training_pipeline import pipeline_status as training_pipeline_status
@@ -775,6 +777,88 @@ def api_dual_labeled_stats(request: Request) -> dict[str, object]:
     except Exception as exc:
         return {"this_week": 0, "weeks": [0, 0, 0, 0], "error": str(exc)[:200]}
     return {"this_week": weeks[-1] if weeks else 0, "weeks": weeks}
+
+
+@app.get("/api/admin/intelligence/health")
+def api_intelligence_health(request: Request) -> dict[str, object]:
+    """Model health: version, training timestamp, per-target accuracy + label distribution."""
+    if request.state.user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only.")
+    settings = get_settings()
+    meta = get_model_meta(db_path=settings.database_path)
+    if not meta:
+        return {"status": "no_model", "message": "No local classifier has been trained yet."}
+    targets = meta.get("targets") or {}
+    summary: dict[str, object] = {
+        "status": "ok",
+        "version_id": meta.get("version_id"),
+        "trained_at": meta.get("trained_at"),
+        "total_examples": meta.get("total_examples_downloaded"),
+        "targets": {},
+    }
+    for target, tmeta in targets.items():
+        cv = tmeta.get("cv_accuracy", -1)
+        dist = tmeta.get("label_distribution") or {}
+        summary["targets"][target] = {  # type: ignore[index]
+            "examples": tmeta.get("examples"),
+            "classes": tmeta.get("classes"),
+            "cv_accuracy": cv if cv >= 0 else None,
+            "label_distribution": dist,
+            "most_common_label": max(dist, key=dist.get) if dist else None,  # type: ignore[arg-type]
+            "least_common_label": min(dist, key=dist.get) if dist else None,  # type: ignore[arg-type]
+        }
+    return summary
+
+
+@app.get("/api/admin/models/feature-importance")
+def api_feature_importance(request: Request) -> dict[str, object]:
+    """Top TF-IDF terms per class for each trained target (urgency, owner, category)."""
+    if request.state.user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only.")
+    settings = get_settings()
+    fi = classifier_feature_importance(db_path=settings.database_path)
+    if not fi:
+        return {"status": "no_model", "feature_importance": {}}
+    return {"status": "ok", "feature_importance": fi}
+
+
+@app.get("/api/admin/intelligence/sender-profile")
+def api_sender_profile(request: Request, domain: str = Query("")) -> dict[str, object]:
+    """Return the learned sender reputation profile for a domain."""
+    if request.state.user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only.")
+    if not domain:
+        raise HTTPException(status_code=400, detail="domain query parameter required")
+    from .sender_intelligence import get_sender_profile
+    profile = get_sender_profile(domain.lower().strip())
+    return {"status": "ok", "profile": profile}
+
+
+@app.get("/api/admin/intelligence/signals")
+def api_email_signals(request: Request, email_id: int = Query(0)) -> dict[str, object]:
+    """Extract and return the full signal set for a stored email."""
+    if request.state.user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only.")
+    if not email_id:
+        raise HTTPException(status_code=400, detail="email_id query parameter required")
+    settings = get_settings()
+    row = get_email(email_id, db_path=settings.database_path)
+    if not row:
+        raise HTTPException(status_code=404, detail="Email not found")
+    from .signal_extractor import describe_signals, extract_signals
+    signals = extract_signals(
+        subject=str(row.get("subject") or ""),
+        body=str(row.get("body_text") or row.get("body_preview") or ""),
+        sender_email=str(row.get("sender_email") or ""),
+        sender_name=str(row.get("sender_name") or ""),
+        received_at=row.get("received_datetime"),
+    )
+    return {
+        "status": "ok",
+        "email_id": email_id,
+        "signals": signals,
+        "description": describe_signals(signals),
+    }
 
 
 @app.post("/api/rule-candidates/status")

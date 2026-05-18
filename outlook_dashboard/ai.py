@@ -653,9 +653,10 @@ def triage_email(
 
     # Try local classifier first — zero API cost, sub-millisecond.
     body = email.get("body_text") or email.get("body_content") or email.get("body_preview") or ""
+    subject_tokens = str(email.get("subject") or "")
     try:
         from .local_classifier import predict as _classifier_predict
-        clf_result = _classifier_predict(body)
+        clf_result = _classifier_predict(body, subject_tokens=subject_tokens)
         if clf_result:
             analysis = dict(heuristic)
             _PRIORITY_FROM_URGENCY = {1: "Low", 2: "Normal", 3: "Normal", 4: "High", 5: "Immediate"}
@@ -712,11 +713,18 @@ def triage_email(
 
 
 def _apply_shared_rules(analysis: dict[str, Any], sender_email: str) -> None:
-    """Mutate analysis in-place using downloaded Supabase classification rules."""
+    """Mutate analysis in-place using Supabase rules + sender reputation profile."""
     from .supabase_client import get_cached_known_senders, get_cached_rules
 
     rules = get_cached_rules()
     domain = (sender_email.split("@")[-1] if "@" in sender_email else "").lower()
+
+    # Apply sender intelligence bias before rule overrides
+    try:
+        from .sender_intelligence import apply_sender_bias
+        apply_sender_bias(analysis, domain)
+    except Exception:
+        pass
 
     if domain:
         for sender in get_cached_known_senders():
@@ -888,11 +896,41 @@ def heuristic_analysis(email: dict[str, Any], settings: Settings | None = None) 
     sender_name = email.get("sender_name") or email.get("from_name") or ""
     sender_email = (email.get("sender_email") or email.get("from_email") or "").lower()
     text = f"{subject}\n{body}".lower()
+    received_at = str(email.get("received_datetime") or email.get("created_at") or "")
+
+    # ── Zero-API signal extraction ─────────────────────────────────────────
+    signals: dict[str, Any] = {}
+    try:
+        from .signal_extractor import extract_signals
+        signals = extract_signals(subject, body, sender_email, sender_name, received_at or None)
+    except Exception:
+        pass
+
+    # ── Structured entity extraction ──────────────────────────────────────
+    entities: dict[str, Any] = {}
+    try:
+        from .hotel_entities import extract_entities
+        entities = extract_entities(subject, body, received_at or None)
+    except Exception:
+        pass
+
+    # ── Travel program detection ───────────────────────────────────────────
+    travel_program: dict[str, Any] = {}
+    try:
+        from .travel_programs import detect_program
+        travel_program = detect_program(sender_email, body)
+    except Exception:
+        pass
 
     category = _category_for(text, sender_email)
     risks = _risk_flags_for(text, category)
     sentiment = _sentiment_for(text, category)
     contact_type = _contact_type_for(sender_email, sender_name, text, category)
+
+    # Upgrade contact_type if travel program detected with high confidence
+    if travel_program.get("confidence", 0) >= 0.7 and contact_type not in ("Internal", "Group contact"):
+        contact_type = "Travel agency"
+
     priority = _priority_for(text, category, risks, sentiment, email.get("importance"))
     owner = _owner_for(text, category, risks)
     missing = _missing_information_for(text, category)
@@ -909,6 +947,35 @@ def heuristic_analysis(email: dict[str, Any], settings: Settings | None = None) 
     draft = _draft_reply(sender_name, sender_email, category, missing)
     arrival_score = _arrival_urgency_score(text)
     confidence, confidence_reason = _confidence_for(text, category, contact_type, arrival_score, sender_email)
+
+    # Boost confidence when entity extraction corroborates the heuristic
+    signal_richness = signals.get("signal_richness", 0)
+    if signal_richness >= 3:
+        confidence = min(95, confidence + 8)
+        confidence_reason = confidence_reason + "; multi-signal confirmation"
+    elif signal_richness >= 1:
+        confidence = min(95, confidence + 3)
+
+    # ── Unified urgency engine ─────────────────────────────────────────────
+    urgency_level, urgency_reason = 0, ""
+    try:
+        from .urgency_engine import compute_urgency
+        has_risk = bool(risks and any(r in risks for r in ("Legal", "Medical", "ADA/accessibility", "Chargeback")))
+        urgency_level, urgency_reason = compute_urgency(
+            subject, body, entities, travel_program,
+            category_hint=category, has_risk_flags=has_risk,
+        )
+    except Exception:
+        urgency_level = PRIORITY_SCORE.get(priority, 2)
+        urgency_reason = f"L{urgency_level} - fallback"
+
+    # ── SLA computation ────────────────────────────────────────────────────
+    effective_sla: float | None = None
+    try:
+        from .taxonomy_meta import get_effective_sla_hours
+        effective_sla = get_effective_sla_hours(category, urgency_level, contact_type, risks)
+    except Exception:
+        pass
 
     return {
         "ai_summary": summary,
@@ -927,6 +994,13 @@ def heuristic_analysis(email: dict[str, Any], settings: Settings | None = None) 
         "analysis_engine": "heuristic",
         "analysis_error": "",
         "redaction_counts": {},
+        # ── New intelligence fields ────────────────────────────────────────
+        "signals": signals,
+        "entities": entities,
+        "travel_program": travel_program,
+        "urgency_score": urgency_level,
+        "urgency_reason": urgency_reason,
+        "effective_sla_hours": effective_sla,
     }
 
 

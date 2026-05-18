@@ -393,6 +393,14 @@ function renderDetail(email) {
         ${section("Reservations Steps", actionList(email.internal_next_steps))}
         ${section("Missing Information", actionList(email.missing_information, "None noted."))}
         ${feedbackForm(email)}
+        ${state.user?.role === "admin" ? `
+        <details style="margin-top:12px;">
+          <summary style="cursor:pointer;font-size:12px;color:var(--muted);padding:6px 0;">
+            Signal Inspector
+            <button id="signalsToggleBtn" class="button small ghost" style="margin-left:8px;font-size:11px;padding:2px 8px;" onclick="event.preventDefault();adminLoadEmailSignals(${email.id})">Show Signals</button>
+          </summary>
+          <div id="signalsContainer" style="margin-top:8px;" hidden></div>
+        </details>` : ""}
       </section>
       <section class="source-panel">
         <div class="field-grid">
@@ -753,15 +761,17 @@ async function renderAdminView() {
   if (!workspace) return;
   workspace.innerHTML = `<div class="admin-loading">Loading admin dashboard…</div>`;
 
-  let data, users, trainingStatus, trainingExamples, dualLabeledStats, versionInfo;
+  let data, users, trainingStatus, trainingExamples, dualLabeledStats, versionInfo, modelHealth, featureImportance;
   try {
-    [data, users, trainingStatus, trainingExamples, dualLabeledStats, versionInfo] = await Promise.all([
+    [data, users, trainingStatus, trainingExamples, dualLabeledStats, versionInfo, modelHealth, featureImportance] = await Promise.all([
       fetchJson("/api/admin/stats"),
       fetchJson("/api/auth/users"),
       fetchJson("/api/admin/training/status").catch(() => null),
       fetchJson("/api/admin/training/examples?limit=10").catch(() => null),
       fetchJson("/api/admin/training/dual-labeled-stats").catch(() => null),
       fetchJson("/api/version").catch(() => null),
+      fetchJson("/api/admin/intelligence/health").catch(() => null),
+      fetchJson("/api/admin/models/feature-importance").catch(() => null),
     ]);
   } catch (err) {
     if (state.currentView !== "admin") return;
@@ -1046,6 +1056,80 @@ async function renderAdminView() {
           </table>` : `<p class="muted">${trainingExamples?.error ? escapeHtml(trainingExamples.error) : "No unreviewed examples. Run the training pipeline first."}</p>`}
         </section>
 
+        <section class="admin-card admin-card--wide" id="modelHealthCard">
+          <h3>Classifier Health</h3>
+          ${(() => {
+            if (!modelHealth || modelHealth.status === "no_model") {
+              return `<p class="muted">No local classifier trained yet. Run the pipeline then click Train Classifier.</p>`;
+            }
+            const targets = modelHealth.targets || {};
+            const metricCards = Object.entries(targets).map(([target, tmeta]) => {
+              const acc = tmeta.cv_accuracy != null ? `${(tmeta.cv_accuracy * 100).toFixed(1)}%` : "—";
+              const dist = tmeta.label_distribution || {};
+              const distEntries = Object.entries(dist).sort((a, b) => b[1] - a[1]).slice(0, 6);
+              const maxDistVal = Math.max(...distEntries.map(([, v]) => v), 1);
+              const distBars = distEntries.map(([lbl, cnt]) => {
+                const pct = Math.round((cnt / maxDistVal) * 100);
+                return `<div style="display:flex;align-items:center;gap:6px;font-size:11px;margin-bottom:3px;">
+                  <span style="width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);" title="${escapeHtml(lbl)}">${escapeHtml(lbl)}</span>
+                  <div style="flex:1;height:8px;background:#e5e7eb;border-radius:4px;min-width:60px;">
+                    <div style="width:${pct}%;height:100%;background:var(--accent);border-radius:4px;"></div>
+                  </div>
+                  <span style="width:28px;text-align:right;color:var(--muted);">${cnt}</span>
+                </div>`;
+              }).join("");
+              return `<div style="background:var(--bg-secondary);border-radius:8px;padding:12px;flex:1;min-width:200px;">
+                <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+                  <strong style="text-transform:capitalize;">${escapeHtml(target)}</strong>
+                  <span class="badge" style="font-size:11px;">CV ${acc}</span>
+                </div>
+                <p style="font-size:11px;color:var(--muted);margin-bottom:8px;">${tmeta.examples} examples · ${tmeta.classes} classes</p>
+                ${distBars}
+              </div>`;
+            }).join("");
+            const vId = modelHealth.version_id || "?";
+            const trainedAt = modelHealth.trained_at ? new Date(modelHealth.trained_at).toLocaleString() : "?";
+            return `
+              <p style="font-size:12px;color:var(--muted);margin-bottom:12px;">v${escapeHtml(vId)} &nbsp;·&nbsp; Trained ${escapeHtml(trainedAt)} &nbsp;·&nbsp; ${modelHealth.total_examples} total examples</p>
+              <div style="display:flex;gap:16px;flex-wrap:wrap;">${metricCards || "<p class='muted'>No targets trained.</p>"}</div>`;
+          })()}
+        </section>
+
+        <section class="admin-card admin-card--wide" id="featureImportanceCard">
+          <h3>Feature Importance <span class="badge" style="font-size:10px;margin-left:6px;">Top TF-IDF tokens per class</span></h3>
+          ${(() => {
+            if (!featureImportance || featureImportance.status !== "ok" || !Object.keys(featureImportance.feature_importance || {}).length) {
+              return `<p class="muted">No feature data — train the classifier first.</p>`;
+            }
+            const fi = featureImportance.feature_importance;
+            return Object.entries(fi).map(([target, classes]) => {
+              const classRows = Object.entries(classes).slice(0, 8).map(([cls, terms]) => {
+                const termsHtml = (terms || []).slice(0, 10).map((t) => `<code style="font-size:11px;background:var(--bg-secondary);padding:1px 5px;border-radius:3px;margin:2px 2px 2px 0;display:inline-block;">${escapeHtml(t)}</code>`).join("");
+                return `<tr>
+                  <td style="white-space:nowrap;font-size:12px;">${escapeHtml(cls)}</td>
+                  <td style="line-height:1.8;">${termsHtml}</td>
+                </tr>`;
+              }).join("");
+              return `<details style="margin-bottom:12px;">
+                <summary style="cursor:pointer;font-weight:600;text-transform:capitalize;padding:4px 0;">${escapeHtml(target)}</summary>
+                <table class="admin-table" style="margin-top:8px;">
+                  <thead><tr><th>Class</th><th>Top tokens</th></tr></thead>
+                  <tbody>${classRows}</tbody>
+                </table>
+              </details>`;
+            }).join("");
+          })()}
+        </section>
+
+        <section class="admin-card" id="senderProfileCard">
+          <h3>Sender Domain Lookup</h3>
+          <div class="admin-invite-row" style="margin-bottom:12px;">
+            <input type="text" id="senderDomainInput" placeholder="e.g. virtuoso.com" style="flex:1;" />
+            <button class="button secondary" onclick="adminLookupSenderProfile()">Lookup</button>
+          </div>
+          <div id="senderProfileResult"></div>
+        </section>
+
         <section class="admin-card admin-card--wide">
           <h3>Audit Log</h3>
           ${auditRows ? `<table class="admin-table"><thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Entity</th></tr></thead><tbody>${auditRows}</tbody></table>` : "<p class='muted'>No audit events yet.</p>"}
@@ -1148,6 +1232,74 @@ async function adminTrainClassifier() {
     showToast(err.message || "Classifier training failed.", "error");
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = "Train Classifier"; }
+  }
+}
+
+async function adminLookupSenderProfile() {
+  const input = document.getElementById("senderDomainInput");
+  const resultEl = document.getElementById("senderProfileResult");
+  const domain = (input?.value || "").trim().toLowerCase();
+  if (!domain) { showToast("Enter a domain name."); return; }
+  if (resultEl) resultEl.innerHTML = `<p class="muted">Loading…</p>`;
+  try {
+    const data = await fetchJson(`/api/admin/intelligence/sender-profile?domain=${encodeURIComponent(domain)}`);
+    const p = data.profile || {};
+    if (!p.total_interactions) {
+      if (resultEl) resultEl.innerHTML = `<p class="muted">No data for <strong>${escapeHtml(domain)}</strong> — not yet seen in feedback events.</p>`;
+      return;
+    }
+    const conf = p.profile_confidence != null ? `${(p.profile_confidence * 100).toFixed(0)}%` : "—";
+    const bias = p.urgency_bias != null ? (p.urgency_bias >= 0 ? `+${p.urgency_bias}` : `${p.urgency_bias}`) : "0";
+    if (resultEl) resultEl.innerHTML = `
+      <div style="background:var(--bg-secondary);border-radius:8px;padding:12px;font-size:13px;">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;">
+          <div><span class="muted" style="font-size:11px;display:block;">Interactions</span><strong>${p.total_interactions}</strong></div>
+          <div><span class="muted" style="font-size:11px;display:block;">Confidence</span><strong>${conf}</strong></div>
+          <div><span class="muted" style="font-size:11px;display:block;">Corrections</span><strong>${p.correction_count}</strong> <span class="muted">(${(p.correction_rate * 100).toFixed(0)}%)</span></div>
+          <div><span class="muted" style="font-size:11px;display:block;">Avg Urgency</span><strong>${p.avg_urgency}</strong></div>
+          <div><span class="muted" style="font-size:11px;display:block;">Urgency Bias</span><strong style="color:${p.urgency_bias > 0 ? "var(--danger,#dc2626)" : p.urgency_bias < 0 ? "var(--success-text,#065f46)" : "inherit"}">${bias}</strong></div>
+          <div><span class="muted" style="font-size:11px;display:block;">Last Seen</span><strong>${p.last_seen ? formatDate(p.last_seen) : "—"}</strong></div>
+        </div>
+        ${p.typical_owner ? `<p style="margin:4px 0;"><span class="muted">Typical owner:</span> <strong>${escapeHtml(p.typical_owner)}</strong></p>` : ""}
+        ${p.typical_category ? `<p style="margin:4px 0;"><span class="muted">Typical category:</span> <strong>${escapeHtml(p.typical_category)}</strong></p>` : ""}
+      </div>`;
+  } catch (err) {
+    if (resultEl) resultEl.innerHTML = `<p class="error-msg">${escapeHtml(err.message || "Lookup failed.")}</p>`;
+  }
+}
+
+async function adminLoadEmailSignals(emailId) {
+  const btn = document.getElementById("signalsToggleBtn");
+  const container = document.getElementById("signalsContainer");
+  if (!container) return;
+  if (container.dataset.loaded === "true") {
+    container.hidden = !container.hidden;
+    if (btn) btn.textContent = container.hidden ? "Show Signals" : "Hide Signals";
+    return;
+  }
+  if (btn) { btn.disabled = true; btn.textContent = "Loading…"; }
+  try {
+    const data = await fetchJson(`/api/admin/intelligence/signals?email_id=${encodeURIComponent(emailId)}`);
+    const signals = data.signals || {};
+    const desc = (data.description || []).map((d) => `<li>${escapeHtml(d)}</li>`).join("");
+    const entries = Object.entries(signals).filter(([k]) => !["sender_domain","hour_received","is_weekend","is_after_hours"].includes(k));
+    const rows = entries.map(([k, v]) => {
+      const display = typeof v === "boolean" ? (v ? '<span style="color:var(--accent)">yes</span>' : '<span style="color:var(--muted)">no</span>') : escapeHtml(String(v));
+      return `<tr><td style="font-size:11px;white-space:nowrap;">${escapeHtml(k)}</td><td style="font-size:11px;">${display}</td></tr>`;
+    }).join("");
+    container.innerHTML = `
+      ${desc ? `<ul style="font-size:12px;color:var(--accent);margin:0 0 10px 16px;">${desc}</ul>` : ""}
+      <table class="admin-table" style="font-size:11px;">
+        <thead><tr><th>Signal</th><th>Value</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+    container.dataset.loaded = "true";
+    container.hidden = false;
+    if (btn) { btn.disabled = false; btn.textContent = "Hide Signals"; }
+  } catch (err) {
+    container.innerHTML = `<p class="error-msg" style="font-size:12px;">${escapeHtml(err.message || "Failed to load signals.")}</p>`;
+    container.hidden = false;
+    if (btn) { btn.disabled = false; btn.textContent = "Show Signals"; }
   }
 }
 
