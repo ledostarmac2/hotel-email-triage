@@ -130,6 +130,7 @@ _http_log = get_logger("http")
 
 _AUTH_SKIP = {
     "/login",
+    "/healthz",
     "/api/health",
     "/reset-password",
     "/api/auth/login",
@@ -236,7 +237,7 @@ class _RequestLogMiddleware(BaseHTTPMiddleware):
 
 app = FastAPI(
     title="Luxury Hotel Outlook Email Intelligence",
-    version="0.1.0",
+    version="0.1.1",
     lifespan=lifespan,
 )
 app.add_middleware(_RateLimitMiddleware)
@@ -895,6 +896,7 @@ def health() -> dict[str, object]:
     settings = get_settings()
     return {
         "ok": True,
+        "service": "ReplyRight",
         "read_only_outlook": True,
         "graph_configured": settings.graph_configured,
         "openai_configured": settings.openai_configured,
@@ -912,6 +914,11 @@ def health() -> dict[str, object]:
         },
         "config_warnings": settings.runtime_warnings,
     }
+
+
+@app.get("/healthz")
+def healthz() -> dict[str, object]:
+    return {"ok": True, "service": "ReplyRight", "version": app.version}
 
 
 @app.get("/api/config")

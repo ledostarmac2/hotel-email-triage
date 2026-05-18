@@ -1,11 +1,23 @@
 # Current State
 
-Last updated: 2026-05-18 (v0.1.0 - CI build hardening pass, 424 tests)
+Last updated: 2026-05-18 (v0.1.1 emergency release repair in progress)
 
 ## Status
 
 - Product name is ReplyRight.
 - Current runnable app is `outlook_dashboard/` plus `run_desktop.py`.
+- v0.1.0 is blocked as a user release because the downloaded app could show a WebView/Edge `127.0.0.1 refused to connect` page and the release path was not installer-first enough for real users.
+- v0.1.1 repair is now in source:
+  - `GET /healthz` is public and used by the desktop launcher before opening pywebview.
+  - `run_desktop.py` waits up to 30 seconds for backend health before creating the window.
+  - Browser fallback was removed; startup failure now shows a controlled ReplyRight error dialog with `replyright-startup.log`.
+  - The launcher prefers configured `APP_PORT` and chooses a dynamic available port only if the preferred port is occupied.
+  - GitHub release workflow and updater now prefer `ReplyRightSetup-v{version}.exe` installer assets.
+  - Source version is bumped to `0.1.1`.
+- New release docs:
+  - `docs/RELEASE_BLOCKERS_v0.1.0.md`
+  - `docs/INSTALLER_STRATEGY.md`
+  - `docs/NATIVE_UI_MIGRATION.md`
 - CI hardening pass completed after GitHub Actions failures on run #14:
   - `build_exe.ps1` now captures pip vendor-install output under non-terminating PowerShell error handling and checks the real native exit code, preventing successful pip installs with dependency-warning stderr from aborting clean CI builds.
   - `.github/workflows/build.yml` now gives pytest a 60-second per-test timeout to reduce Windows runner flakiness.
@@ -133,7 +145,7 @@ Tests: `python -m unittest tests.test_kernel_plugins tests.test_kernel_orchestra
 
 1. **Supabase schema**: if not yet run, paste `docs/supabase_schema.sql` into the Supabase SQL Editor (project `dxalumiijcfmwzmosijf`) and execute it once to create all tables.
 2. **GitHub Secrets**: in the GitHub repo Settings → Secrets → Actions, confirm `ANTHROPIC_API_KEY`, `SUPABASE_URL`, `SUPABASE_KEY`, `SUPABASE_SERVICE_ROLE_KEY` are set so CI can build and test.
-3. **First GitHub Release**: push a tag (`git tag v0.1.0 && git push origin v0.1.0`) to trigger the release job — it builds the EXE and posts a GitHub Release with the installer attached.
+3. **Emergency v0.1.1 Release**: after tests and installer smoke checks pass, push a tag (`git tag v0.1.1 && git push origin v0.1.1`) to trigger the release job. It must publish `ReplyRightSetup-v0.1.1.exe` as the primary asset, not a bare EXE.
 4. **Local classifier training (Phase 7 long-term)**: import historical completed emails → redact PII → AI-label → human-review samples → store sanitized Supabase training set → train lightweight local classifiers. Start with urgency, owner, category, status, missing_information targets only.
 5. **Refresh check**: click Refresh Inbox once and visually confirm the feedback box, resized window behavior, and Outlook-like independent scrolling.
 6. **Login check**: use the local ReplyRight admin credentials from `dist\.env`; bad credentials should show a persistent error with an X, good credentials should enter the app.

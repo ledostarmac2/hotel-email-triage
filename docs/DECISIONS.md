@@ -1,5 +1,17 @@
 # Decisions
 
+## 2026-05-18: Installer-First Releases And Health-Gated Desktop Startup
+
+Decision: ReplyRight user releases must publish `ReplyRightSetup-v{version}.exe` as the primary release asset, with the raw PyInstaller `ReplyRight.exe` treated as an internal build input. The desktop launcher must start FastAPI, wait for `/healthz` to report healthy, and only then open the pywebview window. If startup fails, ReplyRight must show a controlled startup error instead of exposing a WebView or browser localhost connection error.
+
+Rationale: The v0.1.0 GitHub release allowed a user-visible failure where the desktop window opened to `127.0.0.1 refused to connect`. That breaks the standalone desktop illusion and is not acceptable for a user release. Installer-first packaging also gives users shortcuts, uninstall behavior, WebView2 handling, and a more professional Windows installation path.
+
+## 2026-05-18: PySide6 Is The Recommended Native UI Migration Target
+
+Decision: Keep pywebview only as a short-term bridge for v0.1.1 emergency repair. For v0.2.0, evaluate and prototype a PySide6 native desktop shell that reuses the existing Python intelligence, SQLite, Supabase, Outlook, classifier, and training modules through direct Python service calls. Do not use `QWebEngineView` as the main UI.
+
+Rationale: pywebview still depends on a browser/WebView layer, so it can be patched but not made into the long-term zero-browser desktop experience Brian wants. PySide6 keeps the Python codebase and local-first model intact while removing localhost/WebView UI failure modes. WPF/WinUI remains a future option but carries higher interop and porting cost.
+
 ## 2026-05-17: Dashboard Refresh Uses GPT-5.4 Nano By Default
 
 Decision: Refresh Inbox now attempts OpenAI classification when `OPENAI_API_KEY` is configured, with `OPENAI_MODEL` defaulting to `gpt-5.4-nano`. Local deterministic triage remains the fallback when OpenAI is unavailable or errors.

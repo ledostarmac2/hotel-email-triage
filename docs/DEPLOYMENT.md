@@ -4,10 +4,18 @@ Last updated: 2026-05-18
 
 ## Active Deployment Shape
 
-ReplyRight deploys as a Windows desktop executable:
+ReplyRight deploys as an installer-first Windows desktop application.
+
+Primary user-facing release asset:
 
 ```text
-dist\ReplyRight.exe
+ReplyRightSetup-v{version}.exe
+```
+
+Installed executable:
+
+```text
+ReplyRight.exe
 ```
 
 The EXE contains:
@@ -26,9 +34,14 @@ From the repository root:
 
 ```powershell
 .\build_exe.ps1
+.\installer\build_installer.ps1
 ```
 
-The script builds with PyInstaller and attempts to create Desktop and Start Menu shortcuts.
+`build_exe.ps1` builds the internal PyInstaller executable at `dist\ReplyRight.exe`.
+
+`installer\build_installer.ps1` builds the Inno Setup installer at `installer\output\ReplyRightSetup-v{version}.exe`.
+
+The setup installer is the artifact users should download. The raw EXE is an internal build input.
 
 Important dynamic dependency collection includes:
 
@@ -73,7 +86,7 @@ Start the EXE in the background or off-screen:
 ```powershell
 Start-Process "dist\ReplyRight.exe"
 Start-Sleep -Seconds 8
-Invoke-RestMethod http://127.0.0.1:8000/api/health
+Invoke-RestMethod http://127.0.0.1:8000/healthz
 ```
 
 Expected:
@@ -81,6 +94,8 @@ Expected:
 ```text
 ok = true
 ```
+
+The desktop launcher also checks `/healthz` before opening pywebview. If startup fails, it should show a controlled ReplyRight error dialog with the startup log path. It must not open an external browser fallback or show a localhost refused-to-connect page.
 
 Stop the process after testing if it is not needed:
 
@@ -100,32 +115,43 @@ Trigger a training run through the API only after authenticated admin login. Do 
 
 ## GitHub Release Path
 
-GitHub Actions currently includes Windows lint/test/build and release jobs. Tag-based releases are intended to publish installer/build artifacts.
+GitHub Actions includes Windows lint/test/build, installer build, Docker health, and tag-based release jobs.
+
+Release assets must be installer-first:
+
+```text
+ReplyRightSetup-v{version}.exe
+```
+
+Raw `dist\ReplyRight.exe` must not be attached as the default user download.
 
 Typical release flow:
 
 ```powershell
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.1.1
+git push origin v0.1.1
 ```
 
 Before tagging:
 
 - Run tests.
 - Build locally.
-- Smoke-test packaged `/api/health`.
+- Build the installer locally.
+- Smoke-test packaged `/healthz`.
+- Confirm installer output exists.
 - Confirm `docs/CURRENT_STATE.md` and `docs/HANDOFF.md` are current.
 - Confirm ignored runtime files are not staged.
 
 ## Installer
 
-The Inno Setup installer script lives under:
+The Inno Setup installer files live under:
 
 ```text
 installer/replyright_setup.iss
+installer/build_installer.ps1
 ```
 
-Use it after the EXE build is known good.
+Use them after the EXE build is known good. See `docs/INSTALLER_STRATEGY.md`.
 
 ## Auto-Updater
 
@@ -140,6 +166,7 @@ If the EXE fails to launch:
 3. Confirm bundled dependencies were collected.
 4. Delete partial `.vendor` or build temp folders if dependency installation short-circuited.
 5. Re-run `.\build_exe.ps1`.
+6. Rebuild the installer with `.\installer\build_installer.ps1`.
 
 If Outlook refresh fails:
 

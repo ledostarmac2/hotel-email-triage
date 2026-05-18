@@ -198,6 +198,32 @@ OpenAI and Google AI support refresh classification. Claude is reserved for expl
 
 ## 5. Roadmap By Phase
 
+### Emergency v0.1.1: Release Repair
+
+Goal: repair the v0.1.0 user release failure before any broader rollout.
+
+Required outcomes:
+
+- Ship installer-first: `ReplyRightSetup-v0.1.1.exe` must be the primary release asset.
+- Do not publish raw `ReplyRight.exe` as the main user download.
+- Health-gate desktop startup through `GET /healthz`.
+- Never show a WebView/Edge localhost refused-to-connect page.
+- Remove external browser fallback from the desktop launcher.
+- Show a controlled ReplyRight startup error dialog with a safe log path when startup fails.
+- Keep Outlook read-only, keep AI drafts human-reviewed, and do not wire `replyright_kernel/` into production.
+
+Recommended target for v0.2.0:
+
+- Begin PySide6 native UI migration for the main inbox workflow.
+- Do not use `QWebEngineView` as the primary UI.
+- Preserve the Python intelligence modules and extract service boundaries from FastAPI route handlers.
+
+Reference docs:
+
+- `docs/RELEASE_BLOCKERS_v0.1.0.md`
+- `docs/INSTALLER_STRATEGY.md`
+- `docs/NATIVE_UI_MIGRATION.md`
+
 ### Phase 0: Stabilize The Current Build
 
 Goal: keep the packaged EXE aligned with the current intelligence layer.

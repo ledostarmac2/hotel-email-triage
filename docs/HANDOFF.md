@@ -1,5 +1,54 @@
 # Handoff Log
 
+## 2026-05-18 - Emergency v0.1.1 startup gate and installer-first release plan
+
+Summary:
+
+- Investigated the v0.1.0 release blocker where the downloaded EXE could open a pywebview/Edge window to `127.0.0.1 refused to connect`.
+- Added a public `/healthz` endpoint and changed desktop startup so the webview opens only after FastAPI reports healthy. Startup failures now show a controlled ReplyRight error with a safe log path instead of exposing a localhost browser error.
+- Removed external-browser fallback behavior from `run_desktop.py`.
+- Updated the updater and GitHub Actions release flow to treat the Inno Setup installer as the user-facing artifact and avoid raw `ReplyRight.exe` as the primary release/download asset.
+- Documented the v0.1.0 release blocker, installer strategy, and native UI migration options. Recommended PySide6 native UI as the v0.2.0 target while keeping pywebview only as a short-term bridge.
+
+Files changed:
+
+- `run_desktop.py`
+- `outlook_dashboard/main.py`
+- `outlook_dashboard/__init__.py`
+- `outlook_dashboard/updater.py`
+- `outlook_dashboard/supabase_client.py`
+- `outlook_dashboard/training_pipeline.py`
+- `outlook_dashboard/build_info.json`
+- `installer/replyright_setup.iss`
+- `installer/build_installer.ps1`
+- `.github/workflows/build.yml`
+- `tests/test_desktop_startup.py`
+- `tests/test_updater.py`
+- `docs/RELEASE_BLOCKERS_v0.1.0.md`
+- `docs/INSTALLER_STRATEGY.md`
+- `docs/NATIVE_UI_MIGRATION.md`
+- `docs/ROADMAP.md`
+- `docs/DEPLOYMENT.md`
+- `docs/DECISIONS.md`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+- `AGENTS.md`
+
+Verification:
+
+- `python -m py_compile run_desktop.py outlook_dashboard\main.py outlook_dashboard\updater.py outlook_dashboard\training_pipeline.py outlook_dashboard\supabase_client.py` - passed.
+- `.github/workflows/build.yml` parsed successfully with PyYAML.
+- `python -m pytest tests/test_desktop_startup.py tests/test_updater.py tests/test_api_workflow_pytest.py tests/test_training_pipeline.py tests/test_redaction.py tests/test_import_smoke.py -q --timeout=30` - passed.
+- `python -m pytest tests/ -x --timeout=30` - 431 passed, 1 warning, 35 subtests passed.
+
+Remaining work:
+
+- Run a fresh GitHub Actions build after push and verify `lint`, `build-exe`, and installer artifact upload pass.
+- Build and install `ReplyRightSetup-v0.1.1.exe` on Windows, launch from the Start Menu shortcut, and confirm no localhost refusal page is visible.
+- If pywebview remains for v0.1.1, perform manual WebView2 validation on a clean Windows machine. For v0.2.0, begin the PySide6 native UI prototype documented in `docs/NATIVE_UI_MIGRATION.md`.
+
+---
+
 ## 2026-05-18 - CI build and pytest timeout hardening
 
 Summary:

@@ -56,8 +56,15 @@ if (-not $iscc) {
 
 Write-Host "Using ISCC: $iscc"
 & $iscc $issPath
+if ($LASTEXITCODE -ne 0) {
+    throw "Inno Setup failed with exit code $LASTEXITCODE"
+}
 
-$output = Join-Path $PSScriptRoot "output\ReplyRightSetup.exe"
-if (Test-Path -LiteralPath $output) {
-    Write-Host "Built installer: $output"
+$output = Get-ChildItem (Join-Path $PSScriptRoot "output") -Filter "ReplyRightSetup-v*.exe" -ErrorAction SilentlyContinue |
+    Sort-Object LastWriteTime -Descending |
+    Select-Object -First 1
+if ($output) {
+    Write-Host "Built installer: $($output.FullName)"
+} else {
+    throw "ReplyRight installer was not created."
 }

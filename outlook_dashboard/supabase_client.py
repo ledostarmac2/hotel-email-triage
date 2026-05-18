@@ -4,6 +4,7 @@ import hashlib
 import os
 
 from .config import get_settings
+from . import __version__
 from .database import (
     cache_classification_rules,
     cache_known_senders,
@@ -19,7 +20,7 @@ from .database import (
 from .runtime_log import get_logger
 
 _log = get_logger("supabase")
-_APP_VERSION = "0.1.0"
+_APP_VERSION = __version__
 _rules_cache: list[dict] = []
 _known_senders_cache: list[dict] = []
 _prompt_versions_cache: list[dict] = []

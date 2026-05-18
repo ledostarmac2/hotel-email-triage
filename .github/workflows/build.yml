@@ -54,7 +54,7 @@ jobs:
         shell: pwsh
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
+          python -m pip install -r requirements.txt -r requirements-dev.txt
       - name: Build EXE
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -File .\build_exe.ps1
@@ -64,8 +64,8 @@ jobs:
       - name: Upload Installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ReplyRightSetup-${{ github.sha }}.exe
-          path: installer/output/ReplyRightSetup.exe
+          name: ReplyRightSetup-${{ github.sha }}
+          path: installer/output/ReplyRightSetup-v*.exe
           if-no-files-found: error
 
   docker-build:
@@ -120,7 +120,7 @@ jobs:
         shell: pwsh
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
+          python -m pip install -r requirements.txt -r requirements-dev.txt
       - name: Build EXE
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -File .\build_exe.ps1
@@ -129,7 +129,17 @@ jobs:
         run: powershell -ExecutionPolicy Bypass -File .\installer\build_installer.ps1
       - name: Rename Installer
         shell: pwsh
-        run: Rename-Item .\installer\output\ReplyRightSetup.exe "ReplyRightSetup-${{ github.ref_name }}.exe"
+        run: |
+          $built = Get-ChildItem ".\installer\output\ReplyRightSetup-v*.exe" | Select-Object -First 1
+          if (-not $built) { throw "Installer was not created." }
+          Copy-Item $built.FullName ".\installer\output\ReplyRightSetup-${{ github.ref_name }}.exe" -Force
+      - name: Release smoke gate
+        shell: pwsh
+        run: |
+          python -m pytest tests/test_desktop_startup.py -q
+          $expected = ".\installer\output\ReplyRightSetup-${{ github.ref_name }}.exe"
+          if (-not (Test-Path $expected)) { throw "Release installer missing: $expected" }
+          if ((Get-Item $expected).Length -lt 1MB) { throw "Release installer is unexpectedly small." }
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:

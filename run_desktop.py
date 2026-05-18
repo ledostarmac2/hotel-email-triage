@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 import ctypes
-import sys
-import traceback
 import logging
 import os
+import socket
+import sys
+import traceback
 import threading
 import time
 import urllib.error
 import urllib.request
-import webbrowser
 
 
 ROOT_DIR = (
@@ -24,6 +24,8 @@ WINDOW_TITLE = "ReplyRight"
 WINDOW_WIDTH = 1440
 WINDOW_HEIGHT = 900
 ICON_PATH = os.path.join(ROOT_DIR, "outlook_dashboard", "static", "replyright.ico")
+STARTUP_TIMEOUT_SECONDS = 30.0
+HEALTH_PATH = "/healthz"
 
 
 def _log(message: str) -> None:
@@ -65,6 +67,8 @@ def _is_port_available(host: str, port: int) -> bool:
 
 
 def _choose_app_port(host: str, preferred_port: int) -> int:
+    if preferred_port <= 0:
+        preferred_port = 8000
     if _is_port_available(host, preferred_port):
         return preferred_port
     bind_host = host or "127.0.0.1"
@@ -111,7 +115,7 @@ def _wait_for_server(url: str, timeout_seconds: float = STARTUP_TIMEOUT_SECONDS)
 def _open_window(url: str) -> None:
     """Open the ReplyRight UI in a standalone embedded WebView2 window.
 
-    Uses pywebview with the edgechromium (WebView2) backend — this is an
+    Uses pywebview with the edgechromium (WebView2) backend - this is an
     *embedded* web control, not the Edge browser.  The window appears in the
     taskbar as its own app with no address bar, tabs, or browser chrome.
     """
@@ -123,32 +127,27 @@ def _open_window(url: str) -> None:
         IS_WINDOWS = sys.platform.startswith("win")
 
     if not IS_WINDOWS:
-        _open_browser_fallback(url, "The embedded WebView2 desktop window is Windows-only.")
-        return
+        raise RuntimeError("The embedded ReplyRight desktop window is Windows-only.")
     if not HAS_WEBVIEW:
-        _open_browser_fallback(url, "pywebview is not installed.")
-        return
+        raise RuntimeError("pywebview is not installed in this build.")
     if not HAS_WEBVIEW2_RUNTIME:
-        _open_browser_fallback(url, "Microsoft Edge WebView2 Runtime was not detected.")
-        return
+        raise RuntimeError("Microsoft Edge WebView2 Runtime was not detected.")
 
     try:
         import webview  # noqa: PLC0415
-    except ImportError:
-        _open_browser_fallback(url, "pywebview is not installed.")
-        return
+    except ImportError as exc:
+        raise RuntimeError("pywebview is not installed in this build.") from exc
 
     _log("pywebview imported OK")
     _log(f"pywebview version: {getattr(webview, '__version__', 'unknown')}")
 
-    # Verify pythonnet (clr) is importable — it's required by pywebview's
+    # Verify pythonnet (clr) is importable - it's required by pywebview's
     # edgechromium/winforms backend and causes a native crash if missing.
     try:
         import clr as _clr  # noqa: F401
         _log("pythonnet (clr) imported OK")
     except ImportError as exc:
-        _open_browser_fallback(url, f"pythonnet (clr) is not available: {exc}")
-        return
+        raise RuntimeError(f"pythonnet (clr) is not available: {exc}") from exc
 
     window = webview.create_window(
         title=WINDOW_TITLE,
@@ -160,13 +159,12 @@ def _open_window(url: str) -> None:
     )
     _log(f"Opening standalone WebView2 window: {url}")
     try:
-        # gui='edgechromium' → Microsoft Edge WebView2 embedded control.
+        # gui='edgechromium' -> Microsoft Edge WebView2 embedded control.
         # This is NOT the Edge browser. It is a self-contained runtime that is
         # pre-installed on Windows 10 21H1+ and all Windows 11 machines.
         webview.start(gui="edgechromium", debug=False)
     except Exception as exc:
-        _open_browser_fallback(url, f"Could not open the WebView2 window: {exc}")
-        return
+        raise RuntimeError(f"Could not open the WebView2 window: {exc}") from exc
 
     _log("WebView2 window closed by user")
 
@@ -191,12 +189,7 @@ def main() -> None:
     _log("Application modules imported")
     settings = get_settings()
 
-    # Dynamically allocate a free port to avoid conflicts
-    import socket
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind((settings.app_host, 0))
-        app_port = s.getsockname()[1]
-
+    app_port = _choose_app_port(settings.app_host, settings.app_port)
     url = f"http://{settings.app_host}:{app_port}"
     _log(f"Settings loaded: host={settings.app_host} port={app_port} db={settings.database_path}")
     logging.basicConfig(level=logging.WARNING)
@@ -230,7 +223,7 @@ def main() -> None:
 
     try:
         server_thread.start()
-        _wait_for_server(url)
+        _wait_for_server_health(url)
         if server_error:
             raise RuntimeError(server_error[-1])
 
@@ -241,7 +234,7 @@ def main() -> None:
     except Exception as exc:
         _log("Startup failed")
         _log(traceback.format_exc())
-        _show_error(str(exc))
+        _show_error(_startup_error_message(str(exc)))
         raise
     finally:
         _log("Shutting down server")

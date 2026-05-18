@@ -27,6 +27,7 @@ For broad architecture, adaptive learning, Supabase, staged AI pipeline, shared 
 
 - The active runnable app is `outlook_dashboard/` plus `run_desktop.py`.
 - The Windows executable is built by `build_exe.ps1` and outputs `dist\ReplyRight.exe`.
+- User-facing releases are installer-first. The primary GitHub Release asset must be `ReplyRightSetup-v{version}.exe`; raw `dist\ReplyRight.exe` is an internal build input, not the default download.
 - The `app/` directory is an inactive Next.js scaffold. Do not migrate logic there unless Brian explicitly asks.
 - `replyright_kernel/` is experimental and additive. It is not the active desktop app path.
 - The active UI is the FastAPI-served static dashboard under `outlook_dashboard/static/`.
@@ -67,6 +68,7 @@ After meaningful work:
   - `signal_extractor.py`
   - `sender_intelligence.py`
 - Preserve Windows and PyInstaller compatibility.
+- Preserve installer-first release behavior and the health-gated desktop startup. Users must not see a WebView/Edge localhost refused-to-connect page.
 - Keep the VBA macro portable. It must not hardcode one workstation path.
 
 ## AI Usage Rules

@@ -25,6 +25,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from . import __version__
 from .ai import latest_message_text
 from .config import get_settings
 from .database import (
@@ -183,7 +184,7 @@ def _build_example(row: dict, labels: dict, labeling_engine: str) -> dict:
         "label_escalation_required": bool(labels.get("escalation_required")),
         "labeling_engine": labeling_engine,
         "human_reviewed": False,
-        "app_version": "0.1.0",
+        "app_version": __version__,
     }
 
 

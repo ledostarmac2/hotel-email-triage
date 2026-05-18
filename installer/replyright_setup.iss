@@ -1,5 +1,5 @@
 #define MyAppName "ReplyRight"
-#define MyAppVersion "0.1.0"
+#define MyAppVersion "0.1.1"
 #define MyAppPublisher "Waldorf Astoria New York"
 #define MyAppExeName "ReplyRight.exe"
 #define WebView2Url "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
@@ -14,7 +14,7 @@ DefaultGroupName={#MyAppName}
 DisableDirPage=no
 DisableProgramGroupPage=no
 OutputDir=output
-OutputBaseFilename=ReplyRightSetup
+OutputBaseFilename=ReplyRightSetup-v{#MyAppVersion}
 SetupIconFile=..\outlook_dashboard\static\replyright.ico
 Compression=lzma2
 SolidCompression=yes

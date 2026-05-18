@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import subprocess
 import sys
 import threading
 import urllib.request
@@ -47,11 +48,7 @@ class Version:
 
 
 def get_build_info() -> dict[str, str]:
-    """Return build metadata embedded at PyInstaller build time.
-
-    Returns commit, build_date, and version from the bundled build_info.json.
-    Falls back to __version__ with zeros when running from source without a built file.
-    """
+    """Return build metadata embedded at PyInstaller build time."""
     candidates = [
         Path(__file__).parent / "build_info.json",
         Path(getattr(sys, "_MEIPASS", "")) / "outlook_dashboard" / "build_info.json",
@@ -66,11 +63,7 @@ def get_build_info() -> dict[str, str]:
 
 
 def start_update_check(releases_url: str = DEFAULT_RELEASES_URL) -> None:
-    """Start a non-blocking latest-release check.
-
-    The thread is daemonized and network calls time out after five seconds so
-    startup is never delayed by GitHub availability.
-    """
+    """Start a non-blocking latest-release check."""
     thread = threading.Thread(target=_check_latest_release, args=(releases_url,), daemon=True)
     thread.start()
 
@@ -85,12 +78,18 @@ def _set_state(**values: Any) -> None:
         _state.update(values)
 
 
-def _find_exe_asset_url(payload: dict) -> str:
+def _find_installer_asset_url(payload: dict) -> str:
+    fallback_exe = ""
     for asset in payload.get("assets", []):
         name = str(asset.get("name", "")).lower()
-        if name.endswith(".exe"):
-            return str(asset.get("browser_download_url", ""))
-    return ""
+        url = str(asset.get("browser_download_url", ""))
+        if name.startswith("replyrightsetup-") and name.endswith(".exe"):
+            return url
+        if name == "replyrightsetup.exe":
+            fallback_exe = url
+        elif name.endswith(".exe") and "setup" in name and not fallback_exe:
+            fallback_exe = url
+    return fallback_exe
 
 
 def _check_latest_release(releases_url: str) -> None:
@@ -100,7 +99,7 @@ def _check_latest_release(releases_url: str) -> None:
             payload = json.loads(response.read().decode("utf-8"))
         tag = str(payload.get("tag_name") or payload.get("name") or "").strip()
         html_url = str(payload.get("html_url") or payload.get("url") or "").strip()
-        asset_url = _find_exe_asset_url(payload)
+        asset_url = _find_installer_asset_url(payload)
         latest = Version.parse(tag)
         current = Version.parse(__version__)
         available = bool(tag) and latest > current
@@ -122,10 +121,10 @@ def _check_latest_release(releases_url: str) -> None:
 
 
 def download_and_apply_update(asset_url: str) -> None:
-    """Download the new EXE and swap it in place via a helper script then exit.
+    """Download the installer and launch it via a helper script, then exit.
 
-    Runs in a background thread. The helper script waits for this process to
-    exit, moves the downloaded file over ReplyRight.exe, then re-launches it.
+    Releases are installer-first. The updater deliberately avoids replacing the
+    running EXE directly because the user-facing artifact is the setup program.
     """
     if not asset_url:
         _set_state(download_error="No download URL available.")
@@ -134,31 +133,33 @@ def download_and_apply_update(asset_url: str) -> None:
     _set_state(downloading=True, download_error="")
     try:
         exe_path = Path(sys.executable)
-        new_exe = exe_path.with_suffix(".new.exe")
+        installer_path = exe_path.with_name("_ReplyRightSetup-update.exe")
         helper = exe_path.with_name("_rr_update_helper.ps1")
 
-        _log.info("Downloading update from %s -> %s", asset_url, new_exe)
+        _log.info("Downloading installer update from %s -> %s", asset_url, installer_path)
         req = urllib.request.Request(asset_url, headers={"User-Agent": "ReplyRight-updater"})
         with urllib.request.urlopen(req, timeout=120) as resp:
-            new_exe.write_bytes(resp.read())
+            installer_path.write_bytes(resp.read())
 
         helper_script = f"""
 Start-Sleep -Seconds 3
-$target = '{exe_path}'
-$source = '{new_exe}'
+$installer = '{installer_path}'
 try {{
-    Copy-Item -Path $source -Destination $target -Force
-    Remove-Item -Path $source -Force -ErrorAction SilentlyContinue
-    Start-Process -FilePath $target
+    Start-Process -FilePath $installer -ArgumentList '/SILENT','/CLOSEAPPLICATIONS','/RESTARTAPPLICATIONS' -Wait
+    Remove-Item -Path $installer -Force -ErrorAction SilentlyContinue
 }} catch {{
     [System.Windows.Forms.MessageBox]::Show("Update failed: $_", "ReplyRight Updater")
 }}
 Remove-Item -Path $MyInvocation.MyCommand.Path -Force -ErrorAction SilentlyContinue
 """
         helper.write_text(helper_script, encoding="utf-8")
-        _log.info("Launching update helper and exiting for replacement.")
-        os.startfile(str(helper))  # type: ignore[attr-defined]
-        os.kill(os.getpid(), 15)  # SIGTERM — triggers lifespan shutdown
+        _log.info("Launching installer update helper and exiting.")
+        subprocess.Popen(
+            ["powershell", "-ExecutionPolicy", "Bypass", "-File", str(helper)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        os._exit(0)
     except Exception as exc:
         _set_state(downloading=False, download_error=str(exc)[:300])
         _log.error("Update download failed: %s", exc)
