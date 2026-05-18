@@ -1,5 +1,12 @@
 # AI Change Log
 
+## 2026-05-18 - Multilingual hotel workflow bug tests
+
+- Added multilingual reservation workflow tests for Spanish, French, Portuguese, Italian, and German hotel emails.
+- Expanded deterministic hotel entity extraction for localized confirmation/reservation labels, arrival/departure terms, guest counts, night counts, date phrases, and presidential-suite mentions.
+- Expanded training redaction so localized confirmation-number labels are sanitized before training examples are built.
+- Expanded arrival-window urgency keywords for common localized billing, complaint, cancellation, thank-you, accessibility, allergy, and actionable request language.
+
 ## 2026-05-18 - Phase 7 hotel domain intelligence layer
 
 - Added pure hotel entity extraction for confirmation numbers, stay dates, nights, room category, rate code, guest counts, arrival window, and mentioned billing amounts.

@@ -1,5 +1,38 @@
 # Handoff Log
 
+## 2026-05-18 - Multilingual hotel workflow bug-test pass
+
+Summary:
+
+- Added `tests/test_multilingual_hotel_workflows.py` with Spanish, French, Portuguese, Italian, and German hotel reservation scenarios.
+- Expanded `outlook_dashboard/hotel_entities.py` so localized confirmation/reservation labels, arrival/departure words, night counts, adult/child/guest counts, date phrases, and presidential-suite terms are extracted deterministically.
+- Expanded `outlook_dashboard/redaction.py` so localized confirmation-number labels are redacted before training examples are uploaded.
+- Expanded `outlook_dashboard/urgency_engine.py` with common localized billing, complaint, cancellation, thank-you, accessibility, allergy, and actionable-request terms.
+- Kept tests source-only; no EXE or UI launch was needed.
+
+Files changed:
+
+- `outlook_dashboard/hotel_entities.py`
+- `outlook_dashboard/redaction.py`
+- `outlook_dashboard/urgency_engine.py`
+- `tests/test_multilingual_hotel_workflows.py`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+- `docs/CHANGELOG_AI.md`
+
+Verification:
+
+- `python -m pytest tests/test_multilingual_hotel_workflows.py -v` - 12 passed.
+- `python -m pytest tests/test_hotel_entities.py tests/test_urgency_engine.py tests/test_redaction.py tests/test_training_pipeline.py tests/test_multilingual_hotel_workflows.py -v` - 144 passed.
+- `python -m pytest tests/ -x` - 325 passed, 1 warning, 35 subtests passed.
+
+Remaining work:
+
+- Existing warning remains: `datetime.utcnow()` deprecation in `outlook_dashboard/auth.py`.
+- Parallel labeling worktree changes were present and intentionally left untouched.
+
+---
+
 ## 2026-05-18 - Rebuilt packaged EXE and verified training pipeline
 
 Summary:

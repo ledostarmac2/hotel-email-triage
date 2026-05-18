@@ -12,13 +12,14 @@ from datetime import datetime, timedelta
 from typing import Any
 
 import dateparser
+from dateparser.search import search_dates
 
 ROOM_CATEGORIES: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("Presidential Suite", ("presidential suite", "presidential")),
+    ("Presidential Suite", ("presidential suite", "presidential", "suite presidencial", "suite presidentielle", "suite présidentielle", "suite presidenziale", "präsidentensuite")),
     ("Towers Residence", ("towers residence", "tower residence")),
-    ("Royal Suite", ("royal suite", "royal")),
+    ("Royal Suite", ("royal suite", "royal", "suite royale", "suite real", "suite reale")),
     ("Astoria Suite", ("astoria suite", "astoria")),
-    ("Tower Suite", ("tower suite",)),
+    ("Tower Suite", ("tower suite", "suite torre", "suite tour", "turm suite")),
     ("Junior Suite", ("junior suite", "jr suite")),
     ("Premier King", ("premier king", "premier room")),
     ("Deluxe Queen", ("deluxe queen", "deluxe double queen")),
@@ -28,7 +29,9 @@ ROOM_CATEGORIES: tuple[tuple[str, tuple[str, ...]], ...] = (
 _CONFIRMATION_RE = re.compile(
     r"\b(?:confirmation(?:\s*(?:number|no\.?|#))?|confirm(?:ation)?\s*(?:no\.?|number|#)?|"
     r"reservation(?:\s*(?:number|no\.?|#))?|res(?:ervation)?\s*(?:no\.?|number|#)?|"
-    r"booking\s*(?:#|number|ref(?:erence)?)?)"
+    r"booking\s*(?:#|number|ref(?:erence)?)?|"
+    r"confirmaci[oó]n|confirma[cç][aã]o|conferma|best[aä]tigung|"
+    r"r[eé]servation|reserva|prenotazione|reservierung|buchung)"
     r"[\s:.;#-]+([A-Z0-9]{6,12})\b",
     re.IGNORECASE,
 )
@@ -38,10 +41,19 @@ _RATE_CODE_RE = re.compile(
     r"corporate\s+code|group\s+code|rate|promo)\s*[:#-]?\s+([A-Z0-9]{3,12})\b",
     re.IGNORECASE,
 )
-_ADULTS_RE = re.compile(r"\b(\d{1,2})\s+adult(?:s)?\b", re.IGNORECASE)
-_CHILDREN_RE = re.compile(r"\b(\d{1,2})\s+(?:child(?:ren)?|kid(?:s)?)\b", re.IGNORECASE)
-_GUESTS_RE = re.compile(r"\b(\d{1,2})\s+(?:guest(?:s)?|people|pax|persons?)\b", re.IGNORECASE)
-_NIGHTS_RE = re.compile(r"\b(\d{1,3})\s+night(?:s)?\b", re.IGNORECASE)
+_ADULTS_RE = re.compile(r"\b(\d{1,2})\s+(?:adult(?:s)?|adultos|adultes|adulti|erwachsene)\b", re.IGNORECASE)
+_CHILDREN_RE = re.compile(
+    r"\b(\d{1,2})\s+(?:child(?:ren)?|kid(?:s)?|ni[nñ][oa]s?|enfants?|crian[cç]as?|bambini|kinder)\b",
+    re.IGNORECASE,
+)
+_GUESTS_RE = re.compile(
+    r"\b(\d{1,2})\s+(?:guest(?:s)?|people|pax|persons?|personnes?|ospiti|h[uó]spedes?|g[aä]ste)\b",
+    re.IGNORECASE,
+)
+_NIGHTS_RE = re.compile(
+    r"\b(\d{1,3})\s+(?:night(?:s)?|noches|nuits?|noites?|notti|n[aä]chte)\b",
+    re.IGNORECASE,
+)
 
 _DATE_TOKEN_RE = re.compile(
     r"\b("
@@ -58,8 +70,51 @@ _DATE_TOKEN_RE = re.compile(
     r")\b",
     re.IGNORECASE,
 )
-_ARRIVAL_RE = re.compile(r"\b(?:arriv(?:e|es|ing|al)?|check[\s-]?in|stay begins|first night)\b", re.I)
-_DEPARTURE_RE = re.compile(r"\b(?:depart(?:s|ing|ure)?|check(?:ing)?[\s-]?out|stay ends|leav(?:e|ing))\b", re.I)
+_ARRIVAL_RE = re.compile(
+    r"\b(?:arriv(?:e|es|ing|al)?|check[\s-]?in|stay begins|first night|"
+    r"llegada|arriv[ée]e|chegada|arrivo|ankunft)\b",
+    re.I,
+)
+_DEPARTURE_RE = re.compile(
+    r"\b(?:depart(?:s|ing|ure)?|check(?:ing)?[\s-]?out|stay ends|leav(?:e|ing)|"
+    r"salida|d[ée]part|sa[ií]da|partenza|abreise)\b",
+    re.I,
+)
+_CONFIRMATION_TRIGGER_VALUES = {
+    "BOOKING",
+    "BUCHUNG",
+    "CONFIRMATION",
+    "CONFIRMACION",
+    "CONFIRMACIÓN",
+    "CONFIRMACAO",
+    "CONFIRMAÇÃO",
+    "CONFERMA",
+    "RESERVA",
+    "RESERVATION",
+    "RESERVIERUNG",
+    "RÉSERVATION",
+}
+
+
+def _search_dateparser_dates(text: str, base: datetime) -> list[datetime]:
+    settings: dict[str, Any] = {
+        "PREFER_DATES_FROM": "future",
+        "RELATIVE_BASE": base,
+        "RETURN_AS_TIMEZONE_AWARE": False,
+    }
+    try:
+        matches = search_dates(text, settings=settings)
+    except Exception:
+        return []
+    if not matches:
+        return []
+    dates: list[datetime] = []
+    for _raw, parsed in matches:
+        if parsed:
+            normalized = parsed.replace(tzinfo=None)
+            if normalized not in dates:
+                dates.append(normalized)
+    return dates
 
 
 def _base_datetime(received_at: datetime | None) -> datetime:
@@ -128,6 +183,12 @@ def _collect_dates_near(pattern: re.Pattern[str], text: str, base: datetime) -> 
     dates: list[datetime] = []
     for match in pattern.finditer(text):
         window = text[match.end() : match.end() + 120]
+        search_window = re.split(r"(?<=\d{4})\.\s+|[;!\n]", window, maxsplit=1)[0]
+        if not re.search(r"\b\d{1,2}/\d{1,2}(?:/\d{2,4})?\b", search_window):
+            searched = _search_dateparser_dates(search_window, base)
+            if searched:
+                dates.append(searched[0])
+                continue
         for date_match in _DATE_TOKEN_RE.finditer(window):
             parsed = _parse_date_token(date_match.group(1), base)
             if parsed:
@@ -145,10 +206,13 @@ def _extract_dates(text: str, received_at: datetime | None = None) -> tuple[date
     departures = _collect_dates_near(_DEPARTURE_RE, text, base)
 
     all_dates: list[datetime] = []
-    for date_match in _DATE_TOKEN_RE.finditer(text):
-        parsed = _parse_date_token(date_match.group(1), base)
-        if parsed and parsed not in all_dates:
-            all_dates.append(parsed)
+    if not re.search(r"\b\d{1,2}/\d{1,2}(?:/\d{2,4})?\b", text):
+        all_dates = _search_dateparser_dates(text, base)
+    if not all_dates:
+        for date_match in _DATE_TOKEN_RE.finditer(text):
+            parsed = _parse_date_token(date_match.group(1), base)
+            if parsed and parsed not in all_dates:
+                all_dates.append(parsed)
 
     arrival = min(arrivals) if arrivals else (min(all_dates) if all_dates else None)
     departure = min(departures) if departures else None
@@ -166,10 +230,15 @@ def _extract_dates(text: str, received_at: datetime | None = None) -> tuple[date
 
 def _extract_confirmation_numbers(text: str) -> list[str]:
     seen: list[str] = []
-    for match in _CONFIRMATION_RE.finditer(text):
-        value = match.group(1).upper()
-        if value not in seen and (not value.isdigit() or 6 <= len(value) <= 12):
-            seen.append(value)
+    for line in text.splitlines() or [text]:
+        for match in _CONFIRMATION_RE.finditer(line):
+            value = match.group(1).upper()
+            if (
+                value not in _CONFIRMATION_TRIGGER_VALUES
+                and value not in seen
+                and (not value.isdigit() or 6 <= len(value) <= 12)
+            ):
+                seen.append(value)
     return seen
 
 

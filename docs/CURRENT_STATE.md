@@ -1,6 +1,6 @@
 # Current State
 
-Last updated: 2026-05-18 (v0.1.0 - Phase 7 hotel intelligence layer added, 303 tests)
+Last updated: 2026-05-18 (v0.1.0 - multilingual hotel workflow bug-test pass, 325 tests)
 
 ## Status
 
@@ -11,6 +11,7 @@ Last updated: 2026-05-18 (v0.1.0 - Phase 7 hotel intelligence layer added, 303 t
   - `outlook_dashboard/travel_programs.py` exposes `detect_program(sender_email, body, signature=None)` for luxury travel program and advisor/agency detection.
   - `outlook_dashboard/urgency_engine.py` exposes `compute_urgency(...)` for arrival-window-aware urgency scoring from extracted entities and detected program metadata.
   - `new_dependencies.txt` records `dateparser`; `requirements.txt` was not edited because another agent owns it in the parallel branch.
+- Multilingual hotel workflow coverage now exercises Spanish, French, Portuguese, Italian, and German reservation patterns. Entity extraction recognizes localized confirmation/reservation, arrival/departure, night-count, guest-count, and presidential-suite terms; redaction recognizes localized confirmation-number labels; urgency scoring recognizes common localized billing, complaint, cancellation, thank-you, accessibility, allergy, and actionable-request terms.
 - `dist\ReplyRight.exe` was rebuilt from latest source on 2026-05-18 with PyInstaller collection flags for scikit-learn/dateparser/joblib/threadpoolctl. Packaged verification passed: `/api/health` returned `ok=true`, `training_pipeline_log` exists in packaged SQLite, `POST /api/admin/training/run?batch_size=50` returned successfully with no failures, and Supabase `training_examples` returned 5 rows through a service-role REST check.
 - The UI has ReplyRight branding, provided logo/icon assets, an urgency-ranked conversation queue, summary/steps panels, local status changes, and an on-demand AI response modal.
 - Outlook refresh is designed around classic Outlook for Windows and now uses read-only `pywin32` COM import as the primary path. The legacy `ExportNYCWAReservationsInboxOnly` VBA macro remains a fallback when direct import dependencies are unavailable.
@@ -30,7 +31,7 @@ Last updated: 2026-05-18 (v0.1.0 - Phase 7 hotel intelligence layer added, 303 t
   - Similar future messages can reuse stored local feedback patterns.
 - A CCA/completed-form pattern now routes to Reservations with concise steps to apply the form and confirm completion.
 - Urgency is deliberately more conservative: level 5 is reserved for same/next-day operational blockers or serious risk, while completed/thank-you/form-submission updates are lowered unless a high-risk signal is present.
-- `python -m pytest tests/ -x` passes with **303 tests** (35 subtests). The local environment does not currently have the `pytest-timeout` plugin, so commands with `--timeout=30` are rejected before test collection.
+- `python -m pytest tests/ -x` passes with **325 tests** (35 subtests). One existing warning remains for `datetime.utcnow()` in auth reset-token code.
 - `dist\ReplyRight.exe` was rebuilt after adaptive triage changes. Packaged health check succeeded, and current packaged data rendered 28 conversation groups with urgency distribution `2:14, 3:4, 4:7, 5:3`.
 - `docs/FUTURE_ROADMAP_SUPABASE_ADAPTIVE_LEARNING.md` captures the broader Supabase/shared-learning roadmap.
 - Confidence scoring (10–95%) is computed per email and shown as a color-coded pill in the UI.

@@ -18,7 +18,10 @@ PAYMENT_LINK_RE = re.compile(
     re.IGNORECASE,
 )
 CONFIRMATION_RE = re.compile(
-    r"\b((?:confirmation|conf\.?|reservation|res\.?|booking|folio|case)\s*(?:number|no\.?|#|id)?\s*[:#-]?\s*)[A-Z0-9-]{6,18}\b",
+    r"\b((?:confirmation|conf\.?|reservation|res\.?|booking|folio|case|"
+    r"confirmaci[oó]n|confirma[cç][aã]o|conferma|best[aä]tigung|"
+    r"r[eé]servation|reserva|prenotazione|reservierung|buchung)"
+    r"\s*(?:number|no\.?|#|id)?\s*[:#-]?\s*)[A-Z0-9-]{6,18}\b",
     re.IGNORECASE,
 )
 
