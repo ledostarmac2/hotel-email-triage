@@ -96,6 +96,14 @@ ALTER TABLE classification_rules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE known_senders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE prompt_versions ENABLE ROW LEVEL SECURITY;
 
+-- Drop policies before (re)creating so this script is safe to run multiple times.
+DROP POLICY IF EXISTS "allow_insert_feedback"       ON feedback_events;
+DROP POLICY IF EXISTS "allow_read_rules"            ON classification_rules;
+DROP POLICY IF EXISTS "allow_read_senders"          ON known_senders;
+DROP POLICY IF EXISTS "allow_read_active_prompts"   ON prompt_versions;
+DROP POLICY IF EXISTS "allow_upsert_rules"          ON classification_rules;
+DROP POLICY IF EXISTS "allow_update_rules"          ON classification_rules;
+
 -- Anyone can insert feedback (desktop app uses publishable key)
 CREATE POLICY "allow_insert_feedback"
     ON feedback_events FOR INSERT TO anon WITH CHECK (true);
