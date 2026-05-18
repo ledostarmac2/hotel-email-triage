@@ -23,15 +23,16 @@ jobs:
       - name: Compile active Python source
         shell: pwsh
         run: |
-          $files = Get-ChildItem -Recurse -File -Filter *.py |
+          $files = git ls-files '*.py' |
             Where-Object {
-              $_.FullName -notmatch '\\reference\\|\\app\\|\\.venv\\|\\.build-venv|\\build\\|\\dist\\|\\dist2\\|\\data\\|\\__pycache__\\'
-            } |
-            ForEach-Object { $_.FullName }
-          python -m py_compile $files
+              $_ -notmatch '^(reference|app|build|dist|dist2|data)/'
+            }
+          foreach ($file in $files) {
+            python -m py_compile $file
+          }
       - name: Pytest
         shell: pwsh
-        run: python -m pytest tests/ -x --timeout=30
+        run: python -m pytest tests/ -x --timeout=60
 
   build-exe:
     runs-on: windows-latest

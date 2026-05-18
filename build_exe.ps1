@@ -51,12 +51,58 @@ $runtimePackages = @(
     "pywin32"
 )
 
+function Invoke-VendorPipInstall {
+    param(
+        [Parameter(Mandatory = $true)][string[]]$Packages,
+        [switch]$Upgrade
+    )
+
+    $pipArgs = @("-m", "pip", "install", "--no-cache-dir")
+    if ($Upgrade) {
+        $pipArgs += "--upgrade"
+    }
+    $pipArgs += @("--target", $vendorPath)
+    $pipArgs += $Packages
+
+    # pip writes dependency-resolution warnings to stderr even when the install
+    # succeeds. With $ErrorActionPreference="Stop", PowerShell can treat those
+    # warning lines as NativeCommandError and abort clean CI builds before
+    # PyInstaller starts. Capture output under Continue, then enforce the real
+    # native exit code ourselves.
+    $previousErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $output = & $PYTHON @pipArgs 2>&1
+        $exitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+
+    $output |
+        Where-Object {
+            $_ -notmatch "^ERROR: pip" -and
+            $_ -notmatch "dependency resolver" -and
+            $_ -notmatch "behaviour is the source" -and
+            $_ -notmatch "incompatible"
+        } |
+        Write-Host
+
+    if ($exitCode -ne 0) {
+        throw "pip install failed with exit code $exitCode"
+    }
+}
+
 if (-not (Test-Path $vendorPath)) {
     $env:TEMP = Join-Path (Get-Location) ".build-tmp"
     $env:TMP = $env:TEMP
     New-Item -ItemType Directory -Force -Path $env:TEMP | Out-Null
     New-Item -ItemType Directory -Force -Path $vendorPath | Out-Null
-    & $PYTHON -m pip install --no-cache-dir --target $vendorPath $runtimePackages 2>&1 | Where-Object { $_ -notmatch "^ERROR: pip" -and $_ -notmatch "dependency resolver" -and $_ -notmatch "behaviour is the source" -and $_ -notmatch "incompatible" } | Write-Host
+    try {
+        Invoke-VendorPipInstall -Packages $runtimePackages
+    } catch {
+        Remove-Item $vendorPath -Recurse -Force -ErrorAction SilentlyContinue
+        throw
+    }
 } else {
     # Check for packages that may have been added since .vendor was last built
     $vendorChecks = @{
@@ -73,7 +119,7 @@ if (-not (Test-Path $vendorPath)) {
     }
     if ($toInstall.Count -gt 0) {
         Write-Host "Installing missing vendor packages: $($toInstall -join ', ')"
-        & $PYTHON -m pip install --no-cache-dir --upgrade --target $vendorPath $toInstall 2>&1 | Write-Host
+        Invoke-VendorPipInstall -Packages $toInstall -Upgrade
     }
 }
 

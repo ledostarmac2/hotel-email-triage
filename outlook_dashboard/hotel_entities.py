@@ -1,8 +1,8 @@
 """Pure hotel-domain entity extraction for ReplyRight triage.
 
 This module extracts deterministic reservation signals from subject/body text.
-It performs no I/O, does not call AI services, and is intentionally not wired
-into the main triage flow yet.
+It performs no I/O, does not call AI services, and keeps a pure-function
+boundary so it can be used by triage and tests without side effects.
 """
 
 from __future__ import annotations
@@ -94,6 +94,8 @@ _CONFIRMATION_TRIGGER_VALUES = {
     "RESERVIERUNG",
     "RÉSERVATION",
 }
+_MAX_SUBJECT_CHARS = 500
+_MAX_BODY_CHARS = 8_000
 
 
 def _search_dateparser_dates(text: str, base: datetime) -> list[datetime]:
@@ -206,7 +208,7 @@ def _extract_dates(text: str, received_at: datetime | None = None) -> tuple[date
     departures = _collect_dates_near(_DEPARTURE_RE, text, base)
 
     all_dates: list[datetime] = []
-    if not re.search(r"\b\d{1,2}/\d{1,2}(?:/\d{2,4})?\b", text):
+    if _DATE_TOKEN_RE.search(text) and not re.search(r"\b\d{1,2}/\d{1,2}(?:/\d{2,4})?\b", text):
         all_dates = _search_dateparser_dates(text, base)
     if not all_dates:
         for date_match in _DATE_TOKEN_RE.finditer(text):
@@ -275,7 +277,11 @@ def _arrival_window_hours(arrival: datetime | None, received_at: datetime | None
 
 def extract_entities(subject: str, body: str, received_at: datetime | None = None) -> dict[str, Any]:
     """Extract hotel-specific reservation signals from an email."""
-    text = f"{subject or ''}\n{body or ''}"
+    # Keep fuzzy date parsing bounded. Long malformed subjects/bodies should be
+    # cheap to inspect and should not let dateparser dominate Refresh Inbox.
+    subject_text = str(subject or "")[:_MAX_SUBJECT_CHARS]
+    body_text = str(body or "")[:_MAX_BODY_CHARS]
+    text = f"{subject_text}\n{body_text}"
     arrival, departure, nights = _extract_dates(text, received_at)
     adults, children = _extract_guest_counts(text)
     return {

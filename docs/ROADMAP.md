@@ -60,7 +60,7 @@ Current core modules include `main.py`, `ai.py`, `database.py`, `graph.py`, `out
 
 The current system includes deterministic signal extraction, hotel entity extraction, travel-program detection, deterministic urgency scoring, local classification, sender intelligence, Supabase-approved rules, optional AI fallback, admin dashboards, training workflows, Supabase Auth, audit logging, versioning, auto-update support, and a passing automated test suite.
 
-The Phase 7 hotel entity, travel program, and urgency modules are implemented and tested, but intentionally not wired into `triage_email()` yet.
+The Phase 7 hotel entity, travel program, and urgency modules are implemented, tested, and used by heuristic triage while preserving pure-function boundaries.
 
 ## 3. Architectural Principles
 
@@ -147,7 +147,7 @@ Incoming email
   -> Supabase feedback and training pipeline
 ```
 
-Planned enrichment after the parallel Phase 7 merge:
+Current and planned enrichment:
 
 ```text
 extract_signals()

@@ -1,13 +1,17 @@
 # Current State
 
-Last updated: 2026-05-18 (v0.1.0 - documentation hardening pass, 424 tests)
+Last updated: 2026-05-18 (v0.1.0 - CI build hardening pass, 424 tests)
 
 ## Status
 
 - Product name is ReplyRight.
 - Current runnable app is `outlook_dashboard/` plus `run_desktop.py`.
+- CI hardening pass completed after GitHub Actions failures on run #14:
+  - `build_exe.ps1` now captures pip vendor-install output under non-terminating PowerShell error handling and checks the real native exit code, preventing successful pip installs with dependency-warning stderr from aborting clean CI builds.
+  - `.github/workflows/build.yml` now gives pytest a 60-second per-test timeout to reduce Windows runner flakiness.
+  - `outlook_dashboard/hotel_entities.py` bounds fuzzy date parsing on oversized inputs and skips expensive full-text `dateparser.search_dates()` calls when no date-like token exists.
 - Documentation hardening pass completed: `README.md`, `AGENTS.md`, `docs/ARCHITECTURE.md`, `docs/ROADMAP.md`, `docs/TRAINING_PIPELINE.md`, `docs/CLASSIFIER.md`, `docs/SECURITY_AND_PRIVACY.md`, `docs/DEPLOYMENT.md`, `docs/OPERATIONS_GUIDE.md`, and `docs/FUTURE_ROADMAP_SUPABASE_ADAPTIVE_LEARNING.md` now describe the active FastAPI/pywebview app, inactive `app/` scaffold, experimental `replyright_kernel/`, training pipeline, local classifier, privacy boundaries, deployment workflow, and operator workflow.
-- Phase 7 hotel domain intelligence layer is implemented but intentionally not wired into `triage_email()` yet:
+- Phase 7 hotel domain intelligence layer is implemented and now used by `heuristic_analysis()` / `triage_email()` while keeping the modules themselves pure:
   - `outlook_dashboard/hotel_entities.py` exposes `extract_entities(subject, body, received_at=None)` for confirmation numbers, stay dates, nights, room category, rate code, guest counts, arrival window, and billing amounts.
   - `outlook_dashboard/travel_programs.py` exposes `detect_program(sender_email, body, signature=None)` for luxury travel program and advisor/agency detection.
   - `outlook_dashboard/urgency_engine.py` exposes `compute_urgency(...)` for arrival-window-aware urgency scoring from extracted entities and detected program metadata.

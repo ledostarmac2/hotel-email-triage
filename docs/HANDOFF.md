@@ -1,5 +1,38 @@
 # Handoff Log
 
+## 2026-05-18 - CI build and pytest timeout hardening
+
+Summary:
+
+- Investigated GitHub Actions failures from run #14. The Node 20 and `windows-latest` messages were warnings/notices; the actionable failures were `lint` at the Pytest step and `build-exe` at the Build EXE step.
+- Reproduced the clean-checkout build failure locally: `build_exe.ps1` aborted during vendor installation because pip dependency-warning stderr was treated as a fatal PowerShell `NativeCommandError` under `$ErrorActionPreference = "Stop"`.
+- Added `Invoke-VendorPipInstall` to capture pip output under non-terminating error handling, filter known resolver warning noise, and fail only on the native pip exit code.
+- Changed the workflow compile step to use tracked Python files from `git ls-files` and compile them one at a time, avoiding ignored build/temp folders and Windows command-line length limits.
+- Bounded fuzzy date parsing in `hotel_entities.py` so malformed oversized subjects/bodies no longer let `dateparser` dominate the test suite. The formerly slow oversized-subject test dropped from ~25 seconds to under 0.5 seconds locally.
+- Raised the GitHub Actions pytest per-test timeout from 30 to 60 seconds for Windows runner headroom.
+
+Files changed:
+
+- `.github/workflows/build.yml`
+- `build_exe.ps1`
+- `outlook_dashboard/hotel_entities.py`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+
+Verification:
+
+- `python -m pytest tests/test_malformed_emails.py::TestOversizedInputs -v --timeout=30 --durations=5` - 3 passed; slowest call 0.37s.
+- `python -m pytest tests/test_hotel_entities.py tests/test_multilingual_hotel_workflows.py tests/test_urgency_engine.py -q --timeout=30` - passed.
+- `python -m pytest tests/ -x --timeout=30` - 424 passed, 1 warning, 35 subtests passed.
+- Clean worktree build simulation with no `.vendor`: `powershell -ExecutionPolicy Bypass -File .\build_exe.ps1` - succeeded and built `dist\ReplyRight.exe` in the temp worktree.
+
+Remaining work:
+
+- Re-run GitHub Actions after push and confirm `lint` and `build-exe` turn green.
+- Node 20 deprecation and future `windows-latest` redirect notices are non-failing GitHub runner/action notices; update action versions or pin runner images later if they become noisy.
+
+---
+
 ## 2026-05-18 - Documentation hardening and architecture roadmap
 
 Summary:

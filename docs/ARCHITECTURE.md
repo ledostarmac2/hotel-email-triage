@@ -22,9 +22,9 @@ outlook_dashboard/
   taxonomy.py          active categories, priorities, risks, statuses, owners
   taxonomy_meta.py     SLA, colors, descriptions, owner metadata, risk overrides
   signal_extractor.py  deterministic hotel signal extraction
-  hotel_entities.py    pure hotel entity extraction, not wired into triage_email yet
-  travel_programs.py   pure luxury travel program detector, not wired yet
-  urgency_engine.py    pure arrival-window urgency engine, not wired yet
+  hotel_entities.py    pure hotel entity extraction used by heuristic triage
+  travel_programs.py   pure luxury travel program detector used by heuristic triage
+  urgency_engine.py    pure arrival-window urgency engine used by heuristic triage
   local_classifier.py  scikit-learn classifier training/prediction from Supabase examples
   sender_intelligence.py per-domain profile builder from Supabase feedback events
   training_pipeline.py redacted training example export to Supabase
@@ -154,19 +154,19 @@ This remains the baseline for tests and no-key operation.
 
 `hotel_entities.py` extracts confirmation numbers, arrival/departure dates, nights, room categories, rate codes, guest counts, arrival windows, and billing amounts. It supports English plus selected Spanish, French, Portuguese, Italian, and German hotel workflow terms.
 
-It is pure and not yet wired into `triage_email()`.
+It is pure and called by `heuristic_analysis()` during triage.
 
 ### Travel Programs
 
 `travel_programs.py` detects luxury travel and internal programs from sender domains and body/signature keywords.
 
-It is pure and not yet wired into `triage_email()`.
+It is pure and called by `heuristic_analysis()` during triage.
 
 ### Urgency Engine
 
 `urgency_engine.py` computes a deterministic urgency score and reason string from extracted entities, program data, category hints, and risk flags.
 
-It is pure and not yet wired into `triage_email()`.
+It is pure and called by `heuristic_analysis()` during triage.
 
 ### Local Classifier
 
