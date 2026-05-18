@@ -1,5 +1,37 @@
 # Handoff Log
 
+## 2026-05-18 - Rebuilt packaged EXE and verified training pipeline
+
+Summary:
+
+- Updated `build_exe.ps1` so PyInstaller collects Phase 7 runtime dependencies: `sklearn`, `scikit_learn`, `dateparser`, `joblib`, and `threadpoolctl`, plus the required sklearn hidden imports.
+- Hardened the build script's venv PyInstaller probe so a `.venv` without PyInstaller no longer aborts before falling back to system Python.
+- Rebuilt `dist\ReplyRight.exe` from latest source. The EXE binary, copied `dist\.env`, and `dist\data\*` runtime files remain ignored and were not committed.
+- Verified the packaged app starts and reports `/api/health` with `ok=true`.
+- Verified packaged SQLite contains `training_pipeline_log`.
+- Logged in through the packaged `/login` endpoint, captured a session cookie without printing it, and called `POST /api/admin/training/run?batch_size=50`.
+- Queried Supabase `training_examples` with the service-role key without printing the key; the REST call returned 5 example IDs.
+
+Files changed:
+
+- `build_exe.ps1`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+
+Verification:
+
+- `.\build_exe.ps1` - succeeded; rebuilt `dist\ReplyRight.exe`.
+- `Invoke-RestMethod http://127.0.0.1:8000/api/health` - `ok=true`.
+- SQLite table query against `dist\data\hotel_email_triage.sqlite3` - `training_pipeline_log` present.
+- Training run API result: `{"processed":0,"uploaded":0,"skipped":0,"failed":0,"batch_size":50,"refine":false}`. This indicates the packaged endpoint executed cleanly but the current packaged DB had no eligible/new local rows to upload in that batch.
+- Supabase REST query: status 200, `training_examples_count_returned=5`.
+
+Remaining work:
+
+- If Brian expects the training run to upload new rows every time, seed/import completed local emails that have not already been logged by `training_pipeline_log`, then rerun the endpoint.
+
+---
+
 ## 2026-05-18 - Phase 7 hotel domain intelligence layer
 
 Summary:

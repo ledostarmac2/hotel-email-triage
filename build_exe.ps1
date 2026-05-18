@@ -5,8 +5,14 @@ $ErrorActionPreference = "Stop"
 $PYTHON = $null
 $venvPython = Join-Path (Get-Location) ".venv\Scripts\python.exe"
 if (Test-Path $venvPython) {
-    $pyiCheck = & $venvPython -m PyInstaller --version 2>&1
-    if ($LASTEXITCODE -eq 0) { $PYTHON = $venvPython }
+    $previousErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $pyiCheck = & $venvPython -m PyInstaller --version 2>$null
+        if ($LASTEXITCODE -eq 0) { $PYTHON = $venvPython }
+    } finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
 }
 if (-not $PYTHON) {
     $candidates = Get-Command python -All -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source
@@ -82,6 +88,11 @@ if (-not (Test-Path $vendorPath)) {
     --collect-all pythonnet `
     --collect-all outlook_dashboard `
     --collect-all anthropic `
+    --collect-all sklearn `
+    --collect-all scikit_learn `
+    --collect-all dateparser `
+    --collect-all joblib `
+    --collect-all threadpoolctl `
     --collect-submodules win32com `
     --hidden-import webview.platforms.edgechromium `
     --hidden-import webview.platforms.winforms `
@@ -89,6 +100,8 @@ if (-not (Test-Path $vendorPath)) {
     --hidden-import pythoncom `
     --hidden-import pywintypes `
     --hidden-import win32com.client `
+    --hidden-import sklearn.utils._cython_blas `
+    --hidden-import sklearn.neighbors._partition_nodes `
     run_desktop.py
 
 $exePath = (Resolve-Path "dist\ReplyRight.exe").Path
