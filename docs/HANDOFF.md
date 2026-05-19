@@ -1,5 +1,92 @@
 # Handoff Log
 
+## 2026-05-19 - repository structure cleanup
+
+Summary:
+
+- Coordinated with Claude through `agent_comms/from_codex.md` while cleanup was in progress.
+- Added `docs/PROJECT_STRUCTURE.md` to define the root contract, active app paths, archive policy, and generated/local-only paths.
+- Moved root-level historical planning/review docs into `docs/archive/`.
+- Moved migration and release-blocker historical docs into `docs/archive/migration/` and updated tests/current docs to point there.
+- Moved multi-agent coordination docs from `agent_hub/` to `docs/coordination/` and updated the coordination tests.
+- Removed the stale tracked `dist2/ReplyRight.exe` binary and the obsolete `new_dependencies.txt` handoff file from tracking.
+- Removed third-party reference repos from git tracking and moved the local bundle to ignored `.external/reference/`.
+- Moved the dropped standalone `KYC-Auto/` folder to ignored `.external/KYC-Auto/` so the source bundle remains locally available without cluttering the repo root or risking bundled binary commits.
+- Deleted disposable ignored temp/build-cache folders such as `.build-tmp`, `.build-venv*`, `.commit-*`, `.replyright-build`, `build/`, temp folders, and Python cache folders. Preserved `data/`, `dist/`, `.venv/`, and `.vendor/`.
+
+Files changed:
+
+- `.gitignore`
+- `README.md`
+- `docs/PROJECT_STRUCTURE.md`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+- `docs/ROADMAP.md`
+- `docs/TRAINING_PIPELINE.md`
+- `docs/archive/**`
+- `docs/coordination/**`
+- `tests/test_agent_hub_exists.py`
+- `tests/test_migration_docs_reference_no_qwebengine.py`
+
+Verification:
+
+- `python -m pytest tests/test_agent_hub_exists.py tests/test_migration_docs_reference_no_qwebengine.py tests/test_kyc_backend.py -q --timeout=60` - 23 passed.
+- `git diff --check` - passed after whitespace cleanup.
+- `python -m pytest tests/ --timeout=60` - 503 passed, 5 existing `datetime.utcnow()` warnings, 35 subtests passed.
+
+Remaining work:
+
+- Run the full suite after both agents' KYC and cleanup changes settle.
+- Consider renaming `tests/test_agent_hub_exists.py` in a later small cleanup to match `docs/coordination/`; the current test content already points at the new path.
+
+---
+
+## 2026-05-19 - KYC backend module integration
+
+Summary:
+
+- Inspected the dropped `KYC-Auto/` folder and identified reusable backend behavior: 15-minute reminder cadence, team-member selection/rotation concepts, current status, automation completion/failure state, and login-error recognition.
+- Added a modular KYC backend under `outlook_dashboard/kyc/` with settings, service, repository, scheduler helper, and FastAPI routes.
+- Added authenticated `/api/kyc/*` endpoints for configuration, reminder status, event creation, acknowledge, snooze, complete, skip, and history retrieval.
+- Added local SQLite persistence for `kyc_settings`, `kyc_inspection_events`, `kyc_acknowledgements`, and `kyc_audit_log`, plus best-effort Supabase mirroring for non-secret settings/events.
+- Added audit logging to both the KYC module audit table and ReplyRight's shared `audit_logs`.
+- Updated architecture/roadmap/Supabase docs to treat KYC as an integrated operations module, not a standalone app.
+- Did not copy KYC Auto's Tkinter UI, standalone installer, Edge driver files, credentials storage, or Selenium automation into the active backend.
+
+Files changed by Codex:
+
+- `outlook_dashboard/kyc/__init__.py`
+- `outlook_dashboard/kyc/models.py`
+- `outlook_dashboard/kyc/repository.py`
+- `outlook_dashboard/kyc/routes.py`
+- `outlook_dashboard/kyc/scheduler.py`
+- `outlook_dashboard/kyc/service.py`
+- `outlook_dashboard/database.py`
+- `outlook_dashboard/main.py`
+- `tests/test_kyc_backend.py`
+- `docs/ARCHITECTURE.md`
+- `docs/ROADMAP.md`
+- `docs/CURRENT_STATE.md`
+- `docs/DECISIONS.md`
+- `docs/CHANGELOG_AI.md`
+- `docs/HANDOFF.md`
+- `docs/supabase_schema.sql`
+
+Verification:
+
+- `python -m py_compile outlook_dashboard\kyc\models.py outlook_dashboard\kyc\repository.py outlook_dashboard\kyc\service.py outlook_dashboard\kyc\routes.py outlook_dashboard\database.py outlook_dashboard\main.py` - passed.
+- `python -m pytest tests/test_kyc_backend.py -q --timeout=60` - 4 passed.
+- `python -m pytest tests/test_api_workflow_pytest.py tests/test_import_smoke.py tests/test_secret_hygiene.py tests/test_kyc_backend.py -q --timeout=60` - 25 passed.
+- `python -m pytest tests/ --timeout=60` - 503 passed, 5 existing `datetime.utcnow()` warnings, 35 subtests passed.
+
+Remaining work:
+
+- Frontend owner should finish/verify the native PySide6 KYC sidebar, panel, reminder dialog, and API client against `/api/kyc/*`.
+- Decide later whether any legacy Selenium KYC automation should be wrapped as an explicit human-triggered backend action; do not store KYC passwords or auto-run browser automation without new approval.
+- Apply the updated `docs/supabase_schema.sql` to Supabase if shared KYC mirroring is desired.
+
+---
+
 ## 2026-05-19 - package release runtime API keys
 
 Summary:

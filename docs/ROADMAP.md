@@ -160,6 +160,15 @@ extract_signals()
   -> optional external AI fallback
 ```
 
+## Integrated Operations Modules
+
+ReplyRight should feel like one unified hotel operations assistant, not a launcher for unrelated tools. Operational modules should reuse ReplyRight auth, settings, logging, SQLite/Supabase fallback, packaging, and test standards.
+
+- KYC Inspections: integrated reminder configuration, current due status, acknowledge/snooze/complete/skip actions, escalation state, and inspection history.
+- Future possible modules: shift checklist, VIP arrival tracker, billing follow-up tracker, no-show/group audit tracker.
+
+KYC Auto's standalone Tkinter app and installer are historical inputs. Its timer cadence, team-member selection, completion status, and login-error handling concepts should be preserved in native ReplyRight backend/frontend surfaces where they fit the current architecture.
+
 ### Signal Extraction
 
 `signal_extractor.py` extracts zero-API hotel signals including tone, VIP language, billing language, complaint language, urgency terms, group inquiry patterns, dollar amounts, sender identity, follow-up status, temporal language, and structure.
@@ -220,13 +229,13 @@ Recommended target for v0.2.0:
 - Begin PySide6 native UI migration for the main inbox workflow.
 - Do not use `QWebEngineView` as the primary UI.
 - Preserve the Python intelligence modules and extract service boundaries from FastAPI route handlers.
-- Use the scaffold in `replyright_core/`, `replyright_qt/`, and `docs/PYSIDE6_MIGRATION_PLAN.md` as the starting point.
+- Use the scaffold in `replyright_core/`, `replyright_qt/`, and `docs/archive/migration/PYSIDE6_MIGRATION_PLAN.md` as the starting point.
 
 Reference docs:
 
-- `docs/RELEASE_BLOCKERS_v0.1.0.md`
+- `docs/archive/migration/RELEASE_BLOCKERS_v0.1.0.md`
 - `docs/INSTALLER_STRATEGY.md`
-- `docs/NATIVE_UI_MIGRATION.md`
+- `docs/archive/migration/NATIVE_UI_MIGRATION.md`
 
 ### Phase 0: Stabilize The Current Build
 
@@ -243,7 +252,7 @@ Status on 2026-05-18:
 
 Remaining:
 
-- Merge `dateparser` from `new_dependencies.txt` into the active dependency file after the parallel branch is reconciled.
+- Keep `dateparser` in the active dependency file.
 - Re-run classifier training after enough reviewed examples exist.
 - Keep smoke-testing each rebuilt EXE.
 

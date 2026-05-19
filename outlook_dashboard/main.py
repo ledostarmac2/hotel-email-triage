@@ -80,6 +80,7 @@ from .supabase_client import (
     upload_feedback_event,
 )
 from .taxonomy import CATEGORIES, CONTACT_TYPES, DEPARTMENT_OWNERS, PRIORITY_LEVELS, RISK_FLAGS, STATUSES
+from .kyc import router as kyc_router
 from .local_classifier import feature_importance as classifier_feature_importance
 from .local_classifier import get_model_meta
 from .local_classifier import invalidate_cache as invalidate_classifier_cache
@@ -256,6 +257,7 @@ app.add_middleware(_RateLimitMiddleware)
 app.add_middleware(_AuthMiddleware)
 app.add_middleware(_RequestLogMiddleware)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+app.include_router(kyc_router)
 
 
 class StatusUpdate(BaseModel):

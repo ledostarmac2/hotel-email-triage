@@ -148,4 +148,4 @@ End-to-end packaged smoke checks:
 
 - Enough human-reviewed examples are required before the classifier can train.
 - The pipeline currently exports from completed local email rows; broader historical import workflows remain future work.
-- The operator still needs to merge `dateparser` from `new_dependencies.txt` into the active dependency file after branch reconciliation.
+- `dateparser` is now listed in the active dependency file.

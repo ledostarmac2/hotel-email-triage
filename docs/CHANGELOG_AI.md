@@ -1,5 +1,13 @@
 # AI Change Log
 
+## 2026-05-19 - KYC operations backend integration
+
+- Added `outlook_dashboard/kyc/` as the backend foundation for an integrated KYC Inspections module.
+- Added KYC settings, reminder status, event creation, acknowledge, snooze, complete, skip, and history APIs.
+- Added local SQLite KYC tables plus best-effort Supabase mirroring for non-secret settings and event history.
+- Added audit logging for KYC settings and event actions.
+- Preserved KYC Auto's reminder/status concepts without importing its standalone Tkinter UI or Selenium automation into the active ReplyRight backend.
+
 ## 2026-05-19 - Release/auth safety repair
 
 - Removed the user-facing credentials setup page and API endpoint path so the desktop app no longer asks users to paste API keys.

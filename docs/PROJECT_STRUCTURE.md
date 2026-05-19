@@ -26,10 +26,9 @@ Root-level files should be limited to:
 ## Inactive Or Historical Paths
 
 - `app/`: inactive Next.js scaffold. Keep intact unless Brian explicitly asks for a migration.
-- `reference/`: historical external reference projects. Do not wire these into the runtime.
 - `docs/archive/`: retired planning notes, old reviews, migration notes, and historical one-off documents.
 - `docs/coordination/`: multi-agent handoff, task board, gates, and historical coordination log.
-- `.external/`: ignored local holding area for dropped source bundles or external apps, such as the original KYC Auto folder. Files here are preserved locally but not committed.
+- `.external/`: ignored local holding area for dropped source bundles or external apps, such as the original KYC Auto folder and historical reference repos. Files here are preserved locally but not committed.
 
 ## Generated Or Local-Only Paths
 

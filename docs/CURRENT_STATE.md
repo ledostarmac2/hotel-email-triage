@@ -6,6 +6,21 @@ Last updated: 2026-05-19 (v0.1.1 release/auth repair in progress)
 
 - Product name is ReplyRight.
 - Current runnable app is `outlook_dashboard/` plus `run_desktop.py`.
+- KYC Auto backend absorption has started:
+  - `outlook_dashboard/kyc/` now provides the integrated KYC Inspections backend module.
+  - FastAPI exposes authenticated `/api/kyc/*` endpoints for configuration, current reminder status, event creation, acknowledge, snooze, complete, skip, and history.
+  - SQLite now creates `kyc_settings`, `kyc_inspection_events`, `kyc_acknowledgements`, and `kyc_audit_log`.
+  - KYC actions are recorded in both the module audit log and ReplyRight's shared `audit_logs`.
+  - Supabase mirroring is best-effort for non-secret KYC settings/events when configured; SQLite remains the fallback/source of local continuity.
+  - The legacy KYC Auto Tkinter UI, standalone installer, Edge driver files, and Selenium automation were inspected but not copied into the active backend.
+  - Backend verification: `python -m pytest tests/ --timeout=60` passed with 503 tests, 5 existing `datetime.utcnow()` warnings, and 35 subtests.
+- Repository cleanup is in progress:
+  - Root-level historical planning/review docs moved to `docs/archive/`.
+  - Migration/release-blocker docs moved to `docs/archive/migration/`.
+  - Multi-agent coordination docs moved from `agent_hub/` to `docs/coordination/`; `agent_comms/` remains the live message channel.
+  - Third-party reference repos are removed from git tracking and preserved locally under ignored `.external/reference/`.
+  - The dropped standalone KYC Auto bundle is preserved locally under ignored `.external/KYC-Auto/`.
+  - Old generated binaries such as `dist2/ReplyRight.exe` and the temporary `new_dependencies.txt` handoff file are removed from tracking.
 - v0.1.0 is blocked as a user release because the downloaded app could show a WebView/Edge `127.0.0.1 refused to connect` page and the release path was not installer-first enough for real users.
 - v0.1.1 repair is now in source:
   - `GET /healthz` is public and used by the desktop launcher before opening pywebview.
@@ -37,10 +52,10 @@ Last updated: 2026-05-19 (v0.1.1 release/auth repair in progress)
   - `.\installer\build_installer.ps1` built `installer\output\ReplyRightSetup-v0.1.1.exe`.
   - Full test suite passed with 445 tests, 1 existing warning, and 35 subtests.
 - New release docs:
-  - `docs/RELEASE_BLOCKERS_v0.1.0.md`
+  - `docs/archive/migration/RELEASE_BLOCKERS_v0.1.0.md`
   - `docs/INSTALLER_STRATEGY.md`
-  - `docs/NATIVE_UI_MIGRATION.md`
-  - `docs/PYSIDE6_MIGRATION_PLAN.md`
+  - `docs/archive/migration/NATIVE_UI_MIGRATION.md`
+  - `docs/archive/migration/PYSIDE6_MIGRATION_PLAN.md`
 - PySide6 migration scaffolds now exist in `replyright_core/` and `replyright_qt/`. They are not production-wired. Do not use `QWebEngineView`, Electron, Tauri, or any browser/WebView shell as the native UI.
 - CI hardening pass completed after GitHub Actions failures on run #14:
   - `build_exe.ps1` now captures pip vendor-install output under non-terminating PowerShell error handling and checks the real native exit code, preventing successful pip installs with dependency-warning stderr from aborting clean CI builds.
@@ -51,7 +66,7 @@ Last updated: 2026-05-19 (v0.1.1 release/auth repair in progress)
   - `outlook_dashboard/hotel_entities.py` exposes `extract_entities(subject, body, received_at=None)` for confirmation numbers, stay dates, nights, room category, rate code, guest counts, arrival window, and billing amounts.
   - `outlook_dashboard/travel_programs.py` exposes `detect_program(sender_email, body, signature=None)` for luxury travel program and advisor/agency detection.
   - `outlook_dashboard/urgency_engine.py` exposes `compute_urgency(...)` for arrival-window-aware urgency scoring from extracted entities and detected program metadata.
-  - `new_dependencies.txt` records `dateparser`; `requirements.txt` was not edited because another agent owns it in the parallel branch.
+  - `dateparser` is now included in `requirements.txt`; the temporary `new_dependencies.txt` handoff file was removed during repository cleanup.
 - Multilingual hotel workflow coverage now exercises Spanish, French, Portuguese, Italian, and German reservation patterns. Entity extraction recognizes localized confirmation/reservation, arrival/departure, night-count, guest-count, and presidential-suite terms; redaction recognizes localized confirmation-number labels; urgency scoring recognizes common localized billing, complaint, cancellation, thank-you, accessibility, allergy, and actionable-request terms.
 - Previous onefile builds were rebuilt on 2026-05-18 with PyInstaller collection flags for scikit-learn/dateparser/joblib/threadpoolctl. Current source builds the onedir app at `dist\ReplyRight\ReplyRight.exe`.
 - The UI has ReplyRight branding, provided logo/icon assets, an urgency-ranked conversation queue, summary/steps panels, local status changes, and an on-demand AI response modal.
@@ -147,7 +162,7 @@ Important variables:
 - This app intentionally does not mutate Outlook messages; adding send/archive/move/category actions requires a new design and approval.
 - Local mailbox exports and SQLite data are ignored for privacy and are not portable through git.
 - Phase 7 training must remain privacy-preserving by default. Do not store raw hotel email bodies, guest PII, reservation numbers, payment details, or attachments in Supabase training tables unless Brian explicitly approves a new override.
-- The new hotel entity extractor depends on `dateparser`; install/merge the package from `new_dependencies.txt` into the active environment/requirements before using the module on a fresh machine.
+- The hotel entity extractor depends on `dateparser`, which is now listed in `requirements.txt`.
 
 ## Semantic Kernel Orchestration Layer
 
@@ -168,14 +183,16 @@ Tests: `python -m unittest tests.test_kernel_plugins tests.test_kernel_orchestra
 ## Recommended Next Steps
 
 1. **Supabase schema**: if not yet run, paste `docs/supabase_schema.sql` into the Supabase SQL Editor (project `dxalumiijcfmwzmosijf`) and execute it once to create all tables.
-2. **GitHub Secrets**: in the GitHub repo Settings → Secrets → Actions, confirm `ANTHROPIC_API_KEY`, `SUPABASE_URL`, `SUPABASE_KEY`, `SUPABASE_SERVICE_ROLE_KEY` are set so CI can build and test.
-3. **Emergency v0.1.1 Release**: after tests and installer smoke checks pass, push a tag (`git tag v0.1.1 && git push origin v0.1.1`) to trigger the release job. It must publish `ReplyRightSetup-v0.1.1.exe` as the primary asset, not a bare EXE.
-4. **Local classifier training (Phase 7 long-term)**: import historical completed emails → redact PII → AI-label → human-review samples → store sanitized Supabase training set → train lightweight local classifiers. Start with urgency, owner, category, status, missing_information targets only.
-5. **Refresh check**: click Refresh Inbox once and visually confirm the feedback box, resized window behavior, and Outlook-like independent scrolling.
-6. **Login check**: confirm the app never prompts for API keys. On a fresh install with no admin, `/setup` creates the first admin through Supabase when service-role configuration exists and through local SQLite otherwise. Existing local database users should still be able to sign in. Bad credentials should show a persistent error with an X, good credentials should enter the app.
-7. **Spot-check triage**: review conversations formerly over-scored as urgency 4/5, especially completed CCA/payment form threads and friendly travel-agent replies.
-8. **If launch fails**: inspect `dist\ReplyRight\data\replyright-startup.log`. Look for `pythonnet (clr) is not available`; if seen, delete `.vendor` and re-run `.\build_exe.ps1` so pip re-installs pythonnet.
-9. **Use the roadmap**: read `docs/FUTURE_ROADMAP_SUPABASE_ADAPTIVE_LEARNING.md` before broad architecture work, especially Supabase shared learning and staged AI pipeline. Ignore multi-property/cross-property ideas unless Brian reopens them.
-10. **Wire `replyright_kernel`** into `outlook_dashboard/ai.py` only where it supports the new split: OpenAI refresh classification, local fallback/tests, and Claude Opus `AI Suggestion`.
-11. **Admin rules check**: after entering real feedback, confirm Suggested Rules shows Reject/Dismiss and that Dismiss removes a candidate from the local admin view.
-12. **Phase 7 local learning**: when ready, implement incrementally in the documented order: Supabase training tables, sanitized training records, PII redaction, historical importer, AI batch labeler, human review queue, local classifier training, runtime prediction, admin controls, model activation/rollback, and metrics.
+2. **KYC frontend integration**: finish/verify the native PySide6 sidebar/panel/dialog work against `/api/kyc/*`; keep it inside ReplyRight's native UI and do not reintroduce `QWebEngineView` or a standalone KYC app window.
+3. **KYC automation decision**: decide later whether the old Selenium `run_kyc_inspection()` behavior should be wrapped behind an explicit, human-triggered action. Do not store KYC passwords in ReplyRight or auto-run browser automation without approval.
+4. **GitHub Secrets**: in the GitHub repo Settings → Secrets → Actions, confirm `ANTHROPIC_API_KEY`, `SUPABASE_URL`, `SUPABASE_KEY`, `SUPABASE_SERVICE_ROLE_KEY` are set so CI can build and test.
+5. **Emergency v0.1.1 Release**: after tests and installer smoke checks pass, push a tag (`git tag v0.1.1 && git push origin v0.1.1`) to trigger the release job. It must publish `ReplyRightSetup-v0.1.1.exe` as the primary asset, not a bare EXE.
+6. **Local classifier training (Phase 7 long-term)**: import historical completed emails → redact PII → AI-label → human-review samples → store sanitized Supabase training set → train lightweight local classifiers. Start with urgency, owner, category, status, missing_information targets only.
+7. **Refresh check**: click Refresh Inbox once and visually confirm the feedback box, resized window behavior, and Outlook-like independent scrolling.
+8. **Login check**: confirm the app never prompts for API keys. On a fresh install with no admin, `/setup` creates the first admin through Supabase when service-role configuration exists and through local SQLite otherwise. Existing local database users should still be able to sign in. Bad credentials should show a persistent error with an X, good credentials should enter the app.
+9. **Spot-check triage**: review conversations formerly over-scored as urgency 4/5, especially completed CCA/payment form threads and friendly travel-agent replies.
+10. **If launch fails**: inspect `dist\ReplyRight\data\replyright-startup.log`. Look for `pythonnet (clr) is not available`; if seen, delete `.vendor` and re-run `.\build_exe.ps1` so pip re-installs pythonnet.
+11. **Use the roadmap**: read `docs/FUTURE_ROADMAP_SUPABASE_ADAPTIVE_LEARNING.md` before broad architecture work, especially Supabase shared learning and staged AI pipeline. Ignore multi-property/cross-property ideas unless Brian reopens them.
+12. **Wire `replyright_kernel`** into `outlook_dashboard/ai.py` only where it supports the new split: OpenAI refresh classification, local fallback/tests, and Claude Opus `AI Suggestion`.
+13. **Admin rules check**: after entering real feedback, confirm Suggested Rules shows Reject/Dismiss and that Dismiss removes a candidate from the local admin view.
+14. **Phase 7 local learning**: when ready, implement incrementally in the documented order: Supabase training tables, sanitized training records, PII redaction, historical importer, AI batch labeler, human review queue, local classifier training, runtime prediction, admin controls, model activation/rollback, and metrics.

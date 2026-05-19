@@ -145,6 +145,7 @@ See `docs/TESTING.md` for the full guide.
 - `AGENTS.md` - instructions for future agents.
 - `docs/CURRENT_STATE.md` - latest project truth.
 - `docs/ARCHITECTURE.md` - current runtime architecture.
+- `docs/PROJECT_STRUCTURE.md` - repository layout and cleanup policy.
 - `docs/ROADMAP.md` - product and architecture roadmap.
 - `docs/SECURITY_AND_PRIVACY.md` - safety and privacy rules.
 - `docs/DEPLOYMENT.md` - packaging and release workflow.

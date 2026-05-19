@@ -4,11 +4,11 @@ from pathlib import Path
 
 
 def _plan() -> str:
-    return Path("docs/PYSIDE6_MIGRATION_PLAN.md").read_text(encoding="utf-8")
+    return Path("docs/archive/migration/PYSIDE6_MIGRATION_PLAN.md").read_text(encoding="utf-8")
 
 
 def _native_ui_doc() -> str:
-    return Path("docs/NATIVE_UI_MIGRATION.md").read_text(encoding="utf-8")
+    return Path("docs/archive/migration/NATIVE_UI_MIGRATION.md").read_text(encoding="utf-8")
 
 
 def test_migration_plan_says_no_qwebengineview() -> None:

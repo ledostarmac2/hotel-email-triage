@@ -241,6 +241,9 @@ def initialize_database(db_path: Path | None = None) -> None:
             CREATE INDEX IF NOT EXISTS idx_tpl_status ON training_pipeline_log (status);
             """
         )
+        from .kyc.repository import ensure_kyc_schema
+
+        ensure_kyc_schema(db)
 
 
 def _ensure_column(db: sqlite3.Connection, table: str, column: str, definition: str) -> None:

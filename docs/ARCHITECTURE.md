@@ -30,6 +30,7 @@ outlook_dashboard/
   training_pipeline.py redacted training example export to Supabase
   redaction.py         payment-like and identifier redaction
   supabase_client.py   feedback/rule/prompt/sender Supabase helpers and local cache
+  kyc/                 KYC inspection settings, reminders, actions, history, audit API
   updater.py           GitHub release update check
   platform_compat.py   Windows/COM/webview capability flags
   runtime_log.py       shared logger factory
@@ -72,6 +73,15 @@ The app is designed to remain useful when optional network integrations are unav
 12. The dashboard fetches `/api/emails`, groups rows by `conversation_id`, and renders queue/detail views.
 13. User feedback is saved locally, uploaded to Supabase when configured, and queued locally for retry on upload failure.
 14. Admin tools can export completed, redacted examples to Supabase training tables and train a local classifier from reviewed examples.
+
+## Integrated Operations Modules
+
+ReplyRight can host hotel operations modules alongside the reservations email assistant when they follow the same local-first, authenticated, audited architecture.
+
+- KYC Inspections: `outlook_dashboard/kyc/` stores reminder settings, current due status, inspection events, acknowledge/snooze/complete/skip actions, and local/Supabase-mirrored history. It does not store KYC passwords, browser cookies, raw automation diagnostics, or Outlook content.
+- Future possible modules: shift checklist, VIP arrival tracker, billing follow-up tracker, no-show/group audit tracker.
+
+KYC Auto is being absorbed as a ReplyRight module rather than launched as a separate desktop app. The reusable behavior is the reminder cadence, active operator/team-member state, completion tracking, and login-error/status concepts. The legacy Tkinter UI and standalone installer are not part of the integrated runtime.
 
 ## Outlook Safety Boundary
 
@@ -124,6 +134,10 @@ Important local tables include:
 - `supabase_known_sender_cache`
 - `training_pipeline_log`
 - `audit_logs`
+- `kyc_settings`
+- `kyc_inspection_events`
+- `kyc_acknowledgements`
+- `kyc_audit_log`
 - `app_kv`
 
 The `data/` directory is intentionally ignored because it can contain mailbox content, local tokens, exports, model blobs, and logs.

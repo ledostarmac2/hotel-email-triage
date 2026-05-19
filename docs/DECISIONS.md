@@ -102,6 +102,12 @@ Decision: Shared learning rules should auto-promote after repeated correction pa
 
 Rationale: The strategic goal is a hands-off adaptive system where corrections improve future behavior automatically.
 
+## 2026-05-19: KYC Auto Becomes A ReplyRight Operations Module
+
+Decision: Integrate KYC Auto as a modular ReplyRight operations backend under `outlook_dashboard/kyc/`, with FastAPI endpoints, local SQLite persistence, best-effort Supabase mirroring, and audit logging. Do not run it as a second unrelated app.
+
+Rationale: KYC inspection reminders are part of the same hotel operations workflow as reservations triage. Keeping the backend local-first, authenticated, and audited preserves ReplyRight's safety posture while allowing the future native Qt UI to present KYC as a sidebar module.
+
 ## 2026-05-16: Single-Hotel Scope
 
 Decision: Remove multi-property and cross-property support from the active roadmap. ReplyRight is scoped to Waldorf Astoria New York / `NYCWA_Reservations`.
