@@ -158,13 +158,22 @@ jobs:
           $installer = Get-ChildItem ".\installer\output\ReplyRightSetup-v*.exe" | Select-Object -First 1
           if (-not $installer) { throw "Installer missing for extraction audit." }
           innoextract $installer.FullName -d ".\installer\output\extracted"
+          $extractExit = $LASTEXITCODE
+          if ($extractExit -ne 0) {
+            Write-Warning "innoextract could not unpack this installer format; auditing the staged dist payload and installer output instead."
+            if (-not (Test-Path ".\dist\ReplyRight")) { throw "Staged dist payload missing for fallback audit." }
+          }
           python scripts/check_no_bundled_secrets.py
       - name: Rename Installer
         shell: pwsh
         run: |
           $built = Get-ChildItem ".\installer\output\ReplyRightSetup-v*.exe" | Select-Object -First 1
           if (-not $built) { throw "Installer was not created." }
-          Copy-Item $built.FullName ".\installer\output\ReplyRightSetup-${{ github.ref_name }}.exe" -Force
+          $target = (Resolve-Path ".\installer\output").Path
+          $expected = Join-Path $target "ReplyRightSetup-${{ github.ref_name }}.exe"
+          if ($built.FullName -ne $expected) {
+            Copy-Item $built.FullName $expected -Force
+          }
       - name: Release smoke gate
         shell: pwsh
         run: |

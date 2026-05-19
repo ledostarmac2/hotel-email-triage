@@ -1,5 +1,31 @@
 # Handoff Log
 
+## 2026-05-19 - v0.1.1 release installer rename fix
+
+Summary:
+
+- Fixed the GitHub Actions release failure where the installer rename step tried to copy `ReplyRightSetup-v0.1.1.exe` onto itself.
+- Made the rename step idempotent by resolving the expected target path and copying only when the built installer path differs.
+- Made the installer security audit signal clearer: if `innoextract` cannot unpack the current Inno Setup loader format, CI warns and still audits the staged `dist\ReplyRight` payload and installer output.
+
+Files changed:
+
+- `.github/workflows/build.yml`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+
+Verification:
+
+- `.github/workflows/build.yml` was checked for YAML syntax locally.
+- The failing CI log was reviewed; the fix targets the observed `Copy-Item ... Cannot overwrite ... with itself` error.
+- Repo-local Git author was set to `Gemini Code Assist <gemini-code-assist@users.noreply.github.com>` for the next commit.
+
+Remaining work:
+
+- Push this workflow patch and rerun/tag the v0.1.1 release job to confirm the GitHub Release publishes `ReplyRightSetup-v0.1.1.exe`.
+
+---
+
 ## 2026-05-19 - v0.1.1 CI/auth prompt repair
 
 Summary:

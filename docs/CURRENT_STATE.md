@@ -24,6 +24,8 @@ Last updated: 2026-05-19 (v0.1.1 release/auth repair in progress)
   - Removed the user-facing credentials setup page from the desktop app. `/credentials-setup` now redirects to login, and `/api/auth/credentials-setup` is no longer an unauthenticated API-key writing endpoint.
   - End users must not be asked for Supabase, OpenAI, Google, Anthropic, or other API keys in the program. Runtime credentials must be supplied by deployment-time files, machine environment, or GitHub Actions release secrets.
   - GitHub Actions now opts JavaScript actions into Node 24 with `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true`.
+  - Fixed the release workflow rename step so tag builds no longer fail when Inno Setup already emitted the expected `ReplyRightSetup-v0.1.1.exe` filename.
+  - Installer security audit now treats `innoextract` format incompatibility as a warning and still audits the staged `dist\ReplyRight` payload plus installer output.
 - Local validation after the final v0.1.1 repair pass:
   - `.\build_exe.ps1` built `dist\ReplyRight\ReplyRight.exe`.
   - `dist\ReplyRight\ReplyRight.exe --health-smoke` exited successfully.
