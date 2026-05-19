@@ -7,7 +7,7 @@ All notable changes to ReplyRight are documented here.
 ### Features
 
 - **KYC Inspections sidebar module** — built-in reminder system for hotel inspection compliance. Tracks events through `pending → acknowledged/snoozed → completed/skipped` lifecycle. Qt panel polls every 3 seconds (only when visible), shows countdown to next inspection, supports strict-mode mandatory acknowledgement dialog. Team member selector for completion attribution.
-- **PySide6 native shell** (`replyright_qt/`) — full native Qt UI as an alternative to the FastAPI + pywebview path. Activated via `run_desktop.py --native` or `REPLYRIGHT_NATIVE=1`. Includes login window, sidebar nav, conversation list/detail splitter, admin panel, and KYC panel.
+- **PySide6 native shell** (`replyright_qt/`) — full native Qt UI. FastAPI backend starts first, then the Qt window opens via `ApiClient`. Includes login window, sidebar nav, conversation list/detail splitter, admin panel, and KYC panel. The `--native` flag is accepted but is now a no-op (Qt is the default).
 
 ### Auth
 

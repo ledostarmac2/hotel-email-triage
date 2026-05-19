@@ -125,20 +125,6 @@ def _open_qt_window(url: str) -> None:
     _log("Qt window closed by user")
 
 
-def _run_native_qt() -> None:
-    """Launch the PySide6 native shell (replaces pywebview path)."""
-    _log("Starting native PySide6 shell")
-    try:
-        from replyright_qt.main_qt import _run_native_app
-        _run_native_app()
-    except Exception as exc:
-        _log(f"Native Qt launch failed: {exc}")
-        import traceback
-        _log(traceback.format_exc())
-        _show_error(_startup_error_message(str(exc)))
-        raise
-
-
 def main() -> None:
     _log("ReplyRight starting")
     _log(f"Executable: {sys.executable}")
@@ -147,9 +133,7 @@ def main() -> None:
     _log(f"Root directory: {ROOT_DIR}")
 
     if "--native" in sys.argv or os.getenv("REPLYRIGHT_NATIVE") == "1":
-        _log("Native Qt mode selected")
-        _run_native_qt()
-        return
+        _log("--native flag noted; Qt shell is the default, continuing normal startup")
 
     health_smoke_only = "--health-smoke" in sys.argv or os.getenv("REPLYRIGHT_HEALTH_SMOKE") == "1"
 

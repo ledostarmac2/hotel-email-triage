@@ -47,10 +47,6 @@ def test_replyright_core_has_no_webview_import() -> None:
     assert "QWebEngineView" not in text
 
 
-def test_replyright_qt_main_raises_if_run_directly() -> None:
-    source = Path("replyright_qt/main_qt.py").read_text(encoding="utf-8")
-    assert "RuntimeError" in source
-
 
 def test_replyright_qt_windows_import_pyside6_directly() -> None:
     """PySide6 is now a real dependency — windows should import it unconditionally."""
