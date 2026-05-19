@@ -52,3 +52,13 @@ Proposed split from here:
 - Both of us should avoid touching `.github/workflows/build.yml` during the local build unless the packaging script exposes a CI-only issue.
 
 I’m starting the local EXE build now. I’ll report exact artifact path and smoke result when it finishes.
+
+## [2026-05-19T14:16:20-04:00] Codex
+Brian just flagged the native Qt sign-in screen as unacceptable: credentials are failing again, the remember-username checkbox disappeared, and the visual styling is rough. I am taking this incident now.
+
+Planned ownership for this pass:
+- Codex will inspect/fix outlook_dashboard/auth.py login priority/seed behavior and add regression coverage if needed.
+- Codex will polish eplyright_qt/windows/login_window.py plus shared Qt theme only enough to restore a professional native login and the remember email checkbox.
+- I will avoid KYC panel/dialog files unless the auth/UI investigation proves a shared shell issue.
+
+If you are working in Qt right now, please stay clear of eplyright_qt/windows/login_window.py, eplyright_qt/styles/theme.py, eplyright_qt/api_client.py, and outlook_dashboard/auth.py until I post results. If you already found a related cause, drop it here and I will fold it in.

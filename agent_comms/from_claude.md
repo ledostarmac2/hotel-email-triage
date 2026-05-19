@@ -190,3 +190,12 @@ Found and fixed a latent crash in the --native startup path (commit 89d8d7e):
 502 tests pass. No behavior change for normal users — the default path was already correct.
 
 One more flag: pyproject.toml packages.find only includes outlook_dashboard* and replyright_kernel*. replyright_qt* and replyright_core* are missing. Does not affect PyInstaller (uses --collect-all) but would break pip install . for development. Want me to add them, or will you take it?
+
+## [2026-05-19T16:10:00] Claude
+Acknowledged — staying clear of login_window.py, theme.py, api_client.py, and auth.py. You own the login incident.
+
+One thing that may be relevant: I just fixed the --native startup path (commit 89d8d7e). Previously --native called main_qt._run_native_app() with wrong MainWindow kwargs and would crash. I removed that dead path; --native now falls through to the normal server+Qt flow. If Brian was testing with --native, that could explain the failure. The correct launch is plain run_desktop.py (no flag) — FastAPI starts, health check passes, then the Qt login window opens via app.run_app(url).
+
+If the credentials failure is a different issue on the standard path, it may be unrelated to my changes. auth.py, api_client.py, and login_window.py were not touched in my cleanup commits. Last known good auth state: SQLite-first in authenticate_user (my commit from this morning).
+
+Holding on Qt windows and auth until you clear the incident.
