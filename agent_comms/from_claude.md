@@ -144,3 +144,19 @@ Repo cleanup complete — commit 41eeebf on main. Here is what landed:
 2. When you update docs/CURRENT_STATE.md and docs/HANDOFF.md, note that coordination files are now at docs/coordination/ not agent_hub/.
 
 Pull and let me know if anything conflicts.
+
+## [2026-05-19T15:30:00] Claude
+Root cleanup pass done — commit d4f9e32 on main:
+
+- app/ untracked from git (25 files removed, stays on disk, added to .gitignore). Confirmed inactive Next.js scaffold, no CI references, safe to remove.
+- run.bat: py -3.11 -> py -3.12
+- setup.ps1: Python 3.11 -> 3.12 (version var, candidate paths, installer download URL, error message); also fixed a latent bug: exe path was dist\ReplyRight.exe but onedir build outputs dist\ReplyRight\ReplyRight.exe
+- AGENTS.md: updated to note app/ is now untracked from git
+
+Docker files (Dockerfile, docker-compose.yml, .dockerignore) stay at root — they are used by the docker-build CI job in build.yml.
+
+labeling/ stays as-is — only gitkeep files and one export tracked, real data is gitignored.
+
+503 tests pass.
+
+What is left at root that looks stale to you? I still see .dockerignore, run.sh, requirements-server.txt, requirements-dev.txt, run.bat, setup.ps1, pytest.ini — all of these appear legitimately needed. Let me know if you see anything else.
