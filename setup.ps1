@@ -14,7 +14,7 @@
 $ErrorActionPreference = "Stop"
 $REPO_URL = "https://github.com/ledostarmac2/hotel-email-triage.git"
 $INSTALL_DIR = Join-Path $env:USERPROFILE "ReplyRight"
-$PYTHON_VERSION = "3.11"
+$PYTHON_VERSION = "3.12"
 
 Write-Host ""
 Write-Host "  ReplyRight — Setup" -ForegroundColor Cyan
@@ -25,8 +25,9 @@ Write-Host ""
 function Find-Python {
     $candidates = @(
         "python",
+        "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe",
         "$env:LOCALAPPDATA\Programs\Python\Python311\python.exe",
-        "$env:LOCALAPPDATA\Programs\Python\Python310\python.exe",
+        "C:\Python312\python.exe",
         "C:\Python311\python.exe"
     )
     foreach ($c in $candidates) {
@@ -42,13 +43,13 @@ $python = Find-Python
 if (-not $python) {
     Write-Host "Python 3.10+ not found. Downloading Python $PYTHON_VERSION installer..." -ForegroundColor Yellow
     $pyInstaller = "$env:TEMP\python-installer.exe"
-    $pyUrl = "https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe"
+    $pyUrl = "https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe"
     Invoke-WebRequest -Uri $pyUrl -OutFile $pyInstaller -UseBasicParsing
     Start-Process -FilePath $pyInstaller -ArgumentList "/quiet InstallAllUsers=0 PrependPath=1 Include_pip=1" -Wait
     Remove-Item $pyInstaller -Force -ErrorAction SilentlyContinue
     $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "User") + ";" + $env:PATH
     $python = Find-Python
-    if (-not $python) { throw "Python installation failed. Please install Python 3.11 manually from python.org." }
+    if (-not $python) { throw "Python installation failed. Please install Python 3.12 manually from python.org." }
     Write-Host "Python installed: $python" -ForegroundColor Green
 } else {
     Write-Host "Python found: $python" -ForegroundColor Green
@@ -86,9 +87,9 @@ Write-Host "Building ReplyRight.exe..." -ForegroundColor Cyan
 & .venv\Scripts\pip install --quiet pyinstaller==6.20.0
 .\build_exe.ps1
 
-$exePath = Join-Path $INSTALL_DIR "dist\ReplyRight.exe"
+$exePath = Join-Path $INSTALL_DIR "dist\ReplyRight\ReplyRight.exe"
 if (-not (Test-Path $exePath)) {
-    throw "Build failed — dist\ReplyRight.exe not found."
+    throw "Build failed — dist\ReplyRight\ReplyRight.exe not found."
 }
 
 # ── Step 5: Shortcuts ─────────────────────────────────────────────────────────

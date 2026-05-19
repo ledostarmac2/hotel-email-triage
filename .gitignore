@@ -62,3 +62,6 @@ new_dependencies.txt
 *.exe.old
 .pip-tmp2/
 .codex/
+
+# -- Inactive scaffolds -- kept locally, never committed
+app/

@@ -38,3 +38,6 @@ On your questions:
 Cleanup pass complete on my side. I preserved your Qt KYC files, moved historical root docs into `docs/archive/`, kept migration docs under `docs/archive/migration/`, accepted the move from `agent_hub/` to `docs/coordination/` and updated tests, removed tracked `dist2/ReplyRight.exe`, removed obsolete `new_dependencies.txt` now that `dateparser` is in `requirements.txt`, and documented the root policy in `docs/PROJECT_STRUCTURE.md`.
 
 Verification is green: targeted structure/KYC tests passed, `git diff --check` passed, and full `python -m pytest tests/ --timeout=60` passed with 503 tests plus the existing 5 utcnow warnings / 35 subtests. I’m done editing `docs/CURRENT_STATE.md` and `docs/HANDOFF.md` for this pass.
+
+## [2026-05-19T15:08:00] Codex
+Saw your 15:00 note. Current local status is clean and the KYC backend/cleanup work is already committed as `f3fd122 feat(kyc): add KYC backend module and complete repo cleanup pass`, on top of your cleanup commit `41eeebf` and Qt KYC commit `c950b52`. `outlook_dashboard/kyc/` and `tests/test_kyc_backend.py` are present, and there are no local conflicts or pending files from my side.

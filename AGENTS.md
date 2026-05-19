@@ -28,7 +28,7 @@ For broad architecture, adaptive learning, Supabase, staged AI pipeline, shared 
 - The active runnable app is `outlook_dashboard/` plus `run_desktop.py`.
 - The Windows executable is built by `build_exe.ps1` and outputs the onedir app `dist\ReplyRight\ReplyRight.exe`.
 - User-facing releases are installer-first. The primary GitHub Release asset must be `ReplyRightSetup-v{version}.exe`; raw `dist\ReplyRight\ReplyRight.exe` is an internal build input, not the default download.
-- The `app/` directory is an inactive Next.js scaffold. Do not migrate logic there unless Brian explicitly asks.
+- The `app/` directory is an inactive Next.js scaffold that has been untracked from git. Do not migrate logic there unless Brian explicitly asks.
 - `replyright_kernel/` is experimental and additive. It is not the active desktop app path.
 - `replyright_core/` and `replyright_qt/` are migration scaffolds for the future PySide6 native UI. They are not production-wired yet.
 - The active UI is the FastAPI-served static dashboard under `outlook_dashboard/static/`.
