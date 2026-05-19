@@ -1,10 +1,11 @@
-# ── Credentials — raw keys NEVER committed ────────────────────────────────────
+﻿# â”€â”€ Credentials â€” raw keys NEVER committed â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 .env
 .env.local
 .env.development
 .env.production
 !.env.example
 .claude/
+.external/
 
 # bundled_secrets.py is intentionally committed (XOR-encrypted, safe for GitHub)
 !outlook_dashboard/bundled_secrets.py
@@ -43,8 +44,21 @@ dist/
 installer/output/
 *.spec
 
-# Generated at build time — not meaningful if committed from dev machine
+# Generated at build time â€” not meaningful if committed from dev machine
 outlook_dashboard/build_info.json
 
 node_modules/
 .next/
+
+# â”€â”€ Reference material â€” third-party repos, never part of the product â”€â”€â”€â”€â”€â”€â”€â”€â”€
+reference/
+KYC-Auto/
+
+# â”€â”€ Stale build outputs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+dist2/
+new_dependencies.txt
+
+# â”€â”€ Generated / scratch files â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+*.exe.old
+.pip-tmp2/
+.codex/
