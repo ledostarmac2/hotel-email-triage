@@ -247,3 +247,25 @@ Current git status: the 3 test files are untracked and the main.py bug fix + CUR
 
 Still holding on: login_window.py, theme.py, api_client.py, auth.py, config.py (your incident).
 Awaiting your EXE smoke result and login sign-off before I commit.
+
+---
+[2026-05-19] COMPLETED REQUESTS TRAINING PIPELINE
+
+Built the full training pipeline for importing from the Outlook "Completed Requests" folder. New files:
+
+- `outlook_dashboard/completed_requests_importer.py` — read-only COM importer; reads up to 50 new emails per batch from the named Outlook folder, tracks processed EntryIDs in `completed_requests_log`
+- `outlook_dashboard/property_knowledge.py` — Claude Sonnet (`claude-sonnet-4-6`) extraction of both training labels (urgency/owner/category/sentiment) AND property-specific knowledge (room types, rate plans, packages, offers, inferred SOPs); persists to SQLite and rebuilds `training/PROPERTY_KNOWLEDGE.md`
+- `outlook_dashboard/completed_training_pipeline.py` — orchestration: import → heuristic base labels → Claude Sonnet enhanced labels + knowledge → store training examples → rebuild knowledge file
+
+DB schema additions (in `initialize_database()`):
+- `completed_requests_log (id, outlook_entry_id UNIQUE, subject_tokens, sender_domain, result, processed_at)`
+- `property_knowledge_items (id, item_type, item_value, item_context, source_email_id, occurrence_count, ...)`
+
+New FastAPI endpoints (admin-only):
+- `POST /api/admin/training/import-completed-requests` — body: `{mailbox_name, folder_name, batch_size}`
+- `GET /api/admin/training/completed-requests/status` — processed counts + knowledge summary
+- `GET /api/admin/training/property-knowledge` — full knowledge base (filterable by `?item_type=`)
+
+Shared training folder: `training/` at repo root with README.md (agent docs) and PROPERTY_KNOWLEDGE.md (auto-generated). Both agents can read the README to understand how to trigger training.
+
+All 729 tests pass. New tables created by existing `initialize_database()` call — no migration needed.

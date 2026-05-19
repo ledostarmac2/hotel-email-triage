@@ -89,6 +89,11 @@ from .local_classifier import invalidate_cache as invalidate_classifier_cache
 from .local_classifier import train as train_local_classifier
 from .training_pipeline import pipeline_status as training_pipeline_status
 from .training_pipeline import run_pipeline as run_training_pipeline
+from .completed_training_pipeline import (
+    completed_pipeline_status,
+    run_completed_pipeline,
+)
+from .database import list_property_knowledge
 from .updater import get_build_info, get_update_status, start_download, start_update_check
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -729,6 +734,68 @@ def api_training_run(request: Request, batch_size: int = 10, refine: bool = Fals
         db_path=settings.database_path,
     )
     return result
+
+
+class CompletedRequestsImportBody(BaseModel):
+    mailbox_name: str = Field(..., min_length=1, description="Outlook mailbox display name")
+    folder_name: str = Field("Completed Requests", min_length=1)
+    batch_size: int = Field(50, ge=1, le=200)
+
+
+@app.post("/api/admin/training/import-completed-requests")
+def api_import_completed_requests(
+    payload: CompletedRequestsImportBody,
+    request: Request,
+) -> dict[str, object]:
+    """Import up to batch_size emails from the Completed Requests Outlook folder,
+    label them with Claude Sonnet, extract property knowledge, and store training examples.
+    Requires admin role and Outlook running on the same Windows machine.
+    """
+    if request.state.user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only.")
+    settings = get_settings()
+    result = run_completed_pipeline(
+        mailbox_name=payload.mailbox_name,
+        folder_name=payload.folder_name,
+        batch_size=payload.batch_size,
+        db_path=settings.database_path,
+    )
+    record_audit_event(
+        action="training.completed_requests.import",
+        actor_user_id=None,
+        actor_email=str(request.state.user["email"]),
+        entity_type="completed_training_pipeline",
+        entity_id=None,
+        metadata={k: v for k, v in result.items() if k != "messages"},
+        db_path=settings.database_path,
+    )
+    return result
+
+
+@app.get("/api/admin/training/completed-requests/status")
+def api_completed_requests_status(request: Request) -> dict[str, object]:
+    """Return processing counts and property knowledge summary."""
+    if request.state.user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only.")
+    return completed_pipeline_status(db_path=get_settings().database_path)
+
+
+@app.get("/api/admin/training/property-knowledge")
+def api_property_knowledge(
+    request: Request,
+    item_type: str = Query(""),
+) -> dict[str, object]:
+    """Return the property knowledge base extracted from completed email requests."""
+    if request.state.user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only.")
+    items = list_property_knowledge(db_path=get_settings().database_path)
+    if item_type:
+        items = [i for i in items if i.get("item_type") == item_type]
+    grouped: dict[str, list[dict]] = {}
+    for item in items:
+        t = str(item.get("item_type", "other"))
+        grouped.setdefault(t, []).append(item)
+    return {"total": len(items), "by_type": grouped}
 
 
 @app.get("/api/admin/prompts")

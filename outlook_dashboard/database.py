@@ -241,6 +241,32 @@ def initialize_database(db_path: Path | None = None) -> None:
             CREATE INDEX IF NOT EXISTS idx_tpl_status ON training_pipeline_log (status);
             """
         )
+        db.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS completed_requests_log (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                outlook_entry_id TEXT NOT NULL UNIQUE,
+                subject_tokens   TEXT,
+                sender_domain    TEXT,
+                result           TEXT NOT NULL DEFAULT 'pending',
+                processed_at     TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_crl_result ON completed_requests_log (result);
+
+            CREATE TABLE IF NOT EXISTS property_knowledge_items (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                item_type        TEXT NOT NULL,
+                item_value       TEXT NOT NULL,
+                item_context     TEXT,
+                source_email_id  INTEGER,
+                occurrence_count INTEGER NOT NULL DEFAULT 1,
+                created_at       TEXT NOT NULL,
+                updated_at       TEXT NOT NULL,
+                UNIQUE(item_type, item_value)
+            );
+            CREATE INDEX IF NOT EXISTS idx_pki_type ON property_knowledge_items (item_type);
+            """
+        )
         from .kyc.repository import ensure_kyc_schema
 
         ensure_kyc_schema(db)
@@ -1305,3 +1331,20 @@ def list_unprocessed_completed_emails(
             (batch_size,),
         ).fetchall()
         return [dict(row) for row in rows]
+
+
+def list_property_knowledge(db_path: Path | None = None) -> list[dict[str, Any]]:
+    """Return all property knowledge items ordered by type and occurrence."""
+    try:
+        with managed_connect(db_path) as db:
+            rows = db.execute(
+                """
+                SELECT item_type, item_value, item_context, occurrence_count,
+                       created_at, updated_at
+                FROM property_knowledge_items
+                ORDER BY item_type, occurrence_count DESC, item_value
+                """
+            ).fetchall()
+    except sqlite3.OperationalError:
+        return []
+    return [dict(row) for row in rows]
