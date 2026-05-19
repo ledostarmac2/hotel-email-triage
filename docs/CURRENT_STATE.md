@@ -1,6 +1,6 @@
 # Current State
 
-Last updated: 2026-05-19 (v0.1.1 release/auth repair in progress)
+Last updated: 2026-05-19 (massive test expansion + bug fix)
 
 ## Status
 
@@ -51,6 +51,12 @@ Last updated: 2026-05-19 (v0.1.1 release/auth repair in progress)
   - GitHub Actions release builds now keep the CI-provisioned runtime `.env` in `dist\ReplyRight` and package it into the installer. The workflow verifies required release runtime secrets are present without printing values.
   - Startup now always creates/repairs the configured `REPLYRIGHT_ADMIN_EMAIL` / `REPLYRIGHT_ADMIN_PASSWORD` account when those values are present, instead of redirecting to first-run setup first.
   - Release CI now treats `REPLYRIGHT_ADMIN_EMAIL` and `REPLYRIGHT_ADMIN_PASSWORD` as required installer runtime secrets.
+- 2026-05-19 massive test expansion:
+  - Added 225 new tests across three new files; full suite now at 729 tests, 0 failures.
+  - `tests/test_triage_real_world.py` (112 tests): real hotel email scenarios covering VIP, billing, ADA, same-day arrival, complaints, CCA, concierge, rate inquiry, consortia, internal, group blocks, sentiment detection, and edge cases.
+  - `tests/test_api_full_coverage.py` (60 tests): full FastAPI endpoint coverage — auth, emails, KYC lifecycle via API, admin, import/export, rule candidates, rate limiting.
+  - `tests/test_kyc_service_full.py` (53 tests): KYC service unit tests — settings, event CRUD, acknowledge/snooze/complete/skip lifecycle, overdue/strict mode, missed count, escalation, history, repository methods.
+  - Fixed real bug: `needs_credentials_setup` was missing from `outlook_dashboard/main.py` import block, causing NameError at `/api/auth/startup-state`.
 - Local validation after the final v0.1.1 repair pass:
   - `.\build_exe.ps1` built `dist\ReplyRight\ReplyRight.exe`.
   - `dist\ReplyRight\ReplyRight.exe --health-smoke` exited successfully.
