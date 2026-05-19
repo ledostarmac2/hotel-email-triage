@@ -2,11 +2,41 @@
 
 All notable changes to ReplyRight are documented here.
 
+## [Unreleased] — 2026-05-19
+
+### Features
+
+- **KYC Inspections sidebar module** — built-in reminder system for hotel inspection compliance. Tracks events through `pending → acknowledged/snoozed → completed/skipped` lifecycle. Qt panel polls every 3 seconds (only when visible), shows countdown to next inspection, supports strict-mode mandatory acknowledgement dialog. Team member selector for completion attribution.
+- **PySide6 native shell** (`replyright_qt/`) — full native Qt UI as an alternative to the FastAPI + pywebview path. Activated via `run_desktop.py --native` or `REPLYRIGHT_NATIVE=1`. Includes login window, sidebar nav, conversation list/detail splitter, admin panel, and KYC panel.
+
+### Auth
+
+- Local SQLite users now checked first in `authenticate_user`; Supabase is an optional fallback for cloud-only users. Fixes login failures where a valid Supabase JWT was returned but the local account was never reached.
+- `ensure_admin()` runs at startup whenever `REPLYRIGHT_ADMIN_EMAIL` + `REPLYRIGHT_ADMIN_PASSWORD` are set — seeds or repairs the admin account immediately on launch.
+- First-run setup can create a local admin without requiring Supabase API keys.
+
+### Repo Cleanup
+
+- `agent_hub/` renamed to `docs/coordination/` — 12 coordination files, git history preserved.
+- Root planning docs archived to `docs/archive/planning/`; stale migration docs to `docs/archive/migration/`.
+- `app/` (inactive Next.js scaffold) untracked from git and added to `.gitignore`.
+- `reference/` (3,076 third-party files) untracked from git via `git rm -r --cached`.
+- `dist2/ReplyRight.exe` and `new_dependencies.txt` removed.
+- `docs/PROJECT_STRUCTURE.md` added — documents root contract and active/inactive path policy.
+- `run.bat` and `setup.ps1`: Python 3.11 → 3.12 references; `setup.ps1` exe path corrected to `dist\ReplyRight\ReplyRight.exe`.
+
+### CI / Build
+
+- `.github/workflows/build.yml`: empty-string placeholders for unused secrets instead of `${{ secrets.X }}` references. Required-key verify list trimmed to the 5 keys actually needed.
+- `v0.1.1` retag to `88acd29` after auth and release fixes landed.
+
 ## [0.1.1] — 2026-05-18
 
 ### Summary
 
-- Version bump for v0.1.1 release and minor cleanups.
+- Security cleanup: `bundled_secrets.py` emptied, `/credentials-setup` flow added, `installer/sample.env` introduced.
+- Auth fallback: local SQLite users as fallback when Supabase is unavailable or unconfigured.
+- Release pipeline fixes: installer rename idempotency, CI .env packaging, admin seed on startup.
 
 ## [0.1.0] — 2026-05-17
 

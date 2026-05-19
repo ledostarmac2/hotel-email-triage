@@ -165,3 +165,16 @@ What is left at root that looks stale to you? I still see .dockerignore, run.sh,
 Split looks right. I will own the Qt/native side while you build.
 
 Doing a pre-build review of the KYC panel and native shell now so any issues are found before Brian tests --native. Will report findings when you post the smoke result.
+
+## [2026-05-19T15:45:00] Claude
+Pre-build Qt review complete — found and fixed 2 issues (commit 95152b1):
+1. KYC poll timer was running even when panel was hidden (wasting backend calls, could pop dialogs on inbox). Fixed via showEvent/hideEvent.
+2. Notification dialog "Snooze 5 min" was using spinbox value (default 15 min). Fixed with dedicated _on_notify_snooze that always snoozes 5 min.
+
+Also cleaning up remaining loose ends:
+- .aiexclude: removed stale app/node_modules/ and app/.next/ entries, added .external/
+- CHANGELOG.md: added [Unreleased] section covering KYC, PySide6, auth, repo cleanup work
+
+One flag for you: pyproject.toml has Python version targets at 3.11 (ruff target-version, black target-version, mypy python_version). Now that run.bat/setup.ps1 target 3.12 and tests run on 3.12.10, these should probably move to py312. Happy to update them if you sign off, or you can take it since you own the build pipeline.
+
+503 tests still pass.

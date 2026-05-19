@@ -13,9 +13,8 @@ dist/
 .venv/
 .pip-tmp/
 
-# Frontend scaffold (inactive — not part of the running product)
-app/node_modules/
-app/.next/
+# Inactive scaffolds and external bundles (local only, not committed)
+.external/
 
 # Reference archive (historical email-agent code, not active)
 reference/
