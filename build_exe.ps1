@@ -54,6 +54,7 @@ $runtimePackages = @(
     "fastapi",
     "uvicorn[standard]",
     "httpx",
+    "requests",
     "python-dotenv",
     "openai",
     "anthropic",
@@ -106,6 +107,12 @@ function Invoke-VendorPipInstall {
     }
 }
 
+# Wipe stale vendor cache if it contains pywebview (old WebView2 stack)
+if ((Test-Path $vendorPath) -and (Test-Path (Join-Path $vendorPath "webview"))) {
+    Write-Host "Removing stale vendor cache (pywebview detected — replaced by PySide6)"
+    Remove-Item $vendorPath -Recurse -Force
+}
+
 if (-not (Test-Path $vendorPath)) {
     $env:TEMP = Join-Path (Get-Location) ".build-tmp"
     $env:TMP = $env:TEMP
@@ -120,15 +127,16 @@ if (-not (Test-Path $vendorPath)) {
 } else {
     # Check for packages that may have been added since .vendor was last built
     $vendorChecks = @{
-        "win32com"     = "pywin32"
-        "anthropic"    = "anthropic"
-        "dateparser"   = "dateparser"
-        "httpx"        = "httpx"
-        "joblib"       = "joblib"
-        "openai"       = "openai"
-        "sklearn"      = "scikit-learn"
+        "win32com"      = "pywin32"
+        "anthropic"     = "anthropic"
+        "dateparser"    = "dateparser"
+        "httpx"         = "httpx"
+        "requests"      = "requests"
+        "joblib"        = "joblib"
+        "openai"        = "openai"
+        "sklearn"       = "scikit-learn"
         "threadpoolctl" = "threadpoolctl"
-        "PySide6"      = "PySide6>=6.7"
+        "PySide6"       = "PySide6>=6.7"
     }
     $toInstall = @()
     foreach ($dir in $vendorChecks.Keys) {
