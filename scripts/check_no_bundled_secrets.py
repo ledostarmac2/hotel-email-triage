@@ -52,6 +52,11 @@ def is_safe_line(line: str) -> bool:
     return False
 
 def check_file(path: Path) -> list[str]:
+    if os.getenv("ALLOW_RELEASE_RUNTIME_SECRETS") == "1" and path.name == ".env":
+        parts = {part.lower() for part in path.parts}
+        if "dist" in parts or "installer" in parts:
+            return []
+
     errors = []
     try:
         content = path.read_text(encoding="utf-8")

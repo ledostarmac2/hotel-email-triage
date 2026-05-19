@@ -28,6 +28,7 @@ Last updated: 2026-05-19 (v0.1.1 release/auth repair in progress)
   - Installer security audit now treats `innoextract` format incompatibility as a warning and still audits the staged `dist\ReplyRight` payload plus installer output.
   - Restored local SQLite authentication as a fallback for existing installed databases and fresh installs without Supabase service-role configuration. Supabase Auth is still used when configured; if unavailable or not configured, ReplyRight can authenticate local `users` rows and create local sessions.
   - First-run setup can now create a local SQLite admin when no admin exists and Supabase service-role configuration is absent. It still does not ask users for API keys.
+  - GitHub Actions release builds now keep the CI-provisioned runtime `.env` in `dist\ReplyRight` and package it into the installer. The workflow verifies required release runtime secrets are present without printing values.
 - Local validation after the final v0.1.1 repair pass:
   - `.\build_exe.ps1` built `dist\ReplyRight\ReplyRight.exe`.
   - `dist\ReplyRight\ReplyRight.exe --health-smoke` exited successfully.

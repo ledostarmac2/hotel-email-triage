@@ -1,5 +1,11 @@
 # Decisions
 
+## 2026-05-19: Owner-Built Release Installer Includes Runtime Secrets
+
+Decision: The GitHub Actions owner-built release installer should include the CI-provisioned runtime `.env` from repository Actions secrets so ReplyRight has OpenAI, Google AI, Claude, Supabase, admin seed, SMTP, and Microsoft configuration available immediately after install. CI must verify required runtime secrets are present without printing values.
+
+Rationale: ReplyRight is being released for a controlled deployment where the owner expects the installer to be ready to run. Removing `.env` before installer creation left the released app without the API keys needed for AI and Supabase behavior.
+
 ## 2026-05-19: Hybrid Supabase And Local SQLite Auth
 
 Decision: ReplyRight login should prefer Supabase Auth when configured, but must preserve local SQLite users and sessions as a fallback for existing installs and local-first/offline operation. First-run setup may create a local SQLite admin when no admin exists and Supabase service-role configuration is absent, without asking the user for API keys.

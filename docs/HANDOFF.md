@@ -1,5 +1,40 @@
 # Handoff Log
 
+## 2026-05-19 - package release runtime API keys
+
+Summary:
+
+- Fixed the release packaging path that was stripping `.env` before installer creation.
+- Expanded GitHub Actions `.env` generation to include OpenAI, Google AI, Claude, Supabase, admin seed, SMTP, and Microsoft configuration from repository Actions secrets.
+- Added CI verification that required runtime keys are present without printing their values.
+- Changed the Inno Setup file list so the release installer includes `dist\ReplyRight\.env` while still excluding runtime data, SQLite databases, and logs.
+- Adjusted the secret audit to allow release-staged `.env` only when `ALLOW_RELEASE_RUNTIME_SECRETS=1` is explicitly set in CI.
+
+Files changed:
+
+- `.github/workflows/build.yml`
+- `installer/replyright_setup.iss`
+- `installer/sample.env`
+- `scripts/check_no_bundled_secrets.py`
+- `tests/test_secret_hygiene.py`
+- `docs/CURRENT_STATE.md`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+
+Verification:
+
+- `.github/workflows/build.yml` parsed successfully with PyYAML.
+- `python -m pytest tests/test_secret_hygiene.py -q --timeout=60` - 14 passed.
+- `python -m pytest tests/test_auth_supabase.py tests/test_first_run_setup.py -q --timeout=60` - 19 passed, existing `datetime.utcnow()` warnings.
+- `python -m pytest tests/ -x --timeout=60` - 496 passed, 4 existing `datetime.utcnow()` warnings, 35 subtests passed.
+
+Remaining work:
+
+- Confirm the required GitHub Actions secrets exist: `OPENAI_API_KEY`, `GOOGLE_AI_API_KEY`, `ANTHROPIC_API_KEY`, `SUPABASE_URL`, `SUPABASE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`.
+- Push and retag `v0.1.1` so the release installer is rebuilt with runtime config.
+
+---
+
 ## 2026-05-19 - restore local database auth fallback
 
 Summary:

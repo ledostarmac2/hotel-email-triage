@@ -48,11 +48,37 @@ jobs:
         shell: pwsh
         run: |
           @"
+          MICROSOFT_CLIENT_ID=${{ secrets.MICROSOFT_CLIENT_ID }}
+          MICROSOFT_CLIENT_SECRET=${{ secrets.MICROSOFT_CLIENT_SECRET }}
+          MICROSOFT_TENANT_ID=${{ secrets.MICROSOFT_TENANT_ID }}
+          MICROSOFT_REDIRECT_URI=${{ secrets.MICROSOFT_REDIRECT_URI }}
+          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL=${{ secrets.OPENAI_MODEL }}
+          GOOGLE_AI_API_KEY=${{ secrets.GOOGLE_AI_API_KEY }}
+          GOOGLE_AI_MODEL=${{ secrets.GOOGLE_AI_MODEL }}
           ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_MODEL=${{ secrets.ANTHROPIC_MODEL }}
           SUPABASE_URL=${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}
           SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          REPLYRIGHT_ADMIN_EMAIL=${{ secrets.REPLYRIGHT_ADMIN_EMAIL }}
+          REPLYRIGHT_ADMIN_PASSWORD=${{ secrets.REPLYRIGHT_ADMIN_PASSWORD }}
+          SMTP_HOST=${{ secrets.SMTP_HOST }}
+          SMTP_PORT=${{ secrets.SMTP_PORT }}
+          SMTP_USER=${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}
+          SMTP_FROM=${{ secrets.SMTP_FROM }}
           "@ | Set-Content -Path .env -Encoding UTF8
+      - name: Verify runtime keys for installer
+        shell: pwsh
+        run: |
+          $required = @("OPENAI_API_KEY", "GOOGLE_AI_API_KEY", "ANTHROPIC_API_KEY", "SUPABASE_URL", "SUPABASE_KEY", "SUPABASE_SERVICE_ROLE_KEY")
+          $values = @{}
+          Get-Content ".env" | ForEach-Object {
+            if ($_ -match "^\s*([^#=]+)=(.*)$") { $values[$Matches[1].Trim()] = $Matches[2].Trim() }
+          }
+          $missing = @($required | Where-Object { -not $values.ContainsKey($_) -or [string]::IsNullOrWhiteSpace($values[$_]) })
+          if ($missing.Count -gt 0) { throw "Missing required release runtime secrets: $($missing -join ', ')" }
       - name: Install dependencies
         shell: pwsh
         run: |
@@ -64,12 +90,6 @@ jobs:
       - name: Packaged health smoke
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -Command "& '.\dist\ReplyRight\ReplyRight.exe' --health-smoke"
-      - name: Clean up CI secrets
-        shell: pwsh
-        run: |
-          if (Test-Path ".env") { Remove-Item ".env" -Force }
-          if (Test-Path ".\dist\ReplyRight\.env") { Remove-Item ".\dist\ReplyRight\.env" -Force }
-          if (Test-Path ".\dist\ReplyRight\_internal\.env") { Remove-Item ".\dist\ReplyRight\_internal\.env" -Force }
       - name: Build Installer
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -File .\installer\build_installer.ps1
@@ -87,10 +107,26 @@ jobs:
       - name: Write CI .env
         run: |
           cat > .env <<EOF
+          MICROSOFT_CLIENT_ID=${{ secrets.MICROSOFT_CLIENT_ID }}
+          MICROSOFT_CLIENT_SECRET=${{ secrets.MICROSOFT_CLIENT_SECRET }}
+          MICROSOFT_TENANT_ID=${{ secrets.MICROSOFT_TENANT_ID }}
+          MICROSOFT_REDIRECT_URI=${{ secrets.MICROSOFT_REDIRECT_URI }}
+          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL=${{ secrets.OPENAI_MODEL }}
+          GOOGLE_AI_API_KEY=${{ secrets.GOOGLE_AI_API_KEY }}
+          GOOGLE_AI_MODEL=${{ secrets.GOOGLE_AI_MODEL }}
           ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_MODEL=${{ secrets.ANTHROPIC_MODEL }}
           SUPABASE_URL=${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}
           SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          REPLYRIGHT_ADMIN_EMAIL=${{ secrets.REPLYRIGHT_ADMIN_EMAIL }}
+          REPLYRIGHT_ADMIN_PASSWORD=${{ secrets.REPLYRIGHT_ADMIN_PASSWORD }}
+          SMTP_HOST=${{ secrets.SMTP_HOST }}
+          SMTP_PORT=${{ secrets.SMTP_PORT }}
+          SMTP_USER=${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}
+          SMTP_FROM=${{ secrets.SMTP_FROM }}
           EOF
       - name: Build Docker image
         run: docker build -t replyright-ci .
@@ -123,11 +159,37 @@ jobs:
         shell: pwsh
         run: |
           @"
+          MICROSOFT_CLIENT_ID=${{ secrets.MICROSOFT_CLIENT_ID }}
+          MICROSOFT_CLIENT_SECRET=${{ secrets.MICROSOFT_CLIENT_SECRET }}
+          MICROSOFT_TENANT_ID=${{ secrets.MICROSOFT_TENANT_ID }}
+          MICROSOFT_REDIRECT_URI=${{ secrets.MICROSOFT_REDIRECT_URI }}
+          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL=${{ secrets.OPENAI_MODEL }}
+          GOOGLE_AI_API_KEY=${{ secrets.GOOGLE_AI_API_KEY }}
+          GOOGLE_AI_MODEL=${{ secrets.GOOGLE_AI_MODEL }}
           ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_MODEL=${{ secrets.ANTHROPIC_MODEL }}
           SUPABASE_URL=${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}
           SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          REPLYRIGHT_ADMIN_EMAIL=${{ secrets.REPLYRIGHT_ADMIN_EMAIL }}
+          REPLYRIGHT_ADMIN_PASSWORD=${{ secrets.REPLYRIGHT_ADMIN_PASSWORD }}
+          SMTP_HOST=${{ secrets.SMTP_HOST }}
+          SMTP_PORT=${{ secrets.SMTP_PORT }}
+          SMTP_USER=${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}
+          SMTP_FROM=${{ secrets.SMTP_FROM }}
           "@ | Set-Content -Path .env -Encoding UTF8
+      - name: Verify runtime keys for release installer
+        shell: pwsh
+        run: |
+          $required = @("OPENAI_API_KEY", "GOOGLE_AI_API_KEY", "ANTHROPIC_API_KEY", "SUPABASE_URL", "SUPABASE_KEY", "SUPABASE_SERVICE_ROLE_KEY")
+          $values = @{}
+          Get-Content ".env" | ForEach-Object {
+            if ($_ -match "^\s*([^#=]+)=(.*)$") { $values[$Matches[1].Trim()] = $Matches[2].Trim() }
+          }
+          $missing = @($required | Where-Object { -not $values.ContainsKey($_) -or [string]::IsNullOrWhiteSpace($values[$_]) })
+          if ($missing.Count -gt 0) { throw "Missing required release runtime secrets: $($missing -join ', ')" }
       - name: Install dependencies
         shell: pwsh
         run: |
@@ -142,12 +204,6 @@ jobs:
       - name: Packaged health smoke
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -Command "& '.\dist\ReplyRight\ReplyRight.exe' --health-smoke"
-      - name: Clean up CI secrets
-        shell: pwsh
-        run: |
-          if (Test-Path ".env") { Remove-Item ".env" -Force }
-          if (Test-Path ".\dist\ReplyRight\.env") { Remove-Item ".\dist\ReplyRight\.env" -Force }
-          if (Test-Path ".\dist\ReplyRight\_internal\.env") { Remove-Item ".\dist\ReplyRight\_internal\.env" -Force }
       - name: Build Installer
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -File .\installer\build_installer.ps1
@@ -163,7 +219,19 @@ jobs:
             Write-Warning "innoextract could not unpack this installer format; auditing the staged dist payload and installer output instead."
             if (-not (Test-Path ".\dist\ReplyRight")) { throw "Staged dist payload missing for fallback audit." }
           }
+          $env:ALLOW_RELEASE_RUNTIME_SECRETS = "1"
           python scripts/check_no_bundled_secrets.py
+      - name: Verify release installer runtime config
+        shell: pwsh
+        run: |
+          $expected = ".\dist\ReplyRight\.env"
+          if (-not (Test-Path $expected)) { throw "Release runtime .env missing from staged payload." }
+          $content = Get-Content $expected
+          foreach ($name in @("OPENAI_API_KEY", "GOOGLE_AI_API_KEY", "ANTHROPIC_API_KEY", "SUPABASE_URL", "SUPABASE_KEY", "SUPABASE_SERVICE_ROLE_KEY")) {
+            if (-not ($content | Where-Object { $_ -match "^$name=\S+" })) {
+              throw "Release runtime .env is missing required key: $name"
+            }
+          }
       - name: Rename Installer
         shell: pwsh
         run: |
