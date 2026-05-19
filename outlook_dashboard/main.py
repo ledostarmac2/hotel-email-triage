@@ -30,6 +30,7 @@ from .auth import (
     ensure_admin,
     get_session_user,
     list_users,
+    needs_credentials_setup,
     reset_password,
     send_invite_email,
     send_reset_email,
