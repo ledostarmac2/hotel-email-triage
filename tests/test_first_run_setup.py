@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -172,3 +173,37 @@ def test_api_first_run_setup_falls_back_to_local_database_without_service_role(
         assert response.status_code == 200
         assert response.json() == {"ok": True, "email": "admin@example.com", "role": "admin"}
         assert "rr_session=" in response.headers.get("set-cookie", "")
+
+
+def test_startup_seed_repairs_configured_admin_even_when_no_remote_admin(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db_path = tmp_path / "startup-seed.sqlite3"
+    monkeypatch.setenv("SQLITE_DB_PATH", str(db_path))
+    monkeypatch.setenv("RATE_LIMIT_PER_MINUTE", "500")
+    monkeypatch.setenv("REPLYRIGHT_ADMIN_EMAIL", "admin@example.com")
+    monkeypatch.setenv("REPLYRIGHT_ADMIN_PASSWORD", "ConfiguredPassword123!")
+
+    import outlook_dashboard.main as main
+    from outlook_dashboard.config import get_settings
+
+    get_settings.cache_clear()
+    main._RATE_LIMIT_BUCKETS.clear()
+    monkeypatch.setattr(main, "download_approved_rules", lambda: [])
+    monkeypatch.setattr(main, "download_prompt_versions", lambda: [])
+    monkeypatch.setattr(main, "download_known_senders", lambda: [])
+    monkeypatch.setattr(main, "flush_feedback_queue", lambda: 0)
+    monkeypatch.setattr(main, "start_update_check", lambda: None)
+
+    with patch("urllib.request.urlopen", side_effect=AssertionError("Supabase should not be called")):
+        with TestClient(main.app) as client:
+            response = client.post(
+                "/login",
+                data={"email": "admin@example.com", "password": "ConfiguredPassword123!"},
+                follow_redirects=False,
+            )
+
+    assert response.status_code == 303
+    assert "rr_session=" in response.headers.get("set-cookie", "")
+    get_settings.cache_clear()
+    main._RATE_LIMIT_BUCKETS.clear()
