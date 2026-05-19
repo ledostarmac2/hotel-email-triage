@@ -30,6 +30,7 @@ Last updated: 2026-05-19 (v0.1.1 release/auth repair in progress)
   - First-run setup can now create a local SQLite admin when no admin exists and Supabase service-role configuration is absent. It still does not ask users for API keys.
   - GitHub Actions release builds now keep the CI-provisioned runtime `.env` in `dist\ReplyRight` and package it into the installer. The workflow verifies required release runtime secrets are present without printing values.
   - Startup now always creates/repairs the configured `REPLYRIGHT_ADMIN_EMAIL` / `REPLYRIGHT_ADMIN_PASSWORD` account when those values are present, instead of redirecting to first-run setup first.
+  - Release CI now treats `REPLYRIGHT_ADMIN_EMAIL` and `REPLYRIGHT_ADMIN_PASSWORD` as required installer runtime secrets.
 - Local validation after the final v0.1.1 repair pass:
   - `.\build_exe.ps1` built `dist\ReplyRight\ReplyRight.exe`.
   - `dist\ReplyRight\ReplyRight.exe --health-smoke` exited successfully.

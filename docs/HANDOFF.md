@@ -7,6 +7,7 @@ Summary:
 - Fixed the release packaging path that was stripping `.env` before installer creation.
 - Expanded GitHub Actions `.env` generation to include OpenAI, Google AI, Claude, Supabase, admin seed, SMTP, and Microsoft configuration from repository Actions secrets.
 - Added CI verification that required runtime keys are present without printing their values.
+- Added `REPLYRIGHT_ADMIN_EMAIL` and `REPLYRIGHT_ADMIN_PASSWORD` to the required release runtime secret checks.
 - Changed the Inno Setup file list so the release installer includes `dist\ReplyRight\.env` while still excluding runtime data, SQLite databases, and logs.
 - Adjusted the secret audit to allow release-staged `.env` only when `ALLOW_RELEASE_RUNTIME_SECRETS=1` is explicitly set in CI.
 

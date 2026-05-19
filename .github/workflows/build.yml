@@ -72,7 +72,7 @@ jobs:
       - name: Verify runtime keys for installer
         shell: pwsh
         run: |
-          $required = @("OPENAI_API_KEY", "GOOGLE_AI_API_KEY", "ANTHROPIC_API_KEY", "SUPABASE_URL", "SUPABASE_KEY", "SUPABASE_SERVICE_ROLE_KEY")
+          $required = @("OPENAI_API_KEY", "GOOGLE_AI_API_KEY", "ANTHROPIC_API_KEY", "SUPABASE_URL", "SUPABASE_KEY", "SUPABASE_SERVICE_ROLE_KEY", "REPLYRIGHT_ADMIN_EMAIL", "REPLYRIGHT_ADMIN_PASSWORD")
           $values = @{}
           Get-Content ".env" | ForEach-Object {
             if ($_ -match "^\s*([^#=]+)=(.*)$") { $values[$Matches[1].Trim()] = $Matches[2].Trim() }
@@ -183,7 +183,7 @@ jobs:
       - name: Verify runtime keys for release installer
         shell: pwsh
         run: |
-          $required = @("OPENAI_API_KEY", "GOOGLE_AI_API_KEY", "ANTHROPIC_API_KEY", "SUPABASE_URL", "SUPABASE_KEY", "SUPABASE_SERVICE_ROLE_KEY")
+          $required = @("OPENAI_API_KEY", "GOOGLE_AI_API_KEY", "ANTHROPIC_API_KEY", "SUPABASE_URL", "SUPABASE_KEY", "SUPABASE_SERVICE_ROLE_KEY", "REPLYRIGHT_ADMIN_EMAIL", "REPLYRIGHT_ADMIN_PASSWORD")
           $values = @{}
           Get-Content ".env" | ForEach-Object {
             if ($_ -match "^\s*([^#=]+)=(.*)$") { $values[$Matches[1].Trim()] = $Matches[2].Trim() }
@@ -227,7 +227,7 @@ jobs:
           $expected = ".\dist\ReplyRight\.env"
           if (-not (Test-Path $expected)) { throw "Release runtime .env missing from staged payload." }
           $content = Get-Content $expected
-          foreach ($name in @("OPENAI_API_KEY", "GOOGLE_AI_API_KEY", "ANTHROPIC_API_KEY", "SUPABASE_URL", "SUPABASE_KEY", "SUPABASE_SERVICE_ROLE_KEY")) {
+          foreach ($name in @("OPENAI_API_KEY", "GOOGLE_AI_API_KEY", "ANTHROPIC_API_KEY", "SUPABASE_URL", "SUPABASE_KEY", "SUPABASE_SERVICE_ROLE_KEY", "REPLYRIGHT_ADMIN_EMAIL", "REPLYRIGHT_ADMIN_PASSWORD")) {
             if (-not ($content | Where-Object { $_ -match "^$name=\S+" })) {
               throw "Release runtime .env is missing required key: $name"
             }
