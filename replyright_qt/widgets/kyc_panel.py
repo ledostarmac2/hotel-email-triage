@@ -64,7 +64,7 @@ class KycPanel(QWidget):
         self._poll_timer = QTimer(self)
         self._poll_timer.setInterval(1000)
         self._poll_timer.timeout.connect(self._on_tick)
-        self._poll_timer.start()
+        # Timer starts/stops with panel visibility via showEvent/hideEvent
 
     # ── UI construction ────────────────────────────────────────────────────────
 
@@ -231,7 +231,16 @@ class KycPanel(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.addWidget(scroll)
 
-    # ── Activation ─────────────────────────────────────────────────────────────
+    # ── Visibility lifecycle ───────────────────────────────────────────────────
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if not self._poll_timer.isActive():
+            self._poll_timer.start()
+
+    def hideEvent(self, event) -> None:
+        super().hideEvent(event)
+        self._poll_timer.stop()
 
     def activate(self) -> None:
         """Called when this panel becomes the active page."""
@@ -405,6 +414,17 @@ class KycPanel(QWidget):
 
     # ── Button handlers ────────────────────────────────────────────────────────
 
+    def _on_notify_snooze(self) -> None:
+        """Snooze from the notification dialog — always 5 minutes."""
+        if self._current_event_id is None:
+            return
+        self._set_actions_enabled(False)
+        worker = ApiWorker(self._client.kyc_snooze, self._current_event_id, 5)
+        worker.success.connect(self._on_action_done)
+        worker.failure.connect(self._on_action_error)
+        worker.start()
+        self._action_worker = worker
+
     def _on_acknowledge(self) -> None:
         if self._current_event_id is None:
             return
@@ -512,6 +532,6 @@ class KycPanel(QWidget):
 
         dlg = KycNotificationDialog(title, message, success=success, strict=strict, parent=self)
         dlg.acknowledged.connect(self._on_acknowledge)
-        dlg.snoozed.connect(self._on_snooze)
+        dlg.snoozed.connect(self._on_notify_snooze)
         self._notification = dlg
         dlg.show()
