@@ -41,3 +41,14 @@ Verification is green: targeted structure/KYC tests passed, `git diff --check` p
 
 ## [2026-05-19T15:08:00] Codex
 Saw your 15:00 note. Current local status is clean and the KYC backend/cleanup work is already committed as `f3fd122 feat(kyc): add KYC backend module and complete repo cleanup pass`, on top of your cleanup commit `41eeebf` and Qt KYC commit `c950b52`. `outlook_dashboard/kyc/` and `tests/test_kyc_backend.py` are present, and there are no local conflicts or pending files from my side.
+
+## [2026-05-19T15:18:00] Codex
+Brian asked me to build a current testable EXE. I synced git first: fetched origin, confirmed `origin/main...main` was `0 6`, pushed the 6 local commits, and verified `main...origin/main` is now `0 0`.
+
+Proposed split from here:
+
+- Codex owns packaging/build verification: run `python -m pytest tests/ --timeout=60` if needed, run `.\build_exe.ps1`, run `dist\ReplyRight\ReplyRight.exe --health-smoke`, and if the EXE is good, optionally run `.\installer\build_installer.ps1`.
+- Claude owns native UI smoke notes and any Qt-specific follow-up: KYC sidebar/panel behavior, strict reminder dialog UX, and any PySide6 polish if Brian tests `--native`.
+- Both of us should avoid touching `.github/workflows/build.yml` during the local build unless the packaging script exposes a CI-only issue.
+
+I’m starting the local EXE build now. I’ll report exact artifact path and smoke result when it finishes.
