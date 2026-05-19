@@ -1,45 +1,40 @@
 # Task Board
 
-Last updated: 2026-05-18 (Session 4)
+Last updated: 2026-05-19 (Session 5)
 
 ## Claude
 
 | Task | Status | Notes |
 |---|---|---|
-| PySide6 migration plan | Done | docs/PYSIDE6_MIGRATION_PLAN.md |
-| PySide6 scaffold structure | Done | replyright_core/, replyright_qt/ |
-| Agent hub creation | Done | this directory |
-| Core service interface definitions | Done | replyright_core/services/ |
-| Core model dataclasses | Done | replyright_core/models/ |
-| First native login slice | **Done** | feat/pyside6-native-ui, commit 493803e |
-| Full native Qt shell (all screens) | **Done** | feat/pyside6-native-ui, commit 493803e |
-| PySide6 dependency added to requirements | **Done** | PySide6>=6.7, pywebview removed |
-| run_desktop.py wired to Qt window | **Done** | _open_qt_window replaces _open_window |
-| Admin dashboard panel (Qt) | In progress | Gemini building admin_panel.py |
-| PyInstaller packaging for PySide6 | Pending | Validate bundle, platform plugins |
-| Merge feat/pyside6-native-ui → main | Done | Merged by user/Gemini |
-| Rotate/revoke leaked key in dist/.env | Done | Deleted from local disk |
+| PySide6 Qt shell — all screens | ✅ Done | commit 493803e |
+| ApiClient — all endpoints wired | ✅ Done | 100% match verified vs main.py |
+| pywebview/pythonnet removed from requirements | ✅ Done | PySide6>=6.7 added |
+| run_desktop.py → Qt window | ✅ Done | _open_qt_window |
+| 485 tests passing | ✅ Done | 0 failures |
+| **build_exe.ps1 — remove pywebview/pythonnet, add PySide6** | ❌ TODO | See CURRENT_SITREP Phase 2 for exact changes |
+| **replyright_setup.iss — remove WebView2 check/download** | ❌ TODO | Remove entire [Code] section WebView2 block |
+| **admin_panel.py widget** | ❌ TODO | See HANDOFF_CLAUDE.md for spec |
+| **Rebase onto main + merge** | ❌ TODO | After phases 2+3; picks up v0.1.2 config.py fix |
+| Delete .vendor cache before PySide6 build | ❌ TODO | Part of build_exe.ps1 update |
 
 ## Codex
 
 | Task | Status | Notes |
 |---|---|---|
-| bundled_secrets.py cleanup | Done (verified) | ea84602 on main |
-| /credentials-setup route | Done (verified) | ea84602 on main |
-| write_local_env() | Done (verified) | ea84602 on main |
-| needs_credentials_setup() | Done (verified) | ea84602 on main |
-| test_secret_hygiene.py | Done (verified) | 14 assertions passing |
-| v0.1.1 tag and release | Blocked | Pending Gemini verdict + rate limit |
-| Any additional security fixes | Blocked | Pending Gemini verdict |
-| Rate limit resolved | Unknown | Check before starting |
+| bundled_secrets.py cleanup | ✅ Done | On main |
+| /credentials-setup route | ✅ Done | On main |
+| v0.1.2 released | ✅ Done | 2026-05-19 |
+| No pending Codex tasks | — | |
 
-## Gemini
+## Sequencing
 
-| Task | Status | Notes |
-|---|---|---|
-| Security review of bundled_secrets.py | Done | Clean |
-| Security review of credentials_setup.html | Done | Clean |
-| Security review of installer/sample.env | Done | Clean |
-| Security review of auth.py changes | Done | Clean |
-| Security review of config.py changes | Done | Clean |
-| Verdict returned to agent_hub | Done | Written to HANDOFF_GEMINI.md §Verdict |
+```
+Phase 2 (build_exe.ps1 + .iss)
+    └── Phase 3 (admin_panel.py)
+            └── Rebase onto main
+                    └── Merge feat/pyside6-native-ui → main
+                                └── Tag v0.1.3 → GitHub Actions release
+```
+
+Phase 2 and 3 can be done in parallel by the same agent in one session.
+Rebase must happen after both are done and tests pass.

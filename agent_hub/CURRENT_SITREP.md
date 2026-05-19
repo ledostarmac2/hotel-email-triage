@@ -1,77 +1,92 @@
 # Current Situation Report
 
-Last updated: 2026-05-18 (Session 4)
+Last updated: 2026-05-19 (Session 5)
 
-## Status: PySide6 Merged into main | Admin Dashboard In Progress
-
----
-
-## What is done
-
-### PySide6 Phase 1 — native Qt shell (committed 493803e on feat/pyside6-native-ui)
-
-- `pywebview` + `pythonnet` removed from `requirements.txt`; `PySide6>=6.7` added
-- `run_desktop.py`: `_open_window` (WebView2) → `_open_qt_window` (native Qt)
-- Full native UI written: `api_client.py`, `app.py`, `styles/theme.py`,
-  `sidebar_nav.py`, `filter_bar.py`, `conversation_list.py`,
-  `conversation_detail.py`, `login_window.py`, `main_window.py`
-- FastAPI backend **untouched** — Qt shell calls same HTTP endpoints
-- 485 tests passing, 0 failures on branch
-
-### v0.1.1 source work (committed ea84602 on main)
-- `bundled_secrets.py` cleaned: no `SUPABASE_SERVICE_ROLE_KEY`, no `ANTHROPIC_API_KEY`,
-  no `OPENAI_API_KEY`, no XOR obfuscation. `_SECRETS` dict is empty.
-- `needs_credentials_setup()` added to `auth.py`: returns `True` when either
-  `SUPABASE_URL` or `SUPABASE_SERVICE_ROLE_KEY` is absent or blank.
-- `write_local_env()` added to `config.py`: atomic `.env` merge + immediate env injection.
-- `/credentials-setup` route added to `main.py`: GET renders form; POST validates and
-  writes `.env`; both redirect appropriately.
-- `credentials_setup.html` added to `outlook_dashboard/static/`: dark-theme, no
-  hardcoded secrets, no JWT-prefix placeholders.
-- `installer/sample.env` added: ships in installer; all secret fields empty.
-- `scripts/check_no_bundled_secrets.py` added: static checker for CI.
-- `tests/test_secret_hygiene.py` added: 14 assertions.
-- All test files updated. **471 tests passing, 0 failures.**
-
-### PySide6 migration scaffold (committed)
-- `replyright_core/` — models, services, adapters, app_state.py
-- `replyright_qt/` — main_qt.py, windows, widgets, viewmodels, resources
-- `docs/PYSIDE6_MIGRATION_PLAN.md` — full migration plan
-- `tests/test_pyside6_scaffold.py` — no-browser-engine assertions
-
-### Agent coordination
-- `agent_hub/` created with all coordination files
-- `tests/test_agent_hub_exists.py` — existence assertions
-- `tests/test_pyside6_no_browser_engine.py` — expanded browser-engine checks
-- `tests/test_migration_docs_reference_no_qwebengine.py` — docs assertions
+## Status: PySide6 Phase 1 COMPLETE — Phase 2 (packaging) NOT STARTED
 
 ---
 
-## What is blocked
+## Where we are
 
-| Blocker | Owner | Resolution |
-|---|---|---|
-| Codex rate-limited | Codex | Rate limit resolves on its own |
+### Done
+
+**PySide6 Phase 1 — full native Qt shell (commit 493803e)**
+- `pywebview` + `pythonnet` removed; `PySide6>=6.7` added to `requirements.txt`
+- `run_desktop.py` wired to `_open_qt_window`
+- All screens written and wired:
+  `api_client.py`, `app.py`, `theme.py`, `sidebar_nav.py`, `filter_bar.py`,
+  `conversation_list.py`, `conversation_detail.py`, `login_window.py`, `main_window.py`
+- All `ApiClient` endpoints verified against `outlook_dashboard/main.py` — 100% match
+- FastAPI backend untouched
+- 485 tests passing, 0 failures
+
+**main branch — v0.1.2 released 2026-05-19**
+- Admin login fixed end-to-end (Supabase + local SQLite fallback)
+- `config.py` bug fixed: blank `SQLITE_DB_PATH` no longer crashes startup
+- All runtime GitHub secrets in place; installer .env bakes them correctly
+
+### NOT done (blockers to merge and release v0.1.3)
+
+| # | Item | File | Owner |
+|---|---|---|---|
+| 1 | `build_exe.ps1` still vendorizes pywebview/pythonnet | `build_exe.ps1` | Claude |
+| 2 | PyInstaller flags reference webview/clr/pythonnet | `build_exe.ps1` | Claude |
+| 3 | `.iss` installer checks/downloads WebView2 | `installer/replyright_setup.iss` | Claude |
+| 4 | Admin panel widget missing | `replyright_qt/widgets/admin_panel.py` | Claude |
+| 5 | Branch diverged from main (missing v0.1.2 fixes to build.yml, config.py) | — | Claude |
 
 ---
 
-## What is next (in order)
+## Phase breakdown
 
-1. Build Qt Admin Dashboard panel (`admin_panel.py`)
-2. Verify PyInstaller PySide6 packaging (`build_exe.ps1`)
-3. Update testing docs for native Qt assertions
+### Phase 1 — Qt shell  ✅ COMPLETE
+
+### Phase 2 — Packaging  ❌ CRITICAL PATH
+
+`build_exe.ps1` and `replyright_setup.iss` still reference the old WebView2/pywebview
+stack. Nothing will build or install correctly until this is fixed.
+
+**build_exe.ps1 — exact changes:**
+- Remove from `$runtimePackages`: `"pywebview>=4.4,<6"`, `"pythonnet"`, `"pywin32"`
+- Add to `$runtimePackages`: `"PySide6>=6.7"`, `"requests"`
+- Remove `.vendor` check keys: `"win32com"→pywin32`; add `"PySide6"→PySide6`, `"requests"→requests`
+- Remove PyInstaller flags:
+  `--collect-all webview`, `--collect-all pythonnet`,
+  `--hidden-import webview.platforms.edgechromium`,
+  `--hidden-import webview.platforms.winforms`,
+  `--hidden-import clr`, `--hidden-import pythoncom`,
+  `--hidden-import pywintypes`, `--hidden-import win32com.client`
+- Add PyInstaller flags:
+  `--collect-all PySide6`, `--collect-all replyright_qt`,
+  `--hidden-import PySide6.QtCore`, `--hidden-import PySide6.QtWidgets`,
+  `--hidden-import PySide6.QtGui`
+- Delete `.vendor` directory before building (stale cache will break the new bundle)
+
+**replyright_setup.iss — exact changes:**
+- Remove `#define WebView2Url` line
+- Remove `var DownloadPage: TDownloadWizardPage;` declaration
+- Remove entire `[Code]` section (all WebView2 check/download functions:
+  `IsWebView2Installed`, `GetDefaultDir` already moved inline, `InitializeWizard`,
+  `NextButtonClick`, `DownloadPage` initialization)
+- Keep `GetDefaultDir` as a simple inline function (it existed before WebView2 code)
+- PySide6 ships its own Qt DLLs — no runtime prerequisite download needed
+
+### Phase 3 — Admin panel  🔲 PENDING PHASE 2
+Build `replyright_qt/widgets/admin_panel.py`. See HANDOFF_CLAUDE.md for full spec.
+
+### Phase 4 — Rebase + merge + release  🔲 BLOCKED ON PHASES 2+3
+1. `git rebase main` on `feat/pyside6-native-ui` (picks up config.py fix, build.yml secrets)
+2. Merge to main
+3. Tag `v0.1.3` → triggers GitHub Actions release (first PySide6 installer)
 
 ---
 
 ## Do not do (standing orders)
 
-- Do not tag v0.1.1 before Gemini verdict
-- Do not bundle `.env` in the installer
-- Do not put `SUPABASE_SERVICE_ROLE_KEY` in `bundled_secrets.py`
-- Do not put `ANTHROPIC_API_KEY` in `bundled_secrets.py`
-- Do not add reply sending
-- Do not log raw email bodies
-- Do not weaken PII redaction
-- Do not touch `app/` (inactive Next.js scaffold)
+- Do not add `QWebEngineView` anywhere in `replyright_qt/`
+- Do not import `pywebview` or `webview` in `replyright_qt/`
 - Do not wire `replyright_kernel/` into production
-- Do not use `QWebEngineView`, pywebview, Electron, or Tauri in the new Qt app
+- Do not commit real secrets
+- Do not log raw email bodies
+- Do not add reply sending
+- Do not touch `app/` (inactive Next.js scaffold)
