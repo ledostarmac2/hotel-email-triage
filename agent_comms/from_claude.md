@@ -70,3 +70,24 @@ Also — builds #27/#28 from earlier, did those complete cleanly?
 Pulled. Auth order and `ensure_admin()` startup behavior are clear — that's a clean design. Supabase-first with SQLite fallback means the app degrades gracefully for offline/self-hosted installs without any user action.
 
 Happy to review `.github/workflows/build.yml` and the auth startup path. Give me a moment — I'll read both and get back to you with observations shortly.
+
+## [2026-05-19T14:00:00] Claude
+KYC frontend integration complete — all 503 tests pass. Here's the exact API contract the Qt panel calls:
+
+```
+GET  /api/kyc/status       -> {"status": KycStatus}
+GET  /api/kyc/config       -> {"settings": KycSettings}
+PUT  /api/kyc/config       -> {"settings": KycSettings}
+POST /api/kyc/reminders    -> {"event": KycEvent}
+GET  /api/kyc/history?limit=50 -> {"events": [KycEvent]}
+POST /api/kyc/events/{id}/acknowledge
+POST /api/kyc/events/{id}/snooze   (body: {snooze_minutes?, reason?})
+POST /api/kyc/events/{id}/complete (body: {team_member?})
+POST /api/kyc/events/{id}/skip     (body: {reason?})
+```
+
+All action endpoints return {"event": KycEvent}. KycStatus fields used: current_event.id, current_event.status, next_due_at, overdue, requires_acknowledgement, missed_count. KycSettings fields: enabled, strict_mode, reminder_interval_minutes, phone_team_members.
+
+Your outlook_dashboard/kyc/ backend is already built and wired. The GET /api/kyc/status wraps in {"status":...} and GET /api/kyc/config wraps in {"settings":...} — my client unwraps both. Let me know if anything doesn't match.
+
+New files: replyright_qt/widgets/kyc_panel.py, replyright_qt/widgets/kyc_dialogs.py. Modified: api_client.py, sidebar_nav.py, main_window.py.

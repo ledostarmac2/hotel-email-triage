@@ -182,6 +182,86 @@ class ApiClient:
         )
         return self._raise_for(resp)
 
+    # ── KYC Inspections ───────────────────────────────────────────────────────
+
+    def kyc_get_status(self) -> dict:
+        """GET /api/kyc/status → {"status": KycStatus}"""
+        resp = self._session.get(self._url("/api/kyc/status"), timeout=5)
+        data = self._raise_for(resp)
+        return data.get("status", data)
+
+    def kyc_get_config(self) -> dict:
+        """GET /api/kyc/config → {"settings": KycSettings}"""
+        resp = self._session.get(self._url("/api/kyc/config"), timeout=5)
+        data = self._raise_for(resp)
+        return data.get("settings", data)
+
+    def kyc_update_config(self, update: dict) -> dict:
+        """PUT /api/kyc/config → {"settings": KycSettings}"""
+        resp = self._session.put(self._url("/api/kyc/config"), json=update, timeout=5)
+        data = self._raise_for(resp)
+        return data.get("settings", data)
+
+    def kyc_create_reminder(self, due_at: str | None = None, source: str = "manual", note: str | None = None) -> dict:
+        """POST /api/kyc/reminders → {"event": KycEvent}"""
+        payload: dict = {"source": source}
+        if due_at:
+            payload["due_at"] = due_at
+        if note:
+            payload["note"] = note
+        resp = self._session.post(self._url("/api/kyc/reminders"), json=payload, timeout=5)
+        data = self._raise_for(resp)
+        return data.get("event", data)
+
+    def kyc_get_history(self, limit: int = 50) -> list:
+        """GET /api/kyc/history → {"events": [KycEvent]}"""
+        resp = self._session.get(self._url("/api/kyc/history"), params={"limit": limit}, timeout=5)
+        data = self._raise_for(resp)
+        if isinstance(data, list):
+            return data
+        return data.get("events", [])
+
+    def kyc_acknowledge(self, event_id: int, reason: str | None = None) -> dict:
+        resp = self._session.post(
+            self._url(f"/api/kyc/events/{event_id}/acknowledge"),
+            json={"reason": reason},
+            timeout=5,
+        )
+        data = self._raise_for(resp)
+        return data.get("event", data)
+
+    def kyc_snooze(self, event_id: int, snooze_minutes: int | None = None, reason: str | None = None) -> dict:
+        payload: dict = {}
+        if snooze_minutes:
+            payload["snooze_minutes"] = snooze_minutes
+        if reason:
+            payload["reason"] = reason
+        resp = self._session.post(
+            self._url(f"/api/kyc/events/{event_id}/snooze"),
+            json=payload,
+            timeout=5,
+        )
+        data = self._raise_for(resp)
+        return data.get("event", data)
+
+    def kyc_complete(self, event_id: int, team_member: str | None = None) -> dict:
+        resp = self._session.post(
+            self._url(f"/api/kyc/events/{event_id}/complete"),
+            json={"team_member": team_member},
+            timeout=5,
+        )
+        data = self._raise_for(resp)
+        return data.get("event", data)
+
+    def kyc_skip(self, event_id: int, reason: str | None = None) -> dict:
+        resp = self._session.post(
+            self._url(f"/api/kyc/events/{event_id}/skip"),
+            json={"reason": reason},
+            timeout=5,
+        )
+        data = self._raise_for(resp)
+        return data.get("event", data)
+
     # ── Training ───────────────────────────────────────────────────────────────
 
     def get_training_status(self) -> dict:

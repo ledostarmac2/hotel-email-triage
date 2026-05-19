@@ -15,6 +15,7 @@ QUEUES = [
     ("urgent", "Urgent"),
     ("vip", "VIP"),
     ("missing", "Missing Info"),
+    ("kyc", "KYC Inspections"),
     ("admin", "Admin"),
 ]
 
