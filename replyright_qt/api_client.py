@@ -147,6 +147,14 @@ class ApiClient:
         )
         return self._raise_for(resp)
 
+    def forgot_password(self, email: str) -> dict:
+        resp = self._session.post(
+            self._url("/api/auth/forgot-password"),
+            json={"email": email},
+            timeout=10,
+        )
+        return self._raise_for(resp)
+
     def setup_admin(self, email: str, password: str) -> dict:
         resp = self._session.post(
             self._url("/api/auth/setup"),

@@ -19,6 +19,7 @@ class LoginWindow(QWidget):
     """Full-screen login form. Emits logged_in(user_dict) on success."""
 
     logged_in = Signal(dict)
+    forgot_password_requested = Signal()
 
     def __init__(self, client: ApiClient) -> None:
         super().__init__()
@@ -83,6 +84,14 @@ class LoginWindow(QWidget):
         card_layout.addSpacing(4)
         card_layout.addWidget(self._submit_btn)
         card_layout.addWidget(self._error_label)
+
+        forgot_btn = QPushButton("Forgot password?")
+        forgot_btn.setObjectName("link-btn")
+        forgot_btn.setFlat(True)
+        forgot_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        forgot_btn.clicked.connect(self.forgot_password_requested)
+        card_layout.addSpacing(4)
+        card_layout.addWidget(forgot_btn, alignment=Qt.AlignmentFlag.AlignCenter)
 
         h_wrap = QHBoxLayout()
         h_wrap.addItem(QSpacerItem(0, 0, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))

@@ -67,7 +67,7 @@ from .graph import (
     fetch_recent_messages,
 )
 from .outlook_desktop import OutlookDesktopExportError, export_mailbox_folder_to_msg
-from .platform_compat import HAS_OUTLOOK_COM, HAS_WEBVIEW, HAS_WEBVIEW2_RUNTIME, IS_WINDOWS
+from .platform_compat import HAS_OUTLOOK_COM, IS_WINDOWS
 from .preferences import clear_remembered_email, remembered_email, save_remembered_email
 from .runtime_log import configure as _configure_runtime_log
 from .runtime_log import get_logger
@@ -1064,8 +1064,6 @@ def health() -> dict[str, object]:
         "platform": {
             "is_windows": IS_WINDOWS,
             "has_outlook_com": HAS_OUTLOOK_COM,
-            "has_webview": HAS_WEBVIEW,
-            "has_webview2_runtime": HAS_WEBVIEW2_RUNTIME,
         },
         "config_warnings": settings.runtime_warnings,
     }
@@ -1094,8 +1092,6 @@ def config() -> dict[str, object]:
         "platform": {
             "is_windows": IS_WINDOWS,
             "has_outlook_com": HAS_OUTLOOK_COM,
-            "has_webview": HAS_WEBVIEW,
-            "has_webview2_runtime": HAS_WEBVIEW2_RUNTIME,
         },
         "outlook_desktop_export": {
             "mailbox": settings.outlook_export_mailbox,

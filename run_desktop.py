@@ -205,7 +205,7 @@ def main() -> None:
             raise RuntimeError(server_error[-1])
 
         if health_smoke_only:
-            _log("Health smoke mode succeeded; not opening WebView2 window")
+            _log("Health smoke mode succeeded; not opening Qt window")
             return
 
         # _open_qt_window blocks until the user closes the ReplyRight window,

@@ -252,6 +252,19 @@ QLabel#error-label {{
     font-size: 12px;
 }}
 
+QPushButton#link-btn {{
+    color: {ACCENT};
+    font-size: 12px;
+    background: transparent;
+    border: none;
+    padding: 2px 4px;
+    text-decoration: underline;
+}}
+
+QPushButton#link-btn:hover {{
+    color: {ACCENT_HOVER};
+}}
+
 /* ── Scroll bars ─────────────────────────────── */
 QScrollBar:vertical {{
     background: {CONTENT_BG};

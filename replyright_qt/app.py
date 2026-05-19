@@ -11,6 +11,7 @@ from replyright_qt.styles.theme import STYLESHEET
 from replyright_qt.windows.credentials_setup_window import CredentialsSetupWindow
 from replyright_qt.windows.login_window import LoginWindow
 from replyright_qt.windows.main_window import MainWindow
+from replyright_qt.windows.reset_password_window import ResetPasswordWindow
 from replyright_qt.windows.setup_window import SetupWindow
 
 
@@ -33,12 +34,13 @@ def run_app(base_url: str) -> None:
     credentials_window = CredentialsSetupWindow(client)
     setup_window = SetupWindow(client)
     login_window = LoginWindow(client)
+    reset_password_window = ResetPasswordWindow(client)
     main_window = MainWindow(client)
 
     # ── Transition helpers ─────────────────────────────────────────────────────
 
     def _hide_all() -> None:
-        for w in (credentials_window, setup_window, login_window, main_window):
+        for w in (credentials_window, setup_window, login_window, reset_password_window, main_window):
             w.hide()
 
     def _show_login() -> None:
@@ -90,6 +92,10 @@ def run_app(base_url: str) -> None:
 
     # Normal login → main
     login_window.logged_in.connect(_show_main)
+
+    # Forgot password → show reset screen; reset screen back → show login
+    login_window.forgot_password_requested.connect(lambda: (_hide_all(), reset_password_window.clear(), reset_password_window.show()))
+    reset_password_window.back_to_login.connect(_show_login)
 
     # Logout → back through startup routing
     main_window.logged_out.connect(_on_logout)

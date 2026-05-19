@@ -8,8 +8,6 @@ from outlook_dashboard import platform_compat
 def test_platform_flags_are_booleans() -> None:
     assert isinstance(platform_compat.IS_WINDOWS, bool)
     assert isinstance(platform_compat.HAS_OUTLOOK_COM, bool)
-    assert isinstance(platform_compat.HAS_WEBVIEW, bool)
-    assert isinstance(platform_compat.HAS_WEBVIEW2_RUNTIME, bool)
 
 
 def test_outlook_com_flag_is_windows_only() -> None:
