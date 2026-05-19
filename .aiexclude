@@ -1,0 +1,42 @@
+# Directories that are large, generated, or irrelevant to AI assistance.
+# Gemini Code Assist respects this file — excluded paths are not indexed.
+
+# Build artifacts and vendored packages (~hundreds of MB)
+.vendor/
+.build-tmp/
+.build-venv*/
+.replyright-build/
+build/
+dist/
+
+# Virtual environments
+.venv/
+.pip-tmp/
+
+# Frontend scaffold (inactive — not part of the running product)
+app/node_modules/
+app/.next/
+
+# Reference archive (historical email-agent code, not active)
+reference/
+
+# Labeling data (large JSON exports)
+labeling/inbox/
+labeling/Claude/
+labeling/ChatGPT/
+
+# Git internals and worktrees
+.commit-worktree/
+.commit-gitdb/
+.commit-work/
+
+# Test/cache output
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+htmlcov/
+__pycache__/
+data/
+
+# Installer output
+installer/output/

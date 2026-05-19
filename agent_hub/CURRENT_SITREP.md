@@ -1,71 +1,59 @@
 # Current Situation Report
 
-Last updated: 2026-05-18
+Last updated: 2026-05-19 (Session 6)
 
-## Status: v0.1.1 BLOCKED PENDING GEMINI SECURITY VERDICT
-
----
-
-## What is done
-
-### v0.1.1 source work (committed ea84602 on main)
-- `bundled_secrets.py` cleaned: no `SUPABASE_SERVICE_ROLE_KEY`, no `ANTHROPIC_API_KEY`,
-  no `OPENAI_API_KEY`, no XOR obfuscation. `_SECRETS` dict is empty.
-- `needs_credentials_setup()` added to `auth.py`: returns `True` when either
-  `SUPABASE_URL` or `SUPABASE_SERVICE_ROLE_KEY` is absent or blank.
-- `write_local_env()` added to `config.py`: atomic `.env` merge + immediate env injection.
-- `/credentials-setup` route added to `main.py`: GET renders form; POST validates and
-  writes `.env`; both redirect appropriately.
-- `credentials_setup.html` added to `outlook_dashboard/static/`: dark-theme, no
-  hardcoded secrets, no JWT-prefix placeholders.
-- `installer/sample.env` added: ships in installer; all secret fields empty.
-- `scripts/check_no_bundled_secrets.py` added: static checker for CI.
-- `tests/test_secret_hygiene.py` added: 14 assertions.
-- All test files updated. **471 tests passing, 0 failures.**
-
-### PySide6 migration scaffold (committed)
-- `replyright_core/` — models, services, adapters, app_state.py
-- `replyright_qt/` — main_qt.py, windows, widgets, viewmodels, resources
-- `docs/PYSIDE6_MIGRATION_PLAN.md` — full migration plan
-- `tests/test_pyside6_scaffold.py` — no-browser-engine assertions
-
-### Agent coordination
-- `agent_hub/` created with all coordination files
-- `tests/test_agent_hub_exists.py` — existence assertions
-- `tests/test_pyside6_no_browser_engine.py` — expanded browser-engine checks
-- `tests/test_migration_docs_reference_no_qwebengine.py` — docs assertions
+## Status: ALL PHASES COMPLETE — Merging to main and tagging v0.1.3
 
 ---
 
-## What is blocked
+## What's done
 
-| Blocker | Owner | Resolution |
-|---|---|---|
-| Gemini security verdict not yet returned | Gemini | See HANDOFF_GEMINI.md |
-| v0.1.1 must not be tagged until verdict | All | Unblock when Gemini clears |
-| Codex rate-limited | Codex | Rate limit resolves on its own |
+### Phase 1 — Qt shell ✅
+- `pywebview` + `pythonnet` replaced by `PySide6>=6.7`
+- `run_desktop.py` → `_open_qt_window` (no browser engine)
+- All widgets and windows: `api_client.py`, `app.py`, `theme.py`,
+  `sidebar_nav.py`, `filter_bar.py`, `conversation_list.py`,
+  `conversation_detail.py`, `login_window.py`, `main_window.py`
+
+### Phase 2 — Packaging ✅
+- `build_exe.ps1`: PySide6 vendor packages, stale cache wipe, updated PyInstaller flags
+- `installer/replyright_setup.iss`: WebView2 download/check removed; `.env` excluded; version → 0.1.3
+
+### Phase 3 — Admin panel ✅
+- `replyright_qt/widgets/admin_panel.py`: stat cards, 5 tabs (Corrections, Low Confidence,
+  Audit Log, Users, Training), `ApiWorker`-based fetches
+- `main_window.py`: `QStackedWidget` — page 0 = email list+detail, page 1 = `AdminPanel`
+
+### Post-rebase fixes ✅
+- `auth.py ensure_admin`: falls back to local SQLite when Supabase unreachable at startup
+- `installer/output/` added to `.gitignore`; 67 MB binary untracked
+- 499 tests passing, 0 failures
+
+### Versions bumped to 0.1.3 ✅
+- `outlook_dashboard/__init__.py`
+- `pyproject.toml`
+- `installer/replyright_setup.iss`
 
 ---
 
-## What is next (in order)
+## Phase 4 — Merge + release (IN PROGRESS)
 
-1. Gemini returns security verdict for v0.1.1 (see HANDOFF_GEMINI.md)
-2. If verdict is clean → Codex or Claude tags v0.1.1 and triggers GitHub Actions release
-3. If verdict requires changes → Codex implements per the verdict
-4. Clean-machine smoke test: install → `/credentials-setup` → `/setup` → create admin
-5. Claude continues PySide6 migration: service interfaces, first login window
+Branch: `feat/pyside6-native-ui` (10 commits ahead of main)
+
+Steps:
+1. Commit version bump ← doing now
+2. Merge to main (fast-forward or squash-merge)
+3. Push main
+4. Tag v0.1.3 and push → triggers GitHub Actions release workflow
 
 ---
 
 ## Do not do (standing orders)
 
-- Do not tag v0.1.1 before Gemini verdict
-- Do not bundle `.env` in the installer
-- Do not put `SUPABASE_SERVICE_ROLE_KEY` in `bundled_secrets.py`
-- Do not put `ANTHROPIC_API_KEY` in `bundled_secrets.py`
-- Do not add reply sending
-- Do not log raw email bodies
-- Do not weaken PII redaction
-- Do not touch `app/` (inactive Next.js scaffold)
+- Do not add `QWebEngineView` anywhere in `replyright_qt/`
+- Do not import `pywebview` or `webview` in `replyright_qt/`
 - Do not wire `replyright_kernel/` into production
-- Do not use `QWebEngineView`, pywebview, Electron, or Tauri in the new Qt app
+- Do not commit real secrets
+- Do not log raw email bodies
+- Do not add reply sending
+- Do not touch `app/` (inactive Next.js scaffold)

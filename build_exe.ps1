@@ -54,11 +54,11 @@ $runtimePackages = @(
     "fastapi",
     "uvicorn[standard]",
     "httpx",
+    "requests",
     "python-dotenv",
     "openai",
     "anthropic",
-    "pywebview>=4.4,<6",
-    "pythonnet",
+    "PySide6>=6.7",
     "pywin32",
     "dateparser",
     "scikit-learn",
@@ -107,6 +107,12 @@ function Invoke-VendorPipInstall {
     }
 }
 
+# Wipe stale vendor cache if it contains pywebview (old WebView2 stack)
+if ((Test-Path $vendorPath) -and (Test-Path (Join-Path $vendorPath "webview"))) {
+    Write-Host "Removing stale vendor cache (pywebview detected — replaced by PySide6)"
+    Remove-Item $vendorPath -Recurse -Force
+}
+
 if (-not (Test-Path $vendorPath)) {
     $env:TEMP = Join-Path (Get-Location) ".build-tmp"
     $env:TMP = $env:TEMP
@@ -121,14 +127,16 @@ if (-not (Test-Path $vendorPath)) {
 } else {
     # Check for packages that may have been added since .vendor was last built
     $vendorChecks = @{
-        "win32com"  = "pywin32"
-        "anthropic" = "anthropic"
-        "dateparser" = "dateparser"
-        "httpx"     = "httpx"
-        "joblib"    = "joblib"
-        "openai"    = "openai"
-        "sklearn"   = "scikit-learn"
+        "win32com"      = "pywin32"
+        "anthropic"     = "anthropic"
+        "dateparser"    = "dateparser"
+        "httpx"         = "httpx"
+        "requests"      = "requests"
+        "joblib"        = "joblib"
+        "openai"        = "openai"
+        "sklearn"       = "scikit-learn"
         "threadpoolctl" = "threadpoolctl"
+        "PySide6"       = "PySide6>=6.7"
     }
     $toInstall = @()
     foreach ($dir in $vendorChecks.Keys) {
@@ -162,9 +170,9 @@ Write-Host "Build metadata: $buildInfoJson"
     --paths $vendorPath `
     --add-data "outlook_dashboard/static;outlook_dashboard/static" `
     --add-data "outlook_dashboard/build_info.json;outlook_dashboard" `
-    --collect-all webview `
-    --collect-all pythonnet `
+    --collect-all PySide6 `
     --collect-all outlook_dashboard `
+    --collect-all replyright_qt `
     --collect-all anthropic `
     --collect-all sklearn `
     --collect-all scikit_learn `
@@ -172,9 +180,9 @@ Write-Host "Build metadata: $buildInfoJson"
     --collect-all joblib `
     --collect-all threadpoolctl `
     --collect-submodules win32com `
-    --hidden-import webview.platforms.edgechromium `
-    --hidden-import webview.platforms.winforms `
-    --hidden-import clr `
+    --hidden-import PySide6.QtCore `
+    --hidden-import PySide6.QtWidgets `
+    --hidden-import PySide6.QtGui `
     --hidden-import pythoncom `
     --hidden-import pywintypes `
     --hidden-import win32com.client `
@@ -183,12 +191,6 @@ Write-Host "Build metadata: $buildInfoJson"
     run_desktop.py
 
 $exePath = (Resolve-Path "dist\ReplyRight\ReplyRight.exe").Path
-
-# Copy .env next to the EXE so it can load API keys at runtime
-if (Test-Path ".env") {
-    Copy-Item ".env" "dist\ReplyRight\.env" -Force
-    Write-Host "Copied .env to dist\ReplyRight\"
-}
 
 function New-ReplyRightShortcut {
     param(

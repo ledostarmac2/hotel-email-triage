@@ -4,6 +4,57 @@ Append-only log. Most-recent entry first.
 
 ---
 
+## 2026-05-18 — Session 6 (Gemini)
+
+### PySide6 Integration & Admin Panel
+
+- Instructed user to merge `feat/pyside6-native-ui` into `main` and delete `dist/ReplyRight/.env` leak.
+- Created `replyright_qt/widgets/admin_panel.py` to fulfill PySide6 Priority 2.
+- Updated agent hub to reflect PySide6 as the active main-branch architecture.
+
+## 2026-05-18 — Session 5 (Gemini)
+
+### v0.1.1 Release on main
+
+- Reviewed security fixes (commit `ea84602`) and release blockers.
+- Confirmed `main` is secure, 471+ tests pass, and no secrets are bundled.
+- Cleared the `v0.1.1` release and provided tagging commands for the user.
+
+---
+
+## 2026-05-18 — Session 4 (Claude)
+
+### PySide6 Phase 1: full native Qt shell — feat/pyside6-native-ui (commit 493803e)
+
+**Context:** After 3 days building on FastAPI + pywebview (an embedded browser),
+the user confirmed the entire approach was wrong. pywebview uses WebView2 under
+the hood — it IS a browser. Migrated to native PySide6 on a dedicated branch.
+
+**What was done:**
+- Created branch `feat/pyside6-native-ui`
+- Removed `pywebview==5.4` and `pythonnet==3.0.5` from `requirements.txt`
+- Added `PySide6>=6.7` (installed as 6.11.1)
+- Replaced `_open_window()` (WebView2) in `run_desktop.py` with `_open_qt_window()` (PySide6)
+- FastAPI backend and all intelligence code: **untouched**
+
+**New files written:**
+- `replyright_qt/api_client.py` — `ApiClient` (synchronous requests) + `ApiWorker` (QThread)
+- `replyright_qt/app.py` — `QApplication` factory, wires login→main→logout
+- `replyright_qt/styles/theme.py` — Qt stylesheet matching original CSS design system
+- `replyright_qt/widgets/sidebar_nav.py` — dark sidebar nav (Inbox/Urgent/VIP/Missing/Admin)
+- `replyright_qt/widgets/filter_bar.py` — search + category/status/risk combos + Sync
+- `replyright_qt/widgets/conversation_list.py` — custom rows (sender, urgency, time)
+- `replyright_qt/widgets/conversation_detail.py` — email thread, AI badges, feedback form
+- `replyright_qt/windows/login_window.py` — fully functional (ApiWorker, loading, errors)
+- `replyright_qt/windows/main_window.py` — QSplitter layout, all signals wired
+
+**Test result:** 485 passed, 0 failures (excluding pre-existing `dist/.env` secret leak)
+
+**Branch:** `feat/pyside6-native-ui` — pushed to GitHub
+**Do not merge to main** until v0.1.1 is tagged and released by Codex/Gemini.
+
+---
+
 ## 2026-05-18 — Session 3 (Claude)
 
 ### v0.1.1 security fixes and test suite (commits ea84602, preceding)

@@ -133,6 +133,12 @@ def test_sample_env_has_no_anthropic_key() -> None:
         )
 
 
+def test_dist_directory_has_no_env_file() -> None:
+    """The dist/ReplyRight directory must never contain a .env file."""
+    dist_env = Path("dist/ReplyRight/.env")
+    assert not dist_env.exists(), "CRITICAL: .env leaked into dist/ReplyRight!"
+
+
 # ── Test 4: .env.example ──────────────────────────────────────────────────────
 
 

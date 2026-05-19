@@ -15,18 +15,22 @@ from PySide6.QtWidgets import (
 from replyright_qt.api_client import ApiClient, ApiWorker
 
 
-class LoginWindow(QWidget):
-    """Full-screen login form. Emits logged_in(user_dict) on success."""
+class SetupWindow(QWidget):
+    """First-run window to create the initial admin account.
 
-    logged_in = Signal(dict)
+    Emits setup_complete(user_dict) on success. The caller should then
+    transition directly to the main window (the admin is already logged in).
+    """
+
+    setup_complete = Signal(dict)
 
     def __init__(self, client: ApiClient) -> None:
         super().__init__()
         self._client = client
         self._worker: ApiWorker | None = None
         self.setObjectName("login-root")
-        self.setWindowTitle("ReplyRight — Sign In")
-        self.setMinimumSize(480, 360)
+        self.setWindowTitle("ReplyRight — Create Admin Account")
+        self.setMinimumSize(480, 400)
         self._build_ui()
 
     # ── UI construction ────────────────────────────────────────────────────────
@@ -39,30 +43,40 @@ class LoginWindow(QWidget):
         card = QWidget()
         card.setObjectName("login-card")
         card.setFixedWidth(380)
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(36, 36, 36, 36)
-        card_layout.setSpacing(14)
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(36, 36, 36, 36)
+        layout.setSpacing(14)
 
-        title = QLabel("ReplyRight")
+        title = QLabel("Create Admin Account")
         title.setObjectName("login-title")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        subtitle = QLabel("Hotel email triage")
+        subtitle = QLabel(
+            "No admin account exists yet.\n"
+            "Create the first admin to start using ReplyRight."
+        )
         subtitle.setObjectName("login-subtitle")
         subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        subtitle.setWordWrap(True)
 
         self._email_field = QLineEdit()
         self._email_field.setObjectName("login-field")
-        self._email_field.setPlaceholderText("Email address")
+        self._email_field.setPlaceholderText("Admin email address")
         self._email_field.returnPressed.connect(self._on_submit)
 
         self._password_field = QLineEdit()
         self._password_field.setObjectName("login-field")
-        self._password_field.setPlaceholderText("Password")
+        self._password_field.setPlaceholderText("Password (8+ characters)")
         self._password_field.setEchoMode(QLineEdit.EchoMode.Password)
         self._password_field.returnPressed.connect(self._on_submit)
 
-        self._submit_btn = QPushButton("Sign in")
+        self._confirm_field = QLineEdit()
+        self._confirm_field.setObjectName("login-field")
+        self._confirm_field.setPlaceholderText("Confirm password")
+        self._confirm_field.setEchoMode(QLineEdit.EchoMode.Password)
+        self._confirm_field.returnPressed.connect(self._on_submit)
+
+        self._submit_btn = QPushButton("Create admin account")
         self._submit_btn.setObjectName("primary-btn")
         self._submit_btn.setFixedHeight(40)
         self._submit_btn.clicked.connect(self._on_submit)
@@ -73,16 +87,18 @@ class LoginWindow(QWidget):
         self._error_label.setWordWrap(True)
         self._error_label.hide()
 
-        card_layout.addWidget(title)
-        card_layout.addWidget(subtitle)
-        card_layout.addSpacing(8)
-        card_layout.addWidget(QLabel("Email"))
-        card_layout.addWidget(self._email_field)
-        card_layout.addWidget(QLabel("Password"))
-        card_layout.addWidget(self._password_field)
-        card_layout.addSpacing(4)
-        card_layout.addWidget(self._submit_btn)
-        card_layout.addWidget(self._error_label)
+        layout.addWidget(title)
+        layout.addWidget(subtitle)
+        layout.addSpacing(8)
+        layout.addWidget(QLabel("Email"))
+        layout.addWidget(self._email_field)
+        layout.addWidget(QLabel("Password"))
+        layout.addWidget(self._password_field)
+        layout.addWidget(QLabel("Confirm password"))
+        layout.addWidget(self._confirm_field)
+        layout.addSpacing(4)
+        layout.addWidget(self._submit_btn)
+        layout.addWidget(self._error_label)
 
         h_wrap = QHBoxLayout()
         h_wrap.addItem(QSpacerItem(0, 0, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))
@@ -98,38 +114,41 @@ class LoginWindow(QWidget):
     def _on_submit(self) -> None:
         email = self._email_field.text().strip()
         password = self._password_field.text()
-        if not email or not password:
-            self._show_error("Please enter your email and password.")
+        confirm = self._confirm_field.text()
+
+        if not email or "@" not in email:
+            self._show_error("Please enter a valid email address.")
             return
+        if len(password) < 8:
+            self._show_error("Password must be at least 8 characters.")
+            return
+        if password != confirm:
+            self._show_error("Passwords do not match.")
+            return
+
         self._set_loading(True)
         self._error_label.hide()
-        self._worker = ApiWorker(self._client.login, email, password)
-        self._worker.success.connect(self._on_login_success)
-        self._worker.failure.connect(self._on_login_failure)
+        self._worker = ApiWorker(self._client.setup_admin, email, password)
+        self._worker.success.connect(self._on_success)
+        self._worker.failure.connect(self._on_failure)
         self._worker.start()
 
-    def _on_login_success(self, user_data: dict) -> None:
+    def _on_success(self, result: dict) -> None:
         self._set_loading(False)
-        self.logged_in.emit(user_data)
+        self.setup_complete.emit(result)
 
-    def _on_login_failure(self, message: str) -> None:
+    def _on_failure(self, message: str) -> None:
         self._set_loading(False)
-        self._show_error(message or "Sign-in failed. Check your credentials.")
+        self._show_error(message or "Failed to create admin account.")
 
     # ── Helpers ────────────────────────────────────────────────────────────────
 
     def _set_loading(self, loading: bool) -> None:
         self._submit_btn.setEnabled(not loading)
-        self._submit_btn.setText("Signing in…" if loading else "Sign in")
-        self._email_field.setEnabled(not loading)
-        self._password_field.setEnabled(not loading)
+        self._submit_btn.setText("Creating…" if loading else "Create admin account")
+        for field in (self._email_field, self._password_field, self._confirm_field):
+            field.setEnabled(not loading)
 
     def _show_error(self, message: str) -> None:
         self._error_label.setText(message)
         self._error_label.show()
-
-    def clear(self) -> None:
-        self._email_field.clear()
-        self._password_field.clear()
-        self._error_label.hide()
-        self._set_loading(False)

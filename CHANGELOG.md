@@ -2,6 +2,12 @@
 
 All notable changes to ReplyRight are documented here.
 
+## [0.1.1] — 2026-05-18
+
+### Summary
+
+- Version bump for v0.1.1 release and minor cleanups.
+
 ## [0.1.0] — 2026-05-17
 
 ### Summary

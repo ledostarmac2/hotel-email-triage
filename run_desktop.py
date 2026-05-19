@@ -48,8 +48,7 @@ def _startup_error_message(reason: str) -> str:
     return (
         "ReplyRight could not start.\n\n"
         f"{reason}\n\n"
-        "No browser window was opened. Please close any existing ReplyRight "
-        "windows and try again.\n\n"
+        "Please close any existing ReplyRight windows and try again.\n\n"
         f"Diagnostics log:\n{LOG_PATH}"
     )
 
@@ -112,61 +111,18 @@ def _wait_for_server(url: str, timeout_seconds: float = STARTUP_TIMEOUT_SECONDS)
     _wait_for_server_health(url, timeout_seconds=timeout_seconds)
 
 
-def _open_window(url: str) -> None:
-    """Open the ReplyRight UI in a standalone embedded WebView2 window.
-
-    Uses pywebview with the edgechromium (WebView2) backend - this is an
-    *embedded* web control, not the Edge browser.  The window appears in the
-    taskbar as its own app with no address bar, tabs, or browser chrome.
-    """
+def _open_qt_window(url: str) -> None:
+    """Open the ReplyRight UI as a native PySide6 Qt window (no browser engine)."""
     try:
-        from outlook_dashboard.platform_compat import HAS_WEBVIEW, HAS_WEBVIEW2_RUNTIME, IS_WINDOWS
-    except Exception:
-        HAS_WEBVIEW = False
-        HAS_WEBVIEW2_RUNTIME = False
-        IS_WINDOWS = sys.platform.startswith("win")
-
-    if not IS_WINDOWS:
-        raise RuntimeError("The embedded ReplyRight desktop window is Windows-only.")
-    if not HAS_WEBVIEW:
-        raise RuntimeError("pywebview is not installed in this build.")
-    if not HAS_WEBVIEW2_RUNTIME:
-        raise RuntimeError("Microsoft Edge WebView2 Runtime was not detected.")
-
-    try:
-        import webview  # noqa: PLC0415
+        from replyright_qt.app import run_app  # noqa: PLC0415
     except ImportError as exc:
-        raise RuntimeError("pywebview is not installed in this build.") from exc
+        raise RuntimeError(
+            f"PySide6 is not installed. Run: pip install PySide6>=6.7\n{exc}"
+        ) from exc
 
-    _log("pywebview imported OK")
-    _log(f"pywebview version: {getattr(webview, '__version__', 'unknown')}")
-
-    # Verify pythonnet (clr) is importable - it's required by pywebview's
-    # edgechromium/winforms backend and causes a native crash if missing.
-    try:
-        import clr as _clr  # noqa: F401
-        _log("pythonnet (clr) imported OK")
-    except ImportError as exc:
-        raise RuntimeError(f"pythonnet (clr) is not available: {exc}") from exc
-
-    window = webview.create_window(
-        title=WINDOW_TITLE,
-        url=url,
-        width=WINDOW_WIDTH,
-        height=WINDOW_HEIGHT,
-        min_size=(760, 520),
-        resizable=True,
-    )
-    _log(f"Opening standalone WebView2 window: {url}")
-    try:
-        # gui='edgechromium' -> Microsoft Edge WebView2 embedded control.
-        # This is NOT the Edge browser. It is a self-contained runtime that is
-        # pre-installed on Windows 10 21H1+ and all Windows 11 machines.
-        webview.start(gui="edgechromium", debug=False)
-    except Exception as exc:
-        raise RuntimeError(f"Could not open the WebView2 window: {exc}") from exc
-
-    _log("WebView2 window closed by user")
+    _log("PySide6 imported OK — opening native Qt window")
+    run_app(url)
+    _log("Qt window closed by user")
 
 
 def _run_native_qt() -> None:
@@ -252,9 +208,9 @@ def main() -> None:
             _log("Health smoke mode succeeded; not opening WebView2 window")
             return
 
-        # _open_window blocks until the user closes the ReplyRight window,
+        # _open_qt_window blocks until the user closes the ReplyRight window,
         # then we fall through to the finally block to shut down the server.
-        _open_window(url)
+        _open_qt_window(url)
 
     except Exception as exc:
         _log("Startup failed")

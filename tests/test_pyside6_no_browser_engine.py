@@ -52,12 +52,13 @@ def test_replyright_qt_main_raises_if_run_directly() -> None:
     assert "RuntimeError" in source
 
 
-def test_replyright_qt_windows_have_pyside6_import_guard() -> None:
+def test_replyright_qt_windows_import_pyside6_directly() -> None:
+    """PySide6 is now a real dependency — windows should import it unconditionally."""
     for path in Path("replyright_qt/windows").rglob("*.py"):
         if path.name == "__init__.py":
             continue
         source = path.read_text(encoding="utf-8")
         if "QWidget" in source or "QMainWindow" in source:
-            assert "except ImportError" in source, (
-                f"{path} uses Qt widgets but has no ImportError guard for PySide6"
+            assert "from PySide6" in source, (
+                f"{path} uses Qt widgets but does not import PySide6 directly"
             )

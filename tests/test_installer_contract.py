@@ -10,6 +10,13 @@ def test_pyinstaller_build_uses_onedir_bundle() -> None:
     assert "dist\\ReplyRight\\ReplyRight.exe" in script
 
 
+def test_build_exe_script_does_not_copy_env() -> None:
+    """Ensure build_exe.ps1 does not copy .env to the packaged output."""
+    script = Path("build_exe.ps1").read_text(encoding="utf-8")
+    assert "Copy-Item \".env\"" not in script
+    assert "dist\\ReplyRight\\.env" not in script
+
+
 def test_inno_installer_bundles_onedir_app_and_excludes_runtime_secrets() -> None:
     iss = Path("installer/replyright_setup.iss").read_text(encoding="utf-8")
     assert "OutputBaseFilename=ReplyRightSetup-v{#MyAppVersion}" in iss

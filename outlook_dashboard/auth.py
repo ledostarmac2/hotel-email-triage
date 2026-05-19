@@ -219,13 +219,17 @@ def ensure_admin(email: str, password: str, db_path: Path | None = None) -> None
         _ensure_local_admin(normalized, password, db_path)
         _log.info("Local auth: admin account verified/updated for %s", normalized)
         return
-    existing = _find_user_by_email(normalized)
-    if existing:
-        _update_user(existing["id"], password=password, role="admin")
-        _log.info("Supabase: admin account verified/updated for %s", normalized)
-    else:
-        _create_user(normalized, password, role="admin")
-        _log.info("Supabase: admin account created for %s", normalized)
+    try:
+        existing = _find_user_by_email(normalized)
+        if existing:
+            _update_user(existing["id"], password=password, role="admin")
+            _log.info("Supabase: admin account verified/updated for %s", normalized)
+        else:
+            _create_user(normalized, password, role="admin")
+            _log.info("Supabase: admin account created for %s", normalized)
+    except Exception as exc:
+        _log.warning("ensure_admin: Supabase unreachable (%s), falling back to local auth", exc)
+        _ensure_local_admin(normalized, password, db_path)
 
 
 def needs_credentials_setup() -> bool:

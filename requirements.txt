@@ -95,8 +95,7 @@ pytest-cov==6.3.0
 pytest-timeout==2.4.0
 python-dotenv==1.2.2
 python-multipart==0.0.29
-pythonnet==3.0.5; sys_platform == 'win32'
-pywebview==5.4; sys_platform == 'win32'
+PySide6>=6.7
 pywin32==311; sys_platform == 'win32'
 pywin32-ctypes==0.2.3
 PyYAML==6.0.3
