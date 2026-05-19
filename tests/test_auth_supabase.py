@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from outlook_dashboard.auth import (
     _decode_session,
+    _hash_password,
     admin_setup_available,
     admin_user_exists,
     authenticate_user,
@@ -87,6 +88,23 @@ def test_authenticate_user_failure_returns_none(monkeypatch) -> None:
         side_effect=lambda request, timeout=15: (_ for _ in ()).throw(_http_error(request.full_url)),
     ):
         assert authenticate_user("agent@example.com", "wrong") is None
+
+
+def test_supabase_configured_auth_does_not_use_local_password_fallback(tmp_path, monkeypatch) -> None:
+    _set_supabase_env(monkeypatch)
+    db_path = tmp_path / "auth.sqlite3"
+    initialize_database(db_path)
+    with managed_connect(db_path) as db:
+        db.execute(
+            "INSERT INTO users (email, password_hash, role, created_at) VALUES (?, ?, 'admin', ?)",
+            ("agent@example.com", _hash_password("LocalPassword123!"), "2026-05-19T00:00:00"),
+        )
+
+    with patch(
+        "urllib.request.urlopen",
+        side_effect=lambda request, timeout=15: (_ for _ in ()).throw(_http_error(request.full_url)),
+    ):
+        assert authenticate_user("agent@example.com", "LocalPassword123!", db_path=db_path) is None
 
 
 def test_get_session_user_refreshes_expired_token(monkeypatch) -> None:

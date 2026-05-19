@@ -1548,3 +1548,39 @@ Remaining work:
 - Rebuild and launch-test `dist\ReplyRight.exe` after these source edits.
 - Confirm the latest VBA macro works in classic Outlook on both work and home machines.
 - Confirm OpenAI key/model behavior once credentials are available.
+
+## 2026-05-19 - Supabase login and native sign-in repair
+
+Summary:
+
+- Responded to Brian's login incident report and coordinated file ownership with Claude through `agent_comms/from_codex.md`.
+- Kept Supabase Auth authoritative when `SUPABASE_URL` and `SUPABASE_KEY` are configured; local SQLite login remains only for unconfigured/no-key fallback.
+- Verified the configured repo `.env` can repair/create the Supabase admin and authenticate the configured admin account without printing secret values.
+- Updated packaged/local config loading so a local PyInstaller onedir EXE under `dist\ReplyRight` can read the repo-root `.env` when `dist\ReplyRight\.env` is intentionally absent.
+- Restyled the native PySide6 login screen using Qt Fusion styling, a polished card layout, transparent labels, a restored `Remember email` checkbox backed by `QSettings`, and Supabase/read-only copy.
+
+Files changed:
+
+- `outlook_dashboard/auth.py`
+- `outlook_dashboard/config.py`
+- `replyright_qt/app.py`
+- `replyright_qt/windows/login_window.py`
+- `replyright_qt/styles/theme.py`
+- `tests/test_auth_supabase.py`
+- `tests/test_config_env_loading.py`
+- `docs/ARCHITECTURE.md`
+- `docs/CURRENT_STATE.md`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+- `agent_comms/from_codex.md`
+
+Verification:
+
+- Supabase probe using configured `.env`: `ensure_admin` succeeded and `authenticate_user` returned a Supabase token for the configured admin account.
+- `python -m py_compile outlook_dashboard\auth.py outlook_dashboard\config.py replyright_qt\app.py replyright_qt\windows\login_window.py replyright_qt\styles\theme.py` - passed.
+- `python -m pytest tests/test_auth_supabase.py tests/test_config_env_loading.py tests/test_pyside6_no_browser_engine.py -q --timeout=60` - 21 passed, 3 existing `datetime.utcnow()` warnings.
+
+Remaining work:
+
+- Run the full suite after syncing/pushing Claude's native startup commits and this login repair.
+- Rebuild `dist\ReplyRight\ReplyRight.exe`, run `--health-smoke`, and manually sign in with the Supabase-backed admin credentials.

@@ -6,6 +6,11 @@ Last updated: 2026-05-19 (v0.1.1 release/auth repair in progress)
 
 - Product name is ReplyRight.
 - Current runnable app is `outlook_dashboard/` plus `run_desktop.py`.
+- 2026-05-19 login incident repair:
+  - Supabase Auth is authoritative when `SUPABASE_URL` and `SUPABASE_KEY` are configured; local SQLite login is now only for unconfigured/no-key fallback.
+  - Local PyInstaller onedir builds now look for the repo-root `.env` when `dist\ReplyRight\.env` is absent, so Brian's local test EXE can use the configured Supabase credentials without copying secrets into `dist`.
+  - The native PySide6 sign-in screen was restyled with Qt Fusion, a polished card layout, corrected transparent labels, a restored "Remember email" checkbox backed by `QSettings`, and clearer Supabase/read-only copy.
+  - Source-level Supabase admin repair and password login were verified with the configured `.env` without printing secret values.
 - KYC Auto backend absorption has started:
   - `outlook_dashboard/kyc/` now provides the integrated KYC Inspections backend module.
   - FastAPI exposes authenticated `/api/kyc/*` endpoints for configuration, current reminder status, event creation, acknowledge, snooze, complete, skip, and history.
@@ -35,7 +40,7 @@ Last updated: 2026-05-19 (v0.1.1 release/auth repair in progress)
   - Source version is bumped to `0.1.1`.
 - 2026-05-19 release/auth repair:
   - Fixed the CI failure in `tests/test_pyside6_no_browser_engine.py` by restoring the PySide6 scaffold contract: `replyright_qt/main_qt.py` now raises a `RuntimeError` if run directly, and `replyright_qt/windows/main_window.py` has a PySide6 import guard.
-  - Native PySide6 scaffold files for auth/inbox adapters and worker loading are present, with an optional `run_desktop.py --native` / `REPLYRIGHT_NATIVE=1` path for development only. The production v0.1.1 path remains FastAPI plus pywebview.
+  - Native PySide6 auth/inbox/KYC shell files are present and the desktop launcher now opens Qt after FastAPI health succeeds. `--native` is retained as a compatibility no-op because Qt is the current shell.
   - Removed the user-facing credentials setup page from the desktop app. `/credentials-setup` now redirects to login, and `/api/auth/credentials-setup` is no longer an unauthenticated API-key writing endpoint.
   - End users must not be asked for Supabase, OpenAI, Google, Anthropic, or other API keys in the program. Runtime credentials must be supplied by deployment-time files, machine environment, or GitHub Actions release secrets.
   - GitHub Actions now opts JavaScript actions into Node 24 with `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true`.
@@ -56,7 +61,7 @@ Last updated: 2026-05-19 (v0.1.1 release/auth repair in progress)
   - `docs/INSTALLER_STRATEGY.md`
   - `docs/archive/migration/NATIVE_UI_MIGRATION.md`
   - `docs/archive/migration/PYSIDE6_MIGRATION_PLAN.md`
-- PySide6 migration scaffolds now exist in `replyright_core/` and `replyright_qt/`. They are not production-wired. Do not use `QWebEngineView`, Electron, Tauri, or any browser/WebView shell as the native UI.
+- PySide6 shell files now exist in `replyright_qt/` and are launched by `run_desktop.py` after the FastAPI backend is healthy. Do not use `QWebEngineView`, Electron, Tauri, or any browser/WebView shell as the native UI.
 - CI hardening pass completed after GitHub Actions failures on run #14:
   - `build_exe.ps1` now captures pip vendor-install output under non-terminating PowerShell error handling and checks the real native exit code, preventing successful pip installs with dependency-warning stderr from aborting clean CI builds.
   - `.github/workflows/build.yml` now gives pytest a 60-second per-test timeout to reduce Windows runner flakiness.
@@ -73,7 +78,7 @@ Last updated: 2026-05-19 (v0.1.1 release/auth repair in progress)
 - Outlook refresh is designed around classic Outlook for Windows and now uses read-only `pywin32` COM import as the primary path. The legacy `ExportNYCWAReservationsInboxOnly` VBA macro remains a fallback when direct import dependencies are unavailable.
 - Refresh Inbox now attempts OpenAI classification when `OPENAI_API_KEY` is configured. The dashboard `OPENAI_MODEL` default is `gpt-5.4-nano`, selected after checking official OpenAI docs on 2026-05-17 for low-cost classification/extraction suitability. If OpenAI is not configured and `GOOGLE_AI_API_KEY` is present, Refresh Inbox attempts Google AI Studio/Gemini classification with structured JSON output. Local deterministic triage remains the fallback when external AI is unavailable or errors.
 - Microsoft Graph OAuth code exists but is not the active path because the user hit enterprise access restrictions in Microsoft Entra.
-- `build_exe.ps1` builds `dist\ReplyRight\ReplyRight.exe` as a PyInstaller onedir app and attempts Desktop/Start Menu shortcuts. The latest source uses **pywebview** (WebView2/edgechromium backend) for the v0.1.1 bridge desktop window.
+- `build_exe.ps1` builds `dist\ReplyRight\ReplyRight.exe` as a PyInstaller onedir app and attempts Desktop/Start Menu shortcuts. The latest source uses the native PySide6 Qt shell, not WebView2/QWebEngine.
 - A previous rebuilt onefile EXE was launch-tested by the user: the pywebview window opened, the dashboard loaded, and the sidebar tabs worked. The current onedir installer path still needs manual install validation.
 - Refresh Inbox was verified through the packaged EXE: it directly read/imported 46 messages from `NYCWA_Reservations > Inbox`, analyzed 46 locally, skipped 0, and did not launch the VBA macro (`launch_method=pywin32-com`). A prior verification pass deleted 6 stale/non-current rows.
 - The inbox API now returns 28 conversation groups from those 46 Outlook emails. Conversation details include the thread messages for the selected conversation.
@@ -93,7 +98,7 @@ Last updated: 2026-05-19 (v0.1.1 release/auth repair in progress)
 - Confidence scoring (10–95%) is computed per email and shown as a color-coded pill in the UI.
 - Rule candidate engine mines local feedback for recurring correction patterns. Three matching corrections create visible candidates; five or more mark the rule as auto-promoted for hands-off shared learning.
 - Admin Suggested Rules now includes emergency `Reject` and `Dismiss` controls. Dismissed candidates are hidden locally; rejected candidates stay visible as rejected and are skipped by Supabase auto-promotion.
-- Login prefers Supabase Auth when configured, but falls back to local SQLite users/sessions for existing installed databases and offline/local-first installs. The configured admin account can still be repaired from `REPLYRIGHT_ADMIN_EMAIL` / `REPLYRIGHT_ADMIN_PASSWORD`; if no admin exists, first-run setup can create one without asking for API keys.
+- Login uses Supabase Auth when configured and does not silently accept local SQLite passwords in that mode. Local SQLite users/sessions remain available only when Supabase is unconfigured. The configured Supabase admin account can still be repaired from `REPLYRIGHT_ADMIN_EMAIL` / `REPLYRIGHT_ADMIN_PASSWORD`; if no admin exists and Supabase service-role config is absent, first-run setup can create a local admin without asking for API keys.
 - Login failures render a persistent static error message with an X close button and preserve the typed email address. Dashboard action failures such as invite/reset errors now use a persistent dismissable error toast.
 - Auth middleware protects `/api/auth/me` and admin endpoints again. Public auth routes are limited to login/logout/forgot-password/reset-password, fixing the post-login dashboard boot loop.
 - Admin view now has its own dashboard shell: the Refresh Inbox button is hidden while Admin is active, the topbar changes to Admin, and leaving Admin restores/rebinds the inbox queue/detail DOM so Inbox, Urgent, VIP, and Missing Info render correctly again.

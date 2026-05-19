@@ -4,7 +4,7 @@ import os
 import sys
 
 from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QStyleFactory
 
 from replyright_qt.api_client import ApiClient, ApiWorker
 from replyright_qt.styles.theme import STYLESHEET
@@ -20,6 +20,7 @@ def run_app(base_url: str) -> None:
     app = QApplication.instance() or QApplication(sys.argv)
     app.setApplicationName("ReplyRight")
     app.setOrganizationName("ReplyRight")
+    app.setStyle(QStyleFactory.create("Fusion"))
     app.setStyleSheet(STYLESHEET)
 
     icon_path = os.path.join(

@@ -19,8 +19,16 @@ DATA_DIR = ROOT_DIR / "data"
 
 
 def _load_env() -> None:
-    if load_dotenv is not None:
-        load_dotenv(ROOT_DIR / ".env")
+    should_load_dotenv = not os.getenv("PYTEST_CURRENT_TEST") or os.getenv("REPLYRIGHT_LOAD_DOTENV_FOR_TESTS") == "1"
+    if load_dotenv is not None and should_load_dotenv:
+        env_paths = [ROOT_DIR / ".env"]
+        if getattr(sys, "frozen", False):
+            # Local PyInstaller builds run from dist/ReplyRight while the
+            # developer-owned .env stays at the repository root.
+            env_paths.append(ROOT_DIR.parent.parent / ".env")
+        for env_path in env_paths:
+            if env_path.exists():
+                load_dotenv(env_path, override=False)
     try:
         from .bundled_secrets import inject as _inject_bundled
 

@@ -216,40 +216,96 @@ QPushButton#danger-btn:disabled {{
 
 /* ── Login window ────────────────────────────── */
 QWidget#login-root {{
-    background-color: {SIDEBAR_BG};
+    background-color: #111723;
 }}
 
 QWidget#login-card {{
     background-color: {PANEL_BG};
-    border-radius: 10px;
+    border: 1px solid #edf0f5;
+    border-radius: 12px;
+}}
+
+QWidget#login-card QLabel {{
+    background-color: transparent;
+}}
+
+QLabel#login-mark {{
+    background-color: {ACCENT};
+    color: white;
+    border-radius: 18px;
+    min-width: 36px;
+    max-width: 36px;
+    min-height: 36px;
+    max-height: 36px;
+    font-size: 13px;
+    font-weight: 800;
 }}
 
 QLabel#login-title {{
-    font-size: 22px;
+    background-color: transparent;
+    font-size: 26px;
     font-weight: bold;
-    color: {CONTENT_TEXT};
+    color: #101828;
 }}
 
 QLabel#login-subtitle {{
+    background-color: transparent;
     font-size: 13px;
-    color: #6b7280;
+    color: #667085;
+}}
+
+QLabel#login-field-label {{
+    background-color: transparent;
+    color: #344054;
+    font-size: 12px;
+    font-weight: 700;
+    padding-top: 4px;
 }}
 
 QLineEdit#login-field {{
-    background-color: {CONTENT_BG};
-    border: 1px solid {BORDER};
-    border-radius: 6px;
-    padding: 9px 12px;
+    background-color: #ffffff;
+    border: 1px solid #d0d5dd;
+    border-radius: 8px;
+    padding: 11px 12px;
     font-size: 14px;
+    color: #101828;
+    selection-background-color: {ACCENT};
+    min-height: 22px;
 }}
 
 QLineEdit#login-field:focus {{
     border-color: {ACCENT};
+    background-color: #ffffff;
+}}
+
+QCheckBox#login-checkbox {{
+    background-color: transparent;
+    color: #475467;
+    font-size: 12px;
+    spacing: 7px;
+}}
+
+QCheckBox#login-checkbox::indicator {{
+    width: 16px;
+    height: 16px;
+    border: 1px solid #98a2b3;
+    border-radius: 4px;
+    background-color: #ffffff;
+}}
+
+QCheckBox#login-checkbox::indicator:checked {{
+    background-color: {ACCENT};
+    border-color: {ACCENT};
+    image: none;
 }}
 
 QLabel#error-label {{
-    color: {DANGER};
+    background-color: #fff1f3;
+    color: #b42318;
     font-size: 12px;
+    border: 1px solid #fecdca;
+    border-radius: 8px;
+    padding: 8px 10px;
 }}
 
 QPushButton#link-btn {{
@@ -263,6 +319,19 @@ QPushButton#link-btn {{
 
 QPushButton#link-btn:hover {{
     color: {ACCENT_HOVER};
+}}
+
+QFrame#login-divider {{
+    color: #eaecf0;
+    background-color: #eaecf0;
+    max-height: 1px;
+}}
+
+QLabel#login-footnote {{
+    background-color: transparent;
+    color: #98a2b3;
+    font-size: 11px;
+    padding-top: 4px;
 }}
 
 /* ── Scroll bars ─────────────────────────────── */

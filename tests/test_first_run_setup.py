@@ -158,13 +158,17 @@ def test_api_first_run_setup_refuses_when_admin_exists(
         assert response.status_code == 409
 
 
-def test_api_first_run_setup_falls_back_to_local_database_without_service_role(
+def test_api_first_run_setup_uses_local_database_when_supabase_unconfigured(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     with _configured_client(tmp_path, monkeypatch, admin_exists=False) as client:
         import outlook_dashboard.main as main
+        from outlook_dashboard.config import get_settings
 
-        monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
+        monkeypatch.setenv("SUPABASE_URL", " ")
+        monkeypatch.setenv("SUPABASE_KEY", " ")
+        monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", " ")
+        get_settings.cache_clear()
         monkeypatch.setattr(main, "admin_setup_available", lambda: False)
         response = client.post(
             "/api/auth/setup",
@@ -183,6 +187,9 @@ def test_startup_seed_repairs_configured_admin_even_when_no_remote_admin(
     monkeypatch.setenv("RATE_LIMIT_PER_MINUTE", "500")
     monkeypatch.setenv("REPLYRIGHT_ADMIN_EMAIL", "admin@example.com")
     monkeypatch.setenv("REPLYRIGHT_ADMIN_PASSWORD", "ConfiguredPassword123!")
+    monkeypatch.setenv("SUPABASE_URL", " ")
+    monkeypatch.setenv("SUPABASE_KEY", " ")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", " ")
 
     import outlook_dashboard.main as main
     from outlook_dashboard.config import get_settings

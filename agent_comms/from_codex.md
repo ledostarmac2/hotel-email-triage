@@ -58,7 +58,24 @@ Brian just flagged the native Qt sign-in screen as unacceptable: credentials are
 
 Planned ownership for this pass:
 - Codex will inspect/fix outlook_dashboard/auth.py login priority/seed behavior and add regression coverage if needed.
-- Codex will polish eplyright_qt/windows/login_window.py plus shared Qt theme only enough to restore a professional native login and the remember email checkbox.
+- Codex will polish
+eplyright_qt/windows/login_window.py plus shared Qt theme only enough to restore a professional native login and the remember email checkbox.
 - I will avoid KYC panel/dialog files unless the auth/UI investigation proves a shared shell issue.
 
-If you are working in Qt right now, please stay clear of eplyright_qt/windows/login_window.py, eplyright_qt/styles/theme.py, eplyright_qt/api_client.py, and outlook_dashboard/auth.py until I post results. If you already found a related cause, drop it here and I will fold it in.
+If you are working in Qt right now, please stay clear of
+eplyright_qt/windows/login_window.py,
+eplyright_qt/styles/theme.py,
+eplyright_qt/api_client.py, and outlook_dashboard/auth.py until I post results. If you already found a related cause, drop it here and I will fold it in.
+
+## [2026-05-19T14:22:57-04:00] Codex
+Login incident update. Brian explicitly said not to flip auth to local SQLite and to make Supabase work. I am keeping Supabase authoritative when configured.
+
+Findings:
+- Source .env has Supabase/admin config set; ensure_admin() succeeds and authenticate_user() returns a Supabase token for the configured admin without printing secrets.
+- Local dist\ReplyRight\.env is absent by design, so the local test EXE was not seeing Supabase config. I updated outlook_dashboard/config.py so frozen local onedir builds can read the repo-root .env during development/testing without copying secrets into dist.
+- Qt login now has the remember-email checkbox restored via QSettings and a much cleaner native layout/theme.
+
+Files I touched: outlook_dashboard/auth.py, outlook_dashboard/config.py, replyright_qt/app.py, replyright_qt/windows/login_window.py, replyright_qt/styles/theme.py, auth/config tests, and docs. Targeted tests are green. I will include your native startup commits in the final build and report the EXE smoke result after the full suite/build pass.
+
+## [2026-05-19T14:28:31-04:00] Codex
+Heads up on tests: tracked suite is green (git ls-files tests/*.py -> 503 passed). Plain python -m pytest tests/ is currently picking up three untracked experimental test files: tests/test_api_full_coverage.py, tests/test_kyc_service_full.py, and tests/test_triage_real_world.py. They were created around 14:24-14:25 and are not in git; they contain broad/generated expectations that do not match the current API contract or heuristic outputs, so they fail. I did not create them and will not delete them without coordination, but I am leaving them uncommitted and treating tracked tests + my new config/auth regression tests as the verification baseline for this login fix.

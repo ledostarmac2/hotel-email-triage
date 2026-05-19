@@ -9,7 +9,7 @@ The current runnable app is the Python/FastAPI dashboard in `outlook_dashboard/`
 ```text
 run_desktop.py
   -> starts FastAPI on 127.0.0.1:8000 by default
-  -> opens a pywebview / WebView2 desktop window
+  -> opens a native PySide6 Qt desktop window
 
 outlook_dashboard/
   main.py              FastAPI routes, auth middleware, admin endpoints, lifecycle
@@ -49,8 +49,8 @@ Older root-level planning files are historical unless `docs/CURRENT_STATE.md` sa
 PyInstaller ReplyRight.exe
   -> run_desktop.py
   -> FastAPI app in outlook_dashboard/main.py
-  -> pywebview desktop shell
-  -> local dashboard at http://127.0.0.1:8000
+  -> native PySide6 Qt desktop shell
+  -> local JSON API at http://127.0.0.1:8000
   -> SQLite runtime DB under data/
   -> optional Outlook COM, Microsoft Graph, Supabase, OpenAI, Google AI, Claude
 ```
@@ -105,11 +105,11 @@ Disallowed without a new explicit design:
 
 ## Authentication
 
-Dashboard login prefers Supabase Auth when configured. `auth.py` uses Supabase `/auth/v1/*` endpoints for password login, token refresh, logout, admin provisioning, user invite/delete, and password reset support.
+Dashboard login uses Supabase Auth whenever Supabase is configured. `auth.py` uses Supabase `/auth/v1/*` endpoints for password login, token refresh, logout, admin provisioning, user invite/delete, and password reset support.
 
 The `rr_session` cookie stores access and refresh tokens in an HttpOnly cookie. `_AuthMiddleware` validates or refreshes the token for protected routes.
 
-For local-first continuity, `auth.py` also supports local SQLite users and sessions as a fallback when Supabase auth is unavailable or unconfigured. Local `users` rows from earlier installs remain valid, local session IDs can be stored in the same `rr_session` cookie, and first-run setup can create a local admin without asking for API keys.
+For no-key development and local-first continuity, `auth.py` still supports local SQLite users and sessions only when Supabase is not configured. Once Supabase URL and anon key are present, password login is Supabase-authoritative and does not silently accept local SQLite credentials.
 
 ## Persistence
 

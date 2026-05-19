@@ -114,7 +114,7 @@ def _decode_session(cookie: str) -> tuple[str, str] | None:
 
 
 def authenticate_user(email: str, password: str, db_path: Path | None = None) -> dict | None:
-    """Sign in with Supabase when configured, otherwise local SQLite."""
+    """Sign in with Supabase when configured, otherwise use local SQLite."""
     normalized = email.lower().strip()
     if _supabase_auth_configured():
         try:
@@ -132,7 +132,8 @@ def authenticate_user(email: str, password: str, db_path: Path | None = None) ->
                 user["_refresh_token"] = refresh_token
                 return user
         except Exception as exc:
-            _log.warning("Supabase sign-in failed; trying local auth fallback: %s", exc)
+            _log.warning("Supabase sign-in failed: %s", exc)
+            return None
     return _authenticate_local_user(normalized, password, db_path)
 
 

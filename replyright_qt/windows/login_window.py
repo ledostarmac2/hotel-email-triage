@@ -1,7 +1,11 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QSettings, Qt, Signal
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
+    QCheckBox,
+    QFrame,
+    QGraphicsDropShadowEffect,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -25,30 +29,40 @@ class LoginWindow(QWidget):
         super().__init__()
         self._client = client
         self._worker: ApiWorker | None = None
+        self._settings = QSettings("ReplyRight", "ReplyRight")
         self.setObjectName("login-root")
-        self.setWindowTitle("ReplyRight — Sign In")
-        self.setMinimumSize(480, 360)
+        self.setWindowTitle("ReplyRight - Sign In")
+        self.setMinimumSize(520, 560)
         self._build_ui()
-
-    # ── UI construction ────────────────────────────────────────────────────────
 
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
         root.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        root.setContentsMargins(0, 0, 0, 0)
+        root.setContentsMargins(32, 32, 32, 32)
+        root.setSpacing(0)
 
         card = QWidget()
         card.setObjectName("login-card")
-        card.setFixedWidth(380)
+        card.setFixedWidth(430)
+        shadow = QGraphicsDropShadowEffect(card)
+        shadow.setBlurRadius(34)
+        shadow.setOffset(0, 18)
+        shadow.setColor(QColor(4, 8, 18, 95))
+        card.setGraphicsEffect(shadow)
+
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(36, 36, 36, 36)
-        card_layout.setSpacing(14)
+        card_layout.setContentsMargins(38, 36, 38, 34)
+        card_layout.setSpacing(12)
+
+        brand_mark = QLabel("RR")
+        brand_mark.setObjectName("login-mark")
+        brand_mark.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         title = QLabel("ReplyRight")
         title.setObjectName("login-title")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        subtitle = QLabel("Hotel email triage")
+        subtitle = QLabel("Hotel email triage for reservations operations")
         subtitle.setObjectName("login-subtitle")
         subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
@@ -56,6 +70,9 @@ class LoginWindow(QWidget):
         self._email_field.setObjectName("login-field")
         self._email_field.setPlaceholderText("Email address")
         self._email_field.returnPressed.connect(self._on_submit)
+        remembered = str(self._settings.value("remembered_email", "", str) or "").strip()
+        if remembered:
+            self._email_field.setText(remembered)
 
         self._password_field = QLineEdit()
         self._password_field.setObjectName("login-field")
@@ -63,35 +80,57 @@ class LoginWindow(QWidget):
         self._password_field.setEchoMode(QLineEdit.EchoMode.Password)
         self._password_field.returnPressed.connect(self._on_submit)
 
-        self._submit_btn = QPushButton("Sign in")
-        self._submit_btn.setObjectName("primary-btn")
-        self._submit_btn.setFixedHeight(40)
-        self._submit_btn.clicked.connect(self._on_submit)
-
-        self._error_label = QLabel("")
-        self._error_label.setObjectName("error-label")
-        self._error_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._error_label.setWordWrap(True)
-        self._error_label.hide()
-
-        card_layout.addWidget(title)
-        card_layout.addWidget(subtitle)
-        card_layout.addSpacing(8)
-        card_layout.addWidget(QLabel("Email"))
-        card_layout.addWidget(self._email_field)
-        card_layout.addWidget(QLabel("Password"))
-        card_layout.addWidget(self._password_field)
-        card_layout.addSpacing(4)
-        card_layout.addWidget(self._submit_btn)
-        card_layout.addWidget(self._error_label)
+        self._remember_email = QCheckBox("Remember email")
+        self._remember_email.setObjectName("login-checkbox")
+        self._remember_email.setChecked(bool(remembered))
 
         forgot_btn = QPushButton("Forgot password?")
         forgot_btn.setObjectName("link-btn")
         forgot_btn.setFlat(True)
         forgot_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         forgot_btn.clicked.connect(self.forgot_password_requested)
-        card_layout.addSpacing(4)
-        card_layout.addWidget(forgot_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        self._submit_btn = QPushButton("Sign in")
+        self._submit_btn.setObjectName("primary-btn")
+        self._submit_btn.setFixedHeight(44)
+        self._submit_btn.clicked.connect(self._on_submit)
+
+        self._error_label = QLabel("")
+        self._error_label.setObjectName("error-label")
+        self._error_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        self._error_label.setWordWrap(True)
+        self._error_label.hide()
+
+        divider = QFrame()
+        divider.setObjectName("login-divider")
+        divider.setFrameShape(QFrame.Shape.HLine)
+
+        footnote = QLabel("Supabase sign-in. Outlook remains read-only.")
+        footnote.setObjectName("login-footnote")
+        footnote.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        options_row = QHBoxLayout()
+        options_row.setContentsMargins(0, 2, 0, 2)
+        options_row.addWidget(self._remember_email)
+        options_row.addStretch(1)
+        options_row.addWidget(forgot_btn)
+
+        card_layout.addWidget(brand_mark, alignment=Qt.AlignmentFlag.AlignCenter)
+        card_layout.addSpacing(6)
+        card_layout.addWidget(title)
+        card_layout.addWidget(subtitle)
+        card_layout.addSpacing(18)
+        card_layout.addWidget(self._field_label("Email"))
+        card_layout.addWidget(self._email_field)
+        card_layout.addWidget(self._field_label("Password"))
+        card_layout.addWidget(self._password_field)
+        card_layout.addLayout(options_row)
+        card_layout.addSpacing(8)
+        card_layout.addWidget(self._submit_btn)
+        card_layout.addWidget(self._error_label)
+        card_layout.addSpacing(14)
+        card_layout.addWidget(divider)
+        card_layout.addWidget(footnote)
 
         h_wrap = QHBoxLayout()
         h_wrap.addItem(QSpacerItem(0, 0, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))
@@ -102,14 +141,13 @@ class LoginWindow(QWidget):
         root.addLayout(h_wrap)
         root.addItem(QSpacerItem(0, 0, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
 
-    # ── Slots ──────────────────────────────────────────────────────────────────
-
     def _on_submit(self) -> None:
         email = self._email_field.text().strip()
         password = self._password_field.text()
         if not email or not password:
             self._show_error("Please enter your email and password.")
             return
+        self._store_remembered_email(email)
         self._set_loading(True)
         self._error_label.hide()
         self._worker = ApiWorker(self._client.login, email, password)
@@ -125,20 +163,32 @@ class LoginWindow(QWidget):
         self._set_loading(False)
         self._show_error(message or "Sign-in failed. Check your credentials.")
 
-    # ── Helpers ────────────────────────────────────────────────────────────────
-
     def _set_loading(self, loading: bool) -> None:
         self._submit_btn.setEnabled(not loading)
-        self._submit_btn.setText("Signing in…" if loading else "Sign in")
+        self._submit_btn.setText("Signing in..." if loading else "Sign in")
         self._email_field.setEnabled(not loading)
         self._password_field.setEnabled(not loading)
+        self._remember_email.setEnabled(not loading)
 
     def _show_error(self, message: str) -> None:
         self._error_label.setText(message)
         self._error_label.show()
 
+    def _field_label(self, text: str) -> QLabel:
+        label = QLabel(text)
+        label.setObjectName("login-field-label")
+        return label
+
+    def _store_remembered_email(self, email: str) -> None:
+        if self._remember_email.isChecked():
+            self._settings.setValue("remembered_email", email.lower())
+        else:
+            self._settings.remove("remembered_email")
+
     def clear(self) -> None:
-        self._email_field.clear()
+        remembered = str(self._settings.value("remembered_email", "", str) or "").strip()
+        self._email_field.setText(remembered)
+        self._remember_email.setChecked(bool(remembered))
         self._password_field.clear()
         self._error_label.hide()
         self._set_loading(False)

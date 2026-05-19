@@ -6,11 +6,11 @@ Decision: The GitHub Actions owner-built release installer should include the CI
 
 Rationale: ReplyRight is being released for a controlled deployment where the owner expects the installer to be ready to run. Removing `.env` before installer creation left the released app without the API keys needed for AI and Supabase behavior.
 
-## 2026-05-19: Hybrid Supabase And Local SQLite Auth
+## 2026-05-19: Supabase-Authoritative Login When Configured
 
-Decision: ReplyRight login should prefer Supabase Auth when configured, but must preserve local SQLite users and sessions as a fallback for existing installs and local-first/offline operation. First-run setup may create a local SQLite admin when no admin exists and Supabase service-role configuration is absent, without asking the user for API keys.
+Decision: ReplyRight login must use Supabase Auth when Supabase URL and anon key are configured. Local SQLite users and sessions remain available only for unconfigured/no-key development and local fallback installs. First-run setup may create a local SQLite admin only when Supabase service-role configuration is absent, without asking the user for API keys.
 
-Rationale: The v0.1.1 Supabase-only migration broke installed database-backed credentials and fresh installs without bundled service-role credentials. Local auth fallback preserves the existing database contract and the local-first product requirement while still allowing Supabase Auth deployments.
+Rationale: The controlled hotel deployment expects one Supabase-backed identity source. Silently accepting a stale local SQLite password when Supabase is configured can mask broken Supabase runtime configuration and confuse operators. Local auth still preserves no-key development and fallback operation only when Supabase is absent.
 
 ## 2026-05-19: No In-App API Key Collection
 
