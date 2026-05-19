@@ -142,7 +142,7 @@ def test_env_example_has_no_service_role_key_field() -> None:
     text = Path(".env.example").read_text(encoding="utf-8")
     assert "SUPABASE_SERVICE_ROLE_KEY" not in text, (
         ".env.example must not reference SUPABASE_SERVICE_ROLE_KEY; "
-        "that key is entered via the first-run credentials screen"
+        "that key is provisioned outside the ReplyRight UI"
     )
 
 
@@ -158,26 +158,22 @@ def test_env_example_contains_no_real_secrets() -> None:
 # ── Test 5: HTML templates ────────────────────────────────────────────────────
 
 
-def test_credentials_setup_html_no_hardcoded_secrets() -> None:
-    """The credentials setup page must not have pre-filled secret values."""
-    text = Path("outlook_dashboard/static/credentials_setup.html").read_text(encoding="utf-8")
-    for label, pattern in _DANGEROUS_PATTERNS:
-        assert not pattern.search(text), (
-            f"credentials_setup.html contains a real {label}"
-        )
+def test_credentials_setup_html_removed() -> None:
+    """The desktop app must not ship an in-app API-key entry page."""
+    assert not Path("outlook_dashboard/static/credentials_setup.html").exists()
 
 
 # ── Test 6: auth.py surface ───────────────────────────────────────────────────
 
 
-def test_needs_credentials_setup_returns_true_when_no_supabase_url() -> None:
-    """needs_credentials_setup() is True when env vars are absent."""
+def test_needs_credentials_setup_returns_false_when_no_supabase_url() -> None:
+    """Missing env vars must not trigger an in-app API-key prompt."""
     from outlook_dashboard.auth import needs_credentials_setup
 
     saved_url = os.environ.pop("SUPABASE_URL", None)
     saved_svc = os.environ.pop("SUPABASE_SERVICE_ROLE_KEY", None)
     try:
-        assert needs_credentials_setup() is True
+        assert needs_credentials_setup() is False
     finally:
         if saved_url is not None:
             os.environ["SUPABASE_URL"] = saved_url
@@ -185,15 +181,15 @@ def test_needs_credentials_setup_returns_true_when_no_supabase_url() -> None:
             os.environ["SUPABASE_SERVICE_ROLE_KEY"] = saved_svc
 
 
-def test_needs_credentials_setup_returns_true_when_only_url_set() -> None:
-    """needs_credentials_setup() is True when URL is set but service key is absent."""
+def test_needs_credentials_setup_returns_false_when_only_url_set() -> None:
+    """A partial config must not trigger an in-app API-key prompt."""
     from outlook_dashboard.auth import needs_credentials_setup
 
     saved_url = os.environ.get("SUPABASE_URL")
     saved_svc = os.environ.pop("SUPABASE_SERVICE_ROLE_KEY", None)
     os.environ["SUPABASE_URL"] = "https://example.supabase.co"
     try:
-        assert needs_credentials_setup() is True
+        assert needs_credentials_setup() is False
     finally:
         if saved_url is not None:
             os.environ["SUPABASE_URL"] = saved_url

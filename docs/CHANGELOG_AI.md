@@ -1,5 +1,11 @@
 # AI Change Log
 
+## 2026-05-19 - Release/auth safety repair
+
+- Removed the user-facing credentials setup page and API endpoint path so the desktop app no longer asks users to paste API keys.
+- Kept AI provider use configuration-driven: Refresh Inbox still uses OpenAI, then Google AI, then local deterministic fallback based on deployed environment values.
+- Kept Claude/Anthropic reserved for explicit single-email Analyze/AI Suggestion behavior.
+
 ## 2026-05-18 - Multilingual hotel workflow bug tests
 
 - Added multilingual reservation workflow tests for Spanish, French, Portuguese, Italian, and German hotel emails.

@@ -28,12 +28,10 @@ from .auth import (
     ensure_admin,
     get_session_user,
     list_users,
-    needs_credentials_setup,
     reset_password,
     send_invite_email,
     send_reset_email,
 )
-from .config import write_local_env
 from .config import DATA_DIR, get_settings
 from .database import (
     admin_correction_stats,
@@ -144,7 +142,6 @@ _AUTH_SKIP = {
     "/reset-password",
     "/api/auth/login",
     "/api/auth/setup",
-    "/api/auth/credentials-setup",
     "/api/auth/logout",
     "/api/auth/forgot-password",
     "/api/auth/reset-password",
@@ -156,7 +153,6 @@ _RATE_LIMIT_PATHS = {
     "/credentials-setup",
     "/api/auth/login",
     "/api/auth/setup",
-    "/api/auth/credentials-setup",
     "/api/auth/forgot-password",
     "/api/auth/reset-password",
 }
@@ -309,56 +305,17 @@ class DesktopOutlookImport(BaseModel):
 
 
 @app.get("/credentials-setup", response_model=None)
-def credentials_setup_page() -> HTMLResponse | RedirectResponse:
-    if not needs_credentials_setup():
-        return RedirectResponse("/setup" if not admin_user_exists() else "/login", status_code=303)
-    return _credentials_setup_response()
+def credentials_setup_page() -> RedirectResponse:
+    return RedirectResponse("/login", status_code=303)
 
 
 @app.post("/credentials-setup", response_model=None)
-def credentials_setup_form(
-    supabase_url: str = Form(...),
-    supabase_key: str = Form(...),
-    supabase_service_role_key: str = Form(...),
-    anthropic_api_key: str = Form(""),
-) -> HTMLResponse | RedirectResponse:
-    url = supabase_url.strip()
-    key = supabase_key.strip()
-    svc = supabase_service_role_key.strip()
-    ai_key = anthropic_api_key.strip()
-
-    if not url.startswith("https://"):
-        return _credentials_setup_response("Supabase URL must start with https://", status_code=400)
-    if len(key) < 20:
-        return _credentials_setup_response("Supabase anon key appears too short.", status_code=400)
-    if len(svc) < 20:
-        return _credentials_setup_response("Supabase service-role key appears too short.", status_code=400)
-
-    values: dict[str, str] = {
-        "SUPABASE_URL": url,
-        "SUPABASE_KEY": key,
-        "SUPABASE_SERVICE_ROLE_KEY": svc,
-    }
-    if ai_key:
-        values["ANTHROPIC_API_KEY"] = ai_key
-
-    try:
-        write_local_env(values)
-    except Exception as exc:
-        _log.error("credentials-setup: failed to write .env: %s", exc)
-        return _credentials_setup_response(
-            "Could not save credentials to local .env. Check directory permissions.", status_code=500
-        )
-
-    get_settings.cache_clear()
-    _log.info("credentials-setup: Supabase config written; redirecting to /setup")
-    return RedirectResponse("/setup", status_code=303)
+def credentials_setup_form() -> RedirectResponse:
+    return RedirectResponse("/login", status_code=303)
 
 
 @app.get("/login", response_model=None)
 def login_page() -> HTMLResponse | RedirectResponse:
-    if needs_credentials_setup():
-        return RedirectResponse("/credentials-setup", status_code=303)
     if admin_setup_available() and not admin_user_exists():
         return RedirectResponse("/setup", status_code=303)
     return _login_response()
@@ -368,8 +325,6 @@ def login_page() -> HTMLResponse | RedirectResponse:
 def login_form(
     email: str = Form(...), password: str = Form(...), remember_email: str | None = Form(None)
 ) -> HTMLResponse | RedirectResponse:
-    if needs_credentials_setup():
-        return RedirectResponse("/credentials-setup", status_code=303)
     if admin_setup_available() and not admin_user_exists():
         return RedirectResponse("/setup", status_code=303)
     settings = get_settings()
@@ -397,8 +352,6 @@ def login_form(
 
 @app.get("/setup", response_model=None)
 def setup_page() -> HTMLResponse | RedirectResponse:
-    if needs_credentials_setup():
-        return RedirectResponse("/credentials-setup", status_code=303)
     if admin_setup_available() and admin_user_exists():
         return RedirectResponse("/login", status_code=303)
     return _setup_response()
@@ -406,8 +359,6 @@ def setup_page() -> HTMLResponse | RedirectResponse:
 
 @app.post("/setup", response_model=None)
 def setup_form(email: str = Form(...), password: str = Form(...)) -> HTMLResponse | RedirectResponse:
-    if needs_credentials_setup():
-        return RedirectResponse("/credentials-setup", status_code=303)
     settings = get_settings()
     if len(password) < 8:
         return _setup_response(error_message="Password must be at least 8 characters.", email=email, status_code=400)
@@ -492,15 +443,6 @@ def _setup_response(error_message: str = "", email: str = "", status_code: int =
     return HTMLResponse(content=html, status_code=status_code, headers={"Cache-Control": "no-store"})
 
 
-def _credentials_setup_response(error_message: str = "", status_code: int = 200) -> HTMLResponse:
-    html = (STATIC_DIR / "credentials_setup.html").read_text(encoding="utf-8")
-    html = html.replace(
-        'data-server-error=""',
-        f'data-server-error="{html_lib.escape(error_message, quote=True)}"',
-    )
-    return HTMLResponse(content=html, status_code=status_code, headers={"Cache-Control": "no-store"})
-
-
 def _apply_remembered_email(response, email: str, should_remember: bool) -> None:
     normalized = email.lower().strip()
     if should_remember and normalized:
@@ -531,13 +473,6 @@ def dashboard() -> HTMLResponse:
 class LoginRequest(BaseModel):
     email: str
     password: str
-
-
-class CredentialsSetupRequest(BaseModel):
-    supabase_url: str
-    supabase_key: str
-    supabase_service_role_key: str
-    anthropic_api_key: str = ""
 
 
 class SetupAdminRequest(BaseModel):
@@ -588,39 +523,6 @@ def api_login(payload: LoginRequest, request: Request):
         max_age=60 * 60 * 24 * 30,
     )
     return response
-
-
-@app.post("/api/auth/credentials-setup")
-def api_credentials_setup(payload: CredentialsSetupRequest):
-    url = payload.supabase_url.strip()
-    key = payload.supabase_key.strip()
-    svc = payload.supabase_service_role_key.strip()
-    ai_key = payload.anthropic_api_key.strip()
-
-    if not url.startswith("https://"):
-        raise HTTPException(status_code=400, detail="SUPABASE_URL must start with https://")
-    if len(key) < 20:
-        raise HTTPException(status_code=400, detail="SUPABASE_KEY appears too short.")
-    if len(svc) < 20:
-        raise HTTPException(status_code=400, detail="SUPABASE_SERVICE_ROLE_KEY appears too short.")
-
-    values: dict[str, str] = {
-        "SUPABASE_URL": url,
-        "SUPABASE_KEY": key,
-        "SUPABASE_SERVICE_ROLE_KEY": svc,
-    }
-    if ai_key:
-        values["ANTHROPIC_API_KEY"] = ai_key
-
-    try:
-        write_local_env(values)
-    except Exception as exc:
-        _log.error("api credentials-setup: failed to write .env: %s", exc)
-        raise HTTPException(status_code=500, detail="Could not save credentials to local .env.") from exc
-
-    get_settings.cache_clear()
-    _log.info("api credentials-setup: Supabase config written for %d keys", len(values))
-    return JSONResponse({"ok": True, "keys_written": list(values.keys())})
 
 
 @app.post("/api/auth/setup")

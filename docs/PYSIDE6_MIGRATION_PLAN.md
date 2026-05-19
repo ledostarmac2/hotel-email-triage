@@ -1,6 +1,6 @@
 # PySide6 Migration Plan
 
-Last updated: 2026-05-18
+Last updated: 2026-05-19
 
 ---
 
@@ -40,7 +40,9 @@ replyright_core/                     — Framework-neutral service layer
   app_state.py                       — AppState dataclass
 
 replyright_qt/                       — PySide6 native shell scaffold
-  main_qt.py                         — Entry point (raises until native slice ready)
+  main_qt.py                         — Native helper; direct execution raises until native slice ready
+  adapters/                          — Supabase auth and SQLite inbox adapter scaffolds
+  workers.py                         — QThread worker scaffolds for native auth/inbox loading
   windows/
     login_window.py                  — LoginWindow skeleton
     main_window.py                   — MainWindow skeleton
@@ -55,6 +57,8 @@ The active production path remains:
 ```text
 run_desktop.py -> outlook_dashboard/main.py (FastAPI) -> static HTML/CSS/JS -> pywebview
 ```
+
+`run_desktop.py --native` / `REPLYRIGHT_NATIVE=1` is development-only scaffold access and is not the v0.1.1 production launcher.
 
 ---
 
@@ -99,7 +103,6 @@ These are called through `replyright_core/services/` Protocols in the native app
 |---|---|---|
 | Login | `LoginWindow` | Scaffold only |
 | First-run admin setup | `SetupWindow` (future) | Not yet |
-| `/credentials-setup` | `CredentialsSetupWindow` (future) | Not yet |
 | Inbox / queue tabs | `MainWindow` with tab widget | Scaffold only |
 | Conversation detail | `ConversationDetailWidget` (future) | Not yet |
 | Feedback form | `FeedbackDialog` (future) | Not yet |
@@ -118,7 +121,6 @@ These are called through `replyright_core/services/` Protocols in the native app
 - Admin screens (complex, low daily frequency)
 - Training/model health (background-only interaction)
 - Signal inspector (diagnostic only)
-- `/credentials-setup` (first-run only)
 
 ---
 
@@ -139,8 +141,8 @@ replyright_qt/          PySide6 application code only
 ## Service boundary plan
 
 1. `replyright_core` imports nothing from `replyright_qt` or `outlook_dashboard`
-2. `replyright_qt` imports from `replyright_core` only (never from `outlook_dashboard` directly)
-3. Concrete adapters in `replyright_qt/` or a new `replyright_adapters/` package
+2. UI widgets/windows in `replyright_qt` import from `replyright_core` only, with concrete adapters isolated under `replyright_qt/adapters/`
+3. Concrete adapters in `replyright_qt/adapters/` or a future `replyright_adapters/` package
    implement the `replyright_core` Protocols by delegating to `outlook_dashboard` modules
 4. This keeps intelligence modules stable while the shell changes
 
@@ -172,7 +174,7 @@ replyright_qt/          PySide6 application code only
 ## What not to touch during migration
 
 - `outlook_dashboard/` intelligence modules (preserve as-is; extract through interfaces)
-- `run_desktop.py` (production bridge; do not change until native slice is ready)
+- `run_desktop.py` production bridge behavior; only the explicit `--native` development flag should touch native scaffold launch
 - `installer/` files (release process; separate concern)
 - `.github/workflows/` (CI; separate concern)
 - `app/` (inactive Next.js scaffold; remains inactive)

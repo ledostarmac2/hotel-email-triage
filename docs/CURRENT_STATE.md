@@ -1,6 +1,6 @@
 # Current State
 
-Last updated: 2026-05-18 (v0.1.1 emergency release repair finalized in source)
+Last updated: 2026-05-19 (v0.1.1 release/auth repair in progress)
 
 ## Status
 
@@ -18,6 +18,12 @@ Last updated: 2026-05-18 (v0.1.1 emergency release repair finalized in source)
   - First-run setup exists at `/setup` and `/api/auth/setup`; if no admin user exists and Supabase service-role config is available, the user can create the first admin without a local `.env`.
   - GitHub release workflow and updater now prefer `ReplyRightSetup-v{version}.exe` installer assets.
   - Source version is bumped to `0.1.1`.
+- 2026-05-19 release/auth repair:
+  - Fixed the CI failure in `tests/test_pyside6_no_browser_engine.py` by restoring the PySide6 scaffold contract: `replyright_qt/main_qt.py` now raises a `RuntimeError` if run directly, and `replyright_qt/windows/main_window.py` has a PySide6 import guard.
+  - Native PySide6 scaffold files for auth/inbox adapters and worker loading are present, with an optional `run_desktop.py --native` / `REPLYRIGHT_NATIVE=1` path for development only. The production v0.1.1 path remains FastAPI plus pywebview.
+  - Removed the user-facing credentials setup page from the desktop app. `/credentials-setup` now redirects to login, and `/api/auth/credentials-setup` is no longer an unauthenticated API-key writing endpoint.
+  - End users must not be asked for Supabase, OpenAI, Google, Anthropic, or other API keys in the program. Runtime credentials must be supplied by deployment-time files, machine environment, or GitHub Actions release secrets.
+  - GitHub Actions now opts JavaScript actions into Node 24 with `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true`.
 - Local validation after the final v0.1.1 repair pass:
   - `.\build_exe.ps1` built `dist\ReplyRight\ReplyRight.exe`.
   - `dist\ReplyRight\ReplyRight.exe --health-smoke` exited successfully.
@@ -65,7 +71,7 @@ Last updated: 2026-05-18 (v0.1.1 emergency release repair finalized in source)
 - Confidence scoring (10–95%) is computed per email and shown as a color-coded pill in the UI.
 - Rule candidate engine mines local feedback for recurring correction patterns. Three matching corrections create visible candidates; five or more mark the rule as auto-promoted for hands-off shared learning.
 - Admin Suggested Rules now includes emergency `Reject` and `Dismiss` controls. Dismissed candidates are hidden locally; rejected candidates stay visible as rejected and are skipped by Supabase auto-promotion.
-- Login is gated by Supabase Auth. The configured admin account can still be repaired from `REPLYRIGHT_ADMIN_EMAIL` / `REPLYRIGHT_ADMIN_PASSWORD` when an admin already exists; if no admin exists, first-run setup can create one through the bundled Supabase service-role configuration.
+- Login is gated by Supabase Auth. The configured admin account can still be repaired from `REPLYRIGHT_ADMIN_EMAIL` / `REPLYRIGHT_ADMIN_PASSWORD` when an admin already exists; if no admin exists, first-run setup can create one only when the required Supabase service-role configuration is already present. The app must not ask the user to enter API keys.
 - Login failures render a persistent static error message with an X close button and preserve the typed email address. Dashboard action failures such as invite/reset errors now use a persistent dismissable error toast.
 - Auth middleware protects `/api/auth/me` and admin endpoints again. Public auth routes are limited to login/logout/forgot-password/reset-password, fixing the post-login dashboard boot loop.
 - Admin view now has its own dashboard shell: the Refresh Inbox button is hidden while Admin is active, the topbar changes to Admin, and leaving Admin restores/rebinds the inbox queue/detail DOM so Inbox, Urgent, VIP, and Missing Info render correctly again.
@@ -80,7 +86,7 @@ Last updated: 2026-05-18 (v0.1.1 emergency release repair finalized in source)
 - **v0.1.0 optimization pass (2026-05-17):** All code optimizations applied — dead category-check branch removed from `ai.py`, bare JSON parse in `_analyze_with_claude` wrapped with proper error handling, SMTP code deduplicated in `auth.py`, three near-identical Supabase download functions unified in `supabase_client.py`, httpx.Client reused across `promote_rule_candidates` loop, `secrets` moved to top-level import in `main.py`, rate-limit bucket TTL pruning added, `registry.py` plugin loop introduced.
 - **Phase 7 enterprise deployment (2026-05-17):**
   - **Supabase Auth migration**: All user authentication, session management, and admin provisioning now go through Supabase `/auth/v1/*` endpoints. No local SQLite user tables. Sessions stored as `access_token|||refresh_token` cookie (`rr_session`). Token refresh handled transparently in `_AuthMiddleware`.
-  - **Bundled credentials**: `outlook_dashboard/bundled_secrets.py` ships XOR-obfuscated Supabase URLs, keys, Anthropic API key, and model name — committed to GitHub so any machine with the repo can connect to the DB and run AI with zero manual configuration. `.env` takes precedence when present.
+  - **Runtime credentials**: provider and Supabase keys are not collected through the UI. They are supplied by ignored local `.env` files, machine environment variables, or GitHub Actions secrets during build/release workflows. `.env` takes precedence when present.
   - **Claude AI usage rule (CRITICAL)**: Claude/Anthropic is called ONLY when the user clicks the single-email "Analyze" button (`analyze_email()`). Bulk Refresh uses OpenAI → Google → heuristic only (no Claude). Violating this burns credits on every inbox refresh.
   - **EXE now includes anthropic**: `build_exe.ps1` uses `--collect-all anthropic` so the packaged EXE can call Claude without "No module named 'anthropic'" errors.
   - **Docker**: `Dockerfile` + `docker-compose.yml` for web-only server mode on Linux/Mac.
@@ -103,13 +109,13 @@ Last updated: 2026-05-18 (v0.1.1 emergency release repair finalized in source)
 
 ## Config Requirements
 
-Copy `.env.example` to `.env` for local runs. `.env` must not be committed. All credentials are bundled encrypted in `bundled_secrets.py` so the app works out-of-the-box even without a `.env` file — but `.env` always takes precedence.
+Copy `.env.example` to `.env` for local runs. `.env` must not be committed. Release builds can receive credentials from GitHub Actions secrets or deployment-time files, and `.env` always takes precedence when present.
 
 Important variables:
 
-- `ANTHROPIC_API_KEY` — bundled; override in `.env` if rotating. Used ONLY for single-email Analyze button (Claude Opus).
-- `ANTHROPIC_MODEL` — default `claude-opus-4-7` (bundled).
-- `SUPABASE_URL`, `SUPABASE_KEY`, `SUPABASE_SERVICE_ROLE_KEY` — bundled; all auth and data goes through Supabase.
+- `ANTHROPIC_API_KEY` — supplied by deployment config when enabled. Used ONLY for single-email Analyze button (Claude Opus).
+- `ANTHROPIC_MODEL` — default `claude-opus-4-7`.
+- `SUPABASE_URL`, `SUPABASE_KEY`, `SUPABASE_SERVICE_ROLE_KEY` — supplied by deployment config; all auth and data goes through Supabase when configured.
 - `REPLYRIGHT_ADMIN_EMAIL` and `REPLYRIGHT_ADMIN_PASSWORD` — Supabase Auth admin account credentials. `ensure_admin()` creates/repairs this user in Supabase on startup.
 - `OPENAI_API_KEY` / `OPENAI_MODEL` — for Refresh Inbox bulk classification (not Analyze button).
 - `GOOGLE_AI_API_KEY` / `GOOGLE_AI_MODEL` — fallback for Refresh Inbox when OpenAI not configured.
@@ -159,7 +165,7 @@ Tests: `python -m unittest tests.test_kernel_plugins tests.test_kernel_orchestra
 3. **Emergency v0.1.1 Release**: after tests and installer smoke checks pass, push a tag (`git tag v0.1.1 && git push origin v0.1.1`) to trigger the release job. It must publish `ReplyRightSetup-v0.1.1.exe` as the primary asset, not a bare EXE.
 4. **Local classifier training (Phase 7 long-term)**: import historical completed emails → redact PII → AI-label → human-review samples → store sanitized Supabase training set → train lightweight local classifiers. Start with urgency, owner, category, status, missing_information targets only.
 5. **Refresh check**: click Refresh Inbox once and visually confirm the feedback box, resized window behavior, and Outlook-like independent scrolling.
-6. **Login check**: on a fresh install with no admin, confirm `/setup` creates the first admin; otherwise use the configured Supabase admin credentials. Bad credentials should show a persistent error with an X, good credentials should enter the app.
+6. **Login check**: confirm the app never prompts for API keys. On a fresh install with no admin and configured Supabase service-role credentials, `/setup` creates the first admin; otherwise use the configured Supabase admin credentials. Bad credentials should show a persistent error with an X, good credentials should enter the app.
 7. **Spot-check triage**: review conversations formerly over-scored as urgency 4/5, especially completed CCA/payment form threads and friendly travel-agent replies.
 8. **If launch fails**: inspect `dist\ReplyRight\data\replyright-startup.log`. Look for `pythonnet (clr) is not available`; if seen, delete `.vendor` and re-run `.\build_exe.ps1` so pip re-installs pythonnet.
 9. **Use the roadmap**: read `docs/FUTURE_ROADMAP_SUPABASE_ADAPTIVE_LEARNING.md` before broad architecture work, especially Supabase shared learning and staged AI pipeline. Ignore multi-property/cross-property ideas unless Brian reopens them.

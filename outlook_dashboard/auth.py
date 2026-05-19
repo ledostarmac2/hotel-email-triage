@@ -187,15 +187,13 @@ def ensure_admin(email: str, password: str, db_path: Path | None = None) -> None
 
 
 def needs_credentials_setup() -> bool:
-    """Return True when Supabase config is absent or incomplete.
+    """Return whether ReplyRight should show an in-app credentials form.
 
-    Two cases trigger this:
-    - SUPABASE_URL missing: completely unconfigured install.
-    - SUPABASE_URL present but SUPABASE_SERVICE_ROLE_KEY absent: privileged key
-      was not bundled (intentional security policy) and must be entered by the
-      operator on first run via /credentials-setup.
+    End users must never be asked to paste provider or Supabase API keys into
+    the desktop app. Runtime credentials are supplied by deployment files,
+    machine environment, or CI/release provisioning.
     """
-    return not bool(_supabase_url() and _service_key())
+    return False
 
 
 def admin_setup_available() -> bool:

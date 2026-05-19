@@ -1,6 +1,6 @@
 # ReplyRight Installer Strategy
 
-Last updated: 2026-05-18
+Last updated: 2026-05-19
 
 ## Position
 
@@ -64,7 +64,7 @@ The installer bundles the full `dist\ReplyRight\*` folder and excludes local `.e
 - Start Menu shortcut.
 - Windows uninstall entry.
 - No Python installation required on target machine.
-- No local `.env` required for first login; if no admin exists, first-run setup can create one through the bundled Supabase service-role configuration.
+- No user-facing API-key prompt. If no admin exists, first-run setup can create one only when Supabase service-role configuration has already been provisioned by deployment.
 - Compatible with a fresh Windows 10/11 machine.
 - Installer includes or handles WebView2 runtime.
 - Installer uses ReplyRight icon where available.
@@ -139,5 +139,5 @@ Native UI migration should eventually remove the WebView2 dependency. Until then
 - **Never ship the service-role key inside the installer or source code.**
 - **Never ship provider API keys (Anthropic, OpenAI, Google) inside the installer.**
 - The Supabase anon key (`SUPABASE_KEY`) is acceptable to bundle *only* if Row Level Security (RLS) is flawlessly configured.
-- The service-role key must be entered locally by the user during first-run setup or provisioned securely by IT.
+- The service-role key must be provisioned securely by the owner/IT through deployment files or environment variables, not entered by an end user inside ReplyRight.
 - The local `.env` file stays on the machine and must be strictly excluded from all release artifacts.

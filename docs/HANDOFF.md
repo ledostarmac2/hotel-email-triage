@@ -1,5 +1,56 @@
 # Handoff Log
 
+## 2026-05-19 - v0.1.1 CI/auth prompt repair
+
+Summary:
+
+- Fixed the GitHub Actions lint failure from `tests/test_pyside6_no_browser_engine.py` by making `replyright_qt/main_qt.py` raise `RuntimeError` when run directly.
+- Added the missing PySide6 import guard to `replyright_qt/windows/main_window.py`.
+- Included the pending native-auth/inbox scaffold files in `replyright_qt/` that were present in the worktree for the v0.1.1 commit, and kept direct `replyright_qt/main_qt.py` execution guarded.
+- Removed the user-facing credentials setup screen from the active desktop app. `/credentials-setup` now redirects to login, and `/api/auth/credentials-setup` is no longer an unauthenticated endpoint for writing API keys.
+- Added the GitHub Actions `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true` opt-in to address the Node 20 deprecation notice.
+- Updated docs/tests to record that API keys are deployment/build configuration, not an in-app user prompt.
+
+Files changed:
+
+- `.github/workflows/build.yml`
+- `outlook_dashboard/auth.py`
+- `outlook_dashboard/main.py`
+- `outlook_dashboard/static/credentials_setup.html` (deleted)
+- `replyright_qt/main_qt.py`
+- `replyright_qt/adapters/auth_adapter.py`
+- `replyright_qt/adapters/inbox_adapter.py`
+- `replyright_qt/adapters/__init__.py`
+- `replyright_qt/workers.py`
+- `replyright_qt/widgets/conversation_list.py`
+- `replyright_qt/windows/login_window.py`
+- `replyright_qt/windows/main_window.py`
+- `run_desktop.py`
+- `tests/test_api_workflow_pytest.py`
+- `tests/test_first_run_setup.py`
+- `tests/test_secret_hygiene.py`
+- `docs/CURRENT_STATE.md`
+- `docs/DECISIONS.md`
+- `docs/DEPLOYMENT.md`
+- `docs/INSTALLER_STRATEGY.md`
+- `docs/PYSIDE6_MIGRATION_PLAN.md`
+- `docs/SECURITY_AND_PRIVACY.md`
+- `docs/CHANGELOG_AI.md`
+- `docs/HANDOFF.md`
+
+Verification:
+
+- `python -m py_compile replyright_qt/main_qt.py replyright_qt/windows/main_window.py outlook_dashboard/auth.py outlook_dashboard/main.py` - passed.
+- `python -m pytest tests/test_pyside6_no_browser_engine.py tests/test_first_run_setup.py tests/test_secret_hygiene.py -q --timeout=60` - passed.
+- `python -m pytest tests/ -x --timeout=60` - 494 passed, 1 existing warning, 35 subtests passed.
+- `.github/workflows/build.yml` parsed successfully with PyYAML.
+
+Remaining work:
+
+- Push/tag v0.1.1 and confirm GitHub Actions publishes `ReplyRightSetup-v0.1.1.exe`.
+
+---
+
 ## 2026-05-18 - v0.1.1 release finalization and PySide6 scaffold
 
 Summary:

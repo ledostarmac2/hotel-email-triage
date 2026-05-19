@@ -193,4 +193,4 @@ If classifier imports fail in the EXE:
 - vendored dependencies
 - secrets (e.g., `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`)
 
-**Never ship the service-role key or provider API keys inside the installer or source code.** The Supabase anon key (`SUPABASE_KEY`) is acceptable to bundle *only* if Row Level Security (RLS) is flawlessly configured. The service-role key must be entered locally during first-run setup or provisioned securely by IT. The local `.env` stays on the machine and must be strictly excluded from all release artifacts.
+**Never commit the service-role key or provider API keys to source code.** ReplyRight must not ask end users for API keys in the app. Deployment credentials are supplied through ignored local files, machine environment variables, or GitHub Actions secrets during the release workflow. The local `.env` must not be committed.

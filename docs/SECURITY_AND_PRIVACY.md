@@ -1,6 +1,6 @@
 # Security And Privacy
 
-Last updated: 2026-05-18
+Last updated: 2026-05-19
 
 ## Core Posture
 
@@ -128,6 +128,8 @@ Admin routes must stay protected by auth middleware.
 
 Password reset/invite flows must not leak whether a target email exists beyond the current intended behavior.
 
+ReplyRight must not ask end users to paste API keys or Supabase keys into the program. Secrets are provisioned outside the UI through ignored local files, machine environment variables, or release/build secrets.
+
 ## Audit Expectations
 
 Current and future admin actions should have audit records where practical:
@@ -179,5 +181,5 @@ Until a UI setting exists, preserve the current code-level routing rules and con
 - **Never ship the service-role key inside the installer or source code.**
 - **Never ship provider API keys (Anthropic, OpenAI, Google) inside the installer.**
 - The Supabase anon key (`SUPABASE_KEY`) is acceptable to bundle *only* if Row Level Security (RLS) is flawlessly configured.
-- The service-role key must be entered locally by the user during first-run setup or provisioned securely by IT.
+- The service-role key must be provisioned securely by the owner/IT outside the ReplyRight UI.
 - The local `.env` file stays on the machine and must be strictly excluded from all release artifacts.

@@ -1,5 +1,17 @@
 # Decisions
 
+## 2026-05-19: No In-App API Key Collection
+
+Decision: ReplyRight must not display a credentials setup screen or ask end users for Supabase, OpenAI, Google, Anthropic, or other API keys inside the desktop app. Runtime credentials must come from deployment-time configuration, ignored local files, machine environment variables, or GitHub Actions secrets during release builds. The first-run setup surface remains only for creating the first admin account when the required Supabase configuration is already present.
+
+Rationale: Users should only sign in and operate the inbox. API-key handling is an owner/deployment concern, and exposing it in the installed app creates confusion and increases the chance that secrets are pasted into the wrong place.
+
+## 2026-05-19: Native Qt Scaffold Remains Development-Only
+
+Decision: The PySide6 scaffold may be launched only through an explicit development flag (`run_desktop.py --native` or `REPLYRIGHT_NATIVE=1`). Direct `replyright_qt/main_qt.py` execution stays guarded with `RuntimeError`, and the v0.1.1 production desktop path remains `run_desktop.py` starting FastAPI plus pywebview.
+
+Rationale: The native UI work is useful migration scaffolding, but it is not production-wired or release-ready. The guard prevents accidental use while still allowing deliberate development experiments.
+
 ## 2026-05-18: Installer-First Releases And Health-Gated Desktop Startup
 
 Decision: ReplyRight user releases must publish `ReplyRightSetup-v{version}.exe` as the primary release asset, with the raw PyInstaller `ReplyRight.exe` treated as an internal build input. The desktop launcher must start FastAPI, wait for `/healthz` to report healthy, and only then open the pywebview window. If startup fails, ReplyRight must show a controlled startup error instead of exposing a WebView or browser localhost connection error.

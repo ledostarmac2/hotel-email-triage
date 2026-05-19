@@ -39,7 +39,6 @@ def _configured_client(
     monkeypatch.setattr(main, "flush_feedback_queue", lambda: 0)
     monkeypatch.setattr(main, "start_update_check", lambda: None)
     monkeypatch.setattr(main, "admin_setup_available", lambda: not needs_creds)
-    monkeypatch.setattr(main, "needs_credentials_setup", lambda: needs_creds)
     monkeypatch.setattr(main, "admin_user_exists", lambda: admin_exists)
 
     with TestClient(main.app) as client:
@@ -52,13 +51,13 @@ def _configured_client(
 # ── /login routing ────────────────────────────────────────────────────────────
 
 
-def test_login_redirects_to_credentials_setup_when_supabase_unconfigured(
+def test_login_does_not_offer_credentials_setup_when_supabase_unconfigured(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     with _configured_client(tmp_path, monkeypatch, admin_exists=False, needs_creds=True) as client:
         response = client.get("/login", follow_redirects=False)
-        assert response.status_code == 303
-        assert response.headers["location"] == "/credentials-setup"
+        assert response.status_code == 200
+        assert b"API key" not in response.content
 
 
 def test_login_redirects_to_setup_when_no_admin(
@@ -70,7 +69,7 @@ def test_login_redirects_to_setup_when_no_admin(
         assert response.headers["location"] == "/setup"
 
 
-def test_login_post_redirects_to_credentials_setup_when_unconfigured(
+def test_login_post_does_not_redirect_to_credentials_setup_when_unconfigured(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     with _configured_client(tmp_path, monkeypatch, admin_exists=False, needs_creds=True) as client:
@@ -79,113 +78,23 @@ def test_login_post_redirects_to_credentials_setup_when_unconfigured(
             data={"email": "a@b.com", "password": "pass"},
             follow_redirects=False,
         )
-        assert response.status_code == 303
-        assert response.headers["location"] == "/credentials-setup"
+        assert response.status_code == 401
+        assert response.headers.get("location") != "/credentials-setup"
 
 
-# ── /credentials-setup GET ────────────────────────────────────────────────────
+# ── /credentials-setup retired route ──────────────────────────────────────────
 
 
-def test_credentials_setup_page_renders_when_unconfigured(
+def test_credentials_setup_page_redirects_to_login(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     with _configured_client(tmp_path, monkeypatch, admin_exists=False, needs_creds=True) as client:
-        response = client.get("/credentials-setup")
-        assert response.status_code == 200
-        assert b"supabase_service_role_key" in response.content
-        assert b"supabase_url" in response.content
-
-
-def test_credentials_setup_page_renders_no_prefilled_secrets(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    with _configured_client(tmp_path, monkeypatch, admin_exists=False, needs_creds=True) as client:
-        response = client.get("/credentials-setup")
-        body = response.text
-        assert "eyJhbGci" not in body
-        assert "sk-ant-" not in body
-        assert "sk-proj-" not in body
-
-
-def test_credentials_setup_redirects_to_setup_when_already_configured(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    with _configured_client(tmp_path, monkeypatch, admin_exists=False, needs_creds=False) as client:
         response = client.get("/credentials-setup", follow_redirects=False)
         assert response.status_code == 303
-        assert response.headers["location"] in ("/setup", "/login")
+        assert response.headers["location"] == "/login"
 
 
-# ── /api/auth/credentials-setup POST ─────────────────────────────────────────
-
-
-def test_api_credentials_setup_writes_env_and_returns_ok(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    with _configured_client(tmp_path, monkeypatch, admin_exists=False, needs_creds=True) as client:
-        import outlook_dashboard.main as main
-
-        written: list[dict] = []
-        monkeypatch.setattr(main, "write_local_env", lambda v: written.append(v) or (tmp_path / ".env"))
-        monkeypatch.setattr(main.get_settings, "cache_clear", lambda: None)
-
-        response = client.post(
-            "/api/auth/credentials-setup",
-            json={
-                "supabase_url": "https://abc.supabase.co",
-                "supabase_key": "a" * 40,
-                "supabase_service_role_key": "s" * 40,
-                "anthropic_api_key": "",
-            },
-        )
-        assert response.status_code == 200, response.text
-        data = response.json()
-        assert data["ok"] is True
-        assert "SUPABASE_URL" in data["keys_written"]
-        assert "SUPABASE_SERVICE_ROLE_KEY" in data["keys_written"]
-        assert written, "write_local_env was not called"
-        assert "ANTHROPIC_API_KEY" not in written[0]
-
-
-def test_api_credentials_setup_includes_anthropic_key_when_provided(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    with _configured_client(tmp_path, monkeypatch, admin_exists=False, needs_creds=True) as client:
-        import outlook_dashboard.main as main
-
-        written: list[dict] = []
-        monkeypatch.setattr(main, "write_local_env", lambda v: written.append(v) or (tmp_path / ".env"))
-        monkeypatch.setattr(main.get_settings, "cache_clear", lambda: None)
-
-        response = client.post(
-            "/api/auth/credentials-setup",
-            json={
-                "supabase_url": "https://abc.supabase.co",
-                "supabase_key": "a" * 40,
-                "supabase_service_role_key": "s" * 40,
-                "anthropic_api_key": "test-ai-key-value-longer-than-20",
-            },
-        )
-        assert response.status_code == 200, response.text
-        assert written and "ANTHROPIC_API_KEY" in written[0]
-
-
-def test_api_credentials_setup_rejects_non_https_url(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    with _configured_client(tmp_path, monkeypatch, admin_exists=False, needs_creds=True) as client:
-        response = client.post(
-            "/api/auth/credentials-setup",
-            json={
-                "supabase_url": "http://insecure.supabase.co",
-                "supabase_key": "a" * 40,
-                "supabase_service_role_key": "s" * 40,
-            },
-        )
-        assert response.status_code == 400
-
-
-def test_api_credentials_setup_rejects_short_keys(
+def test_api_credentials_setup_is_not_available(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     with _configured_client(tmp_path, monkeypatch, admin_exists=False, needs_creds=True) as client:
@@ -193,11 +102,11 @@ def test_api_credentials_setup_rejects_short_keys(
             "/api/auth/credentials-setup",
             json={
                 "supabase_url": "https://abc.supabase.co",
-                "supabase_key": "short",
+                "supabase_key": "a" * 40,
                 "supabase_service_role_key": "s" * 40,
             },
         )
-        assert response.status_code == 400
+        assert response.status_code in (401, 404)
 
 
 # ── /setup after credentials are configured ──────────────────────────────────
