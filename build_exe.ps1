@@ -109,7 +109,7 @@ function Invoke-VendorPipInstall {
 
 # Wipe stale vendor cache if it contains pywebview (old WebView2 stack)
 if ((Test-Path $vendorPath) -and (Test-Path (Join-Path $vendorPath "webview"))) {
-    Write-Host "Removing stale vendor cache (pywebview detected — replaced by PySide6)"
+    Write-Host "Removing stale vendor cache (pywebview detected - replaced by PySide6)"
     Remove-Item $vendorPath -Recurse -Force
 }
 
