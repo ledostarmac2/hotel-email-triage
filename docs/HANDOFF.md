@@ -1,5 +1,39 @@
 # Handoff Log
 
+## 2026-05-19 - restore local database auth fallback
+
+Summary:
+
+- Restored local SQLite authentication fallback so existing database-backed usernames/passwords work again when Supabase Auth is unavailable or unconfigured.
+- Local session IDs are valid in the existing `rr_session` cookie path; Supabase access/refresh token sessions still work when configured.
+- First-run setup can now create a local SQLite admin if no admin exists and Supabase service-role configuration is absent, without asking for API keys.
+- Confirmed the source local DB has one admin user while the packaged `dist\ReplyRight\data` DB currently has none, matching the reported login breakage path for fresh packaged runs.
+
+Files changed:
+
+- `outlook_dashboard/auth.py`
+- `outlook_dashboard/main.py`
+- `tests/test_auth_supabase.py`
+- `tests/test_first_run_setup.py`
+- `tests/test_api_workflow_pytest.py`
+- `docs/ARCHITECTURE.md`
+- `docs/CURRENT_STATE.md`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+
+Verification:
+
+- `python -m py_compile outlook_dashboard/auth.py outlook_dashboard/main.py` - passed.
+- `python -m pytest tests/test_auth_supabase.py tests/test_first_run_setup.py tests/test_secret_hygiene.py tests/test_api_workflow_pytest.py -q --timeout=60` - 38 passed, existing `datetime.utcnow()` warnings.
+- `python -m pytest tests/test_desktop_startup.py tests/test_pyside6_no_browser_engine.py -q --timeout=60` - 16 passed.
+- `python -m pytest tests/ -x --timeout=60` - 496 passed, 4 existing `datetime.utcnow()` warnings, 35 subtests passed.
+
+Remaining work:
+
+- Rebuild/package after tests pass so the installed app uses the restored database auth fallback.
+
+---
+
 ## 2026-05-19 - v0.1.1 release installer rename fix
 
 Summary:

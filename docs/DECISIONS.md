@@ -1,8 +1,14 @@
 # Decisions
 
+## 2026-05-19: Hybrid Supabase And Local SQLite Auth
+
+Decision: ReplyRight login should prefer Supabase Auth when configured, but must preserve local SQLite users and sessions as a fallback for existing installs and local-first/offline operation. First-run setup may create a local SQLite admin when no admin exists and Supabase service-role configuration is absent, without asking the user for API keys.
+
+Rationale: The v0.1.1 Supabase-only migration broke installed database-backed credentials and fresh installs without bundled service-role credentials. Local auth fallback preserves the existing database contract and the local-first product requirement while still allowing Supabase Auth deployments.
+
 ## 2026-05-19: No In-App API Key Collection
 
-Decision: ReplyRight must not display a credentials setup screen or ask end users for Supabase, OpenAI, Google, Anthropic, or other API keys inside the desktop app. Runtime credentials must come from deployment-time configuration, ignored local files, machine environment variables, or GitHub Actions secrets during release builds. The first-run setup surface remains only for creating the first admin account when the required Supabase configuration is already present.
+Decision: ReplyRight must not display a credentials setup screen or ask end users for Supabase, OpenAI, Google, Anthropic, or other API keys inside the desktop app. Runtime credentials must come from deployment-time configuration, ignored local files, machine environment variables, or GitHub Actions secrets during release builds. The first-run setup surface is only for creating the first admin account, using Supabase when service-role configuration is present and local SQLite otherwise.
 
 Rationale: Users should only sign in and operate the inbox. API-key handling is an owner/deployment concern, and exposing it in the installed app creates confusion and increases the chance that secrets are pasted into the wrong place.
 
@@ -20,7 +26,7 @@ Rationale: The v0.1.0 GitHub release allowed a user-visible failure where the de
 
 ## 2026-05-18: Onedir Packaging And First-Run Admin Setup For v0.1.1
 
-Decision: Build v0.1.1 as a PyInstaller onedir app at `dist\ReplyRight\ReplyRight.exe`, then package the full folder with Inno Setup while excluding local `.env`, runtime data, databases, and logs. Add a first-run setup route that creates the first Supabase admin when no admin exists and service-role configuration is available.
+Decision: Build v0.1.1 as a PyInstaller onedir app at `dist\ReplyRight\ReplyRight.exe`, then package the full folder with Inno Setup while excluding local `.env`, runtime data, databases, and logs. Add a first-run setup route that creates the first admin when no admin exists, using Supabase when service-role configuration is available and local SQLite otherwise.
 
 Rationale: Onedir packaging is easier to validate and install reliably than a single self-extracting EXE, and it lets the installer carry the full runtime bundle. First-run setup removes the requirement that a fresh user have a local `.env` admin seed before the first login.
 

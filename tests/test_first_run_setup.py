@@ -56,8 +56,8 @@ def test_login_does_not_offer_credentials_setup_when_supabase_unconfigured(
 ) -> None:
     with _configured_client(tmp_path, monkeypatch, admin_exists=False, needs_creds=True) as client:
         response = client.get("/login", follow_redirects=False)
-        assert response.status_code == 200
-        assert b"API key" not in response.content
+        assert response.status_code == 303
+        assert response.headers["location"] == "/setup"
 
 
 def test_login_redirects_to_setup_when_no_admin(
@@ -78,7 +78,8 @@ def test_login_post_does_not_redirect_to_credentials_setup_when_unconfigured(
             data={"email": "a@b.com", "password": "pass"},
             follow_redirects=False,
         )
-        assert response.status_code == 401
+        assert response.status_code == 303
+        assert response.headers.get("location") == "/setup"
         assert response.headers.get("location") != "/credentials-setup"
 
 
@@ -156,15 +157,18 @@ def test_api_first_run_setup_refuses_when_admin_exists(
         assert response.status_code == 409
 
 
-def test_api_first_run_setup_requires_supabase_service_role(
+def test_api_first_run_setup_falls_back_to_local_database_without_service_role(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     with _configured_client(tmp_path, monkeypatch, admin_exists=False) as client:
         import outlook_dashboard.main as main
 
+        monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
         monkeypatch.setattr(main, "admin_setup_available", lambda: False)
         response = client.post(
             "/api/auth/setup",
             json={"email": "admin@example.com", "password": "StrongPass123!"},
         )
-        assert response.status_code == 503
+        assert response.status_code == 200
+        assert response.json() == {"ok": True, "email": "admin@example.com", "role": "admin"}
+        assert "rr_session=" in response.headers.get("set-cookie", "")

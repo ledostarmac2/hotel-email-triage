@@ -64,7 +64,7 @@ The installer bundles the full `dist\ReplyRight\*` folder and excludes local `.e
 - Start Menu shortcut.
 - Windows uninstall entry.
 - No Python installation required on target machine.
-- No user-facing API-key prompt. If no admin exists, first-run setup can create one only when Supabase service-role configuration has already been provisioned by deployment.
+- No user-facing API-key prompt. If no admin exists, first-run setup can create one through Supabase when service-role configuration has already been provisioned by deployment, or through local SQLite when it has not.
 - Compatible with a fresh Windows 10/11 machine.
 - Installer includes or handles WebView2 runtime.
 - Installer uses ReplyRight icon where available.

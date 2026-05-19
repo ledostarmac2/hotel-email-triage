@@ -10,6 +10,7 @@ from outlook_dashboard.auth import (
     admin_setup_available,
     admin_user_exists,
     authenticate_user,
+    create_session,
     create_first_admin,
     create_reset_token,
     encode_session,
@@ -217,3 +218,40 @@ def test_create_reset_token_stores_supabase_uuid(tmp_path, monkeypatch) -> None:
         row = db.execute("SELECT user_id FROM password_reset_tokens WHERE token = ?", (token,)).fetchone()
     assert row is not None
     assert row["user_id"] == USER_ID
+
+
+def test_local_sqlite_auth_fallback_when_supabase_unconfigured(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("SUPABASE_URL", raising=False)
+    monkeypatch.delenv("SUPABASE_KEY", raising=False)
+    monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
+    db_path = tmp_path / "local-auth.sqlite3"
+    initialize_database(db_path)
+
+    ensure_admin("Admin@Example.com", "LocalPassword123!", db_path=db_path)
+    user = authenticate_user("admin@example.com", "LocalPassword123!", db_path=db_path)
+
+    assert user is not None
+    assert user["email"] == "admin@example.com"
+    assert user["role"] == "admin"
+    assert "_access_token" not in user
+    session_id = create_session(str(user["id"]), db_path=db_path)
+    session_user = get_session_user(session_id, db_path=db_path)
+    assert session_user is not None
+    assert session_user["email"] == "admin@example.com"
+
+
+def test_local_reset_token_fallback_when_supabase_unconfigured(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("SUPABASE_URL", raising=False)
+    monkeypatch.delenv("SUPABASE_KEY", raising=False)
+    monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
+    db_path = tmp_path / "local-reset.sqlite3"
+    initialize_database(db_path)
+    ensure_admin("admin@example.com", "LocalPassword123!", db_path=db_path)
+
+    token = create_reset_token("admin@example.com", db_path=db_path)
+
+    assert token
+    with managed_connect(db_path) as db:
+        row = db.execute("SELECT user_id FROM password_reset_tokens WHERE token = ?", (token,)).fetchone()
+    assert row is not None
+    assert row["user_id"].isdigit()

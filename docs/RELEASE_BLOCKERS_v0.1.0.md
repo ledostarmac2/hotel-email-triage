@@ -73,7 +73,7 @@ Before tagging v0.1.1:
 - `dist\ReplyRight\ReplyRight.exe --health-smoke` succeeds.
 - The release workflow uploads `ReplyRightSetup-v0.1.1.exe`.
 - The release does not present raw `ReplyRight.exe` as the main user download.
-- A fresh install can create the first admin account if none exists and Supabase service-role configuration is available.
+- A fresh install can create the first admin account if none exists, using Supabase when service-role configuration is available and local SQLite otherwise.
 - Starting the installed app never shows a WebView localhost refused page.
 - If startup fails, the user sees a ReplyRight-controlled error dialog with a log path.
 - `dist\ReplyRight\data\replyright-startup.log` contains safe diagnostics only.

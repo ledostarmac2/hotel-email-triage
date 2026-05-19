@@ -6,6 +6,9 @@ import os
 import secrets
 import urllib.error
 import urllib.request
+import hashlib
+import hmac
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from .text_utils import utc_now_iso
@@ -27,6 +30,10 @@ def _anon_key() -> str:
 
 def _service_key() -> str:
     return os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+
+
+def _supabase_auth_configured() -> bool:
+    return bool(_supabase_url() and _anon_key())
 
 
 def _auth_url(path: str = "") -> str:
@@ -72,6 +79,21 @@ def _normalize_user(data: dict) -> dict:
     }
 
 
+def _hash_password(password: str) -> str:
+    salt = secrets.token_hex(32)
+    key = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode(), 260_000)
+    return f"pbkdf2:sha256:260000:{salt}:{key.hex()}"
+
+
+def _verify_password(password: str, stored: str) -> bool:
+    try:
+        _, alg, iters, salt, stored_key = stored.split(":")
+        key = hashlib.pbkdf2_hmac(alg, password.encode("utf-8"), salt.encode(), int(iters))
+        return hmac.compare_digest(key.hex(), stored_key)
+    except Exception:
+        return False
+
+
 # ── Session encoding ──────────────────────────────────────────────────────────
 
 
@@ -92,25 +114,26 @@ def _decode_session(cookie: str) -> tuple[str, str] | None:
 
 
 def authenticate_user(email: str, password: str, db_path: Path | None = None) -> dict | None:
-    """Sign in with email/password. Returns user dict with _access_token/_refresh_token."""
-    try:
-        resp = _req(
-            _auth_url("/token?grant_type=password"),
-            _anon_headers(),
-            {"email": email.lower().strip(), "password": password},
-            method="POST",
-        )
-    except Exception as exc:
-        _log.warning("Supabase sign-in failed: %s", exc)
-        return None
-    access_token = resp.get("access_token", "")
-    refresh_token = resp.get("refresh_token", "")
-    if not access_token:
-        return None
-    user = _normalize_user(resp)
-    user["_access_token"] = access_token
-    user["_refresh_token"] = refresh_token
-    return user
+    """Sign in with Supabase when configured, otherwise local SQLite."""
+    normalized = email.lower().strip()
+    if _supabase_auth_configured():
+        try:
+            resp = _req(
+                _auth_url("/token?grant_type=password"),
+                _anon_headers(),
+                {"email": normalized, "password": password},
+                method="POST",
+            )
+            access_token = resp.get("access_token", "")
+            refresh_token = resp.get("refresh_token", "")
+            if access_token:
+                user = _normalize_user(resp)
+                user["_access_token"] = access_token
+                user["_refresh_token"] = refresh_token
+                return user
+        except Exception as exc:
+            _log.warning("Supabase sign-in failed; trying local auth fallback: %s", exc)
+    return _authenticate_local_user(normalized, password, db_path)
 
 
 def get_session_user(session_cookie: str, db_path: Path | None = None) -> dict | None:
@@ -118,6 +141,8 @@ def get_session_user(session_cookie: str, db_path: Path | None = None) -> dict |
     May add _new_access_token/_new_refresh_token if token was refreshed."""
     decoded = _decode_session(session_cookie)
     if not decoded:
+        return _get_local_session_user(session_cookie, db_path)
+    if not _supabase_auth_configured():
         return None
     access_token, refresh_token = decoded
 
@@ -153,14 +178,27 @@ def get_session_user(session_cookie: str, db_path: Path | None = None) -> dict |
 
 
 def create_session(user_id: str, db_path: Path | None = None) -> str:
-    """No-op — sessions are encoded in cookies by encode_session()."""
-    return ""
+    """Create a local SQLite session for fallback/local users."""
+    from .database import managed_connect
+
+    session_id = secrets.token_urlsafe(40)
+    expires_at = (datetime.utcnow() + timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%S")
+    with managed_connect(db_path) as db:
+        db.execute(
+            "INSERT INTO sessions (session_id, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)",
+            (session_id, int(user_id), expires_at, utc_now_iso()),
+        )
+        db.execute("UPDATE users SET last_login = ? WHERE id = ?", (utc_now_iso(), int(user_id)))
+    return session_id
 
 
 def delete_session(session_cookie: str, db_path: Path | None = None) -> None:
     """Sign the access token out from Supabase."""
     decoded = _decode_session(session_cookie)
     if not decoded:
+        _delete_local_session(session_cookie, db_path)
+        return
+    if not _supabase_auth_configured():
         return
     access_token, _ = decoded
     try:
@@ -175,8 +213,12 @@ def delete_session(session_cookie: str, db_path: Path | None = None) -> None:
 
 
 def ensure_admin(email: str, password: str, db_path: Path | None = None) -> None:
-    """Create or repair the admin account in Supabase Auth."""
+    """Create or repair the admin account in Supabase Auth or local SQLite."""
     normalized = email.lower().strip()
+    if not admin_setup_available():
+        _ensure_local_admin(normalized, password, db_path)
+        _log.info("Local auth: admin account verified/updated for %s", normalized)
+        return
     existing = _find_user_by_email(normalized)
     if existing:
         _update_user(existing["id"], password=password, role="admin")
@@ -204,17 +246,17 @@ def admin_setup_available() -> bool:
 def admin_user_exists() -> bool:
     """Return True when at least one Supabase user has the ReplyRight admin role."""
     if not admin_setup_available():
-        return False
+        return _local_admin_exists()
     try:
         resp = _req(_auth_url("/admin/users?per_page=1000"), _admin_headers())
         for user in resp.get("users") or []:
             meta = user.get("app_metadata") or {}
             if (meta.get("role") or "").lower() == "admin":
                 return True
-        return False
+        return _local_admin_exists()
     except Exception as exc:
         _log.warning("admin_user_exists failed: %s", exc)
-        return False
+        return _local_admin_exists()
 
 
 def create_first_admin(email: str, password: str, db_path: Path | None = None) -> str:
@@ -233,14 +275,22 @@ def create_user(
     invited_by_id=None,
     db_path: Path | None = None,
 ) -> str:
+    if not admin_setup_available():
+        return str(_create_local_user(email.lower().strip(), password, role=role, invited_by_id=invited_by_id, db_path=db_path))
     return _create_user(email.lower().strip(), password, role=role)
 
 
 def reset_password(user_id: str, new_password: str, db_path: Path | None = None) -> None:
+    if not admin_setup_available() or str(user_id).isdigit():
+        _reset_local_password(user_id, new_password, db_path)
+        return
     _update_user(str(user_id), password=new_password)
 
 
 def delete_user(user_id: str, db_path: Path | None = None) -> None:
+    if not admin_setup_available() or str(user_id).isdigit():
+        _delete_local_user(user_id, db_path)
+        return
     try:
         req = urllib.request.Request(
             _auth_url(f"/admin/users/{user_id}"),
@@ -259,7 +309,7 @@ def create_reset_token(email: str, db_path: Path | None = None, hours: int = 1) 
     normalized = email.lower().strip()
     user = _find_user_by_email(normalized)
     if not user:
-        return None
+        return _create_local_reset_token(normalized, db_path, hours)
     supabase_uid = user.get("id", "")
     if not supabase_uid:
         return None
@@ -276,6 +326,8 @@ def create_reset_token(email: str, db_path: Path | None = None, hours: int = 1) 
 
 
 def list_users(db_path: Path | None = None) -> list[dict]:
+    if not admin_setup_available():
+        return _list_local_users(db_path)
     try:
         resp = _req(_auth_url("/admin/users?per_page=1000"), _admin_headers())
         users = resp.get("users") or []
@@ -295,10 +347,157 @@ def list_users(db_path: Path | None = None) -> list[dict]:
         return result
     except Exception as exc:
         _log.warning("list_users failed: %s", exc)
-        return []
+        return _list_local_users(db_path)
 
 
 # ── Email helpers (SMTP remains local) ───────────────────────────────────────
+
+
+def _authenticate_local_user(email: str, password: str, db_path: Path | None = None) -> dict | None:
+    from .database import managed_connect
+
+    try:
+        with managed_connect(db_path) as db:
+            row = db.execute(
+                "SELECT id, email, password_hash, role FROM users WHERE email = ?",
+                (email.lower().strip(),),
+            ).fetchone()
+    except Exception as exc:
+        _log.warning("Local auth lookup failed: %s", exc)
+        return None
+    if not row or not _verify_password(password, row["password_hash"]):
+        return None
+    return {"id": row["id"], "email": row["email"], "role": row["role"], "_local_session": True}
+
+
+def _get_local_session_user(session_id: str, db_path: Path | None = None) -> dict | None:
+    if not session_id:
+        return None
+    from .database import managed_connect
+
+    try:
+        with managed_connect(db_path) as db:
+            row = db.execute(
+                """
+                SELECT u.id, u.email, u.role
+                FROM sessions s JOIN users u ON s.user_id = u.id
+                WHERE s.session_id = ? AND s.expires_at > datetime('now')
+                """,
+                (session_id,),
+            ).fetchone()
+    except Exception as exc:
+        _log.warning("Local session lookup failed: %s", exc)
+        return None
+    return dict(row) if row else None
+
+
+def _delete_local_session(session_id: str, db_path: Path | None = None) -> None:
+    if not session_id:
+        return
+    from .database import managed_connect
+
+    with managed_connect(db_path) as db:
+        db.execute("DELETE FROM sessions WHERE session_id = ?", (session_id,))
+
+
+def _ensure_local_admin(email: str, password: str, db_path: Path | None = None) -> None:
+    from .database import managed_connect
+
+    with managed_connect(db_path) as db:
+        existing = db.execute(
+            "SELECT id, password_hash, role FROM users WHERE email = ?",
+            (email.lower().strip(),),
+        ).fetchone()
+        if not existing:
+            db.execute(
+                "INSERT INTO users (email, password_hash, role, created_at) VALUES (?, ?, 'admin', ?)",
+                (email.lower().strip(), _hash_password(password), utc_now_iso()),
+            )
+            return
+        if existing["role"] != "admin" or not _verify_password(password, existing["password_hash"]):
+            db.execute(
+                "UPDATE users SET password_hash = ?, role = 'admin' WHERE id = ?",
+                (_hash_password(password), existing["id"]),
+            )
+
+
+def _local_admin_exists(db_path: Path | None = None) -> bool:
+    from .database import managed_connect
+
+    try:
+        with managed_connect(db_path) as db:
+            row = db.execute("SELECT 1 FROM users WHERE role = 'admin' LIMIT 1").fetchone()
+    except Exception:
+        return False
+    return bool(row)
+
+
+def _create_local_user(
+    email: str,
+    password: str,
+    *,
+    role: str = "user",
+    invited_by_id=None,
+    db_path: Path | None = None,
+) -> int:
+    from .database import managed_connect
+
+    with managed_connect(db_path) as db:
+        cursor = db.execute(
+            "INSERT INTO users (email, password_hash, role, invited_by_id, created_at) VALUES (?, ?, ?, ?, ?)",
+            (email.lower().strip(), _hash_password(password), role, invited_by_id, utc_now_iso()),
+        )
+        return int(cursor.lastrowid)
+
+
+def _reset_local_password(user_id: str, new_password: str, db_path: Path | None = None) -> None:
+    from .database import managed_connect
+
+    with managed_connect(db_path) as db:
+        db.execute("UPDATE users SET password_hash = ? WHERE id = ?", (_hash_password(new_password), int(user_id)))
+
+
+def _delete_local_user(user_id: str, db_path: Path | None = None) -> None:
+    from .database import managed_connect
+
+    with managed_connect(db_path) as db:
+        db.execute("DELETE FROM sessions WHERE user_id = ?", (int(user_id),))
+        db.execute("DELETE FROM users WHERE id = ?", (int(user_id),))
+
+
+def _create_local_reset_token(email: str, db_path: Path | None = None, hours: int = 1) -> str | None:
+    from .database import managed_connect
+
+    with managed_connect(db_path) as db:
+        row = db.execute("SELECT id FROM users WHERE email = ?", (email.lower().strip(),)).fetchone()
+        if not row:
+            return None
+        token = secrets.token_urlsafe(32)
+        expires_at = (datetime.utcnow() + timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%S")
+        db.execute(
+            "INSERT INTO password_reset_tokens (token, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)",
+            (token, str(row["id"]), expires_at, utc_now_iso()),
+        )
+    return token
+
+
+def _list_local_users(db_path: Path | None = None) -> list[dict]:
+    from .database import managed_connect
+
+    try:
+        with managed_connect(db_path) as db:
+            rows = db.execute(
+                """
+                SELECT u.id, u.email, u.role, u.created_at, u.last_login,
+                       inv.email AS invited_by_email
+                FROM users u LEFT JOIN users inv ON u.invited_by_id = inv.id
+                ORDER BY u.role DESC, u.created_at
+                """
+            ).fetchall()
+    except Exception as exc:
+        _log.warning("Local user list failed: %s", exc)
+        return []
+    return [dict(row) for row in rows]
 
 
 def send_invite_email(to_email: str, token: str, base_url: str, settings) -> None:

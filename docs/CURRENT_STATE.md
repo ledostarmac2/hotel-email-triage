@@ -26,6 +26,8 @@ Last updated: 2026-05-19 (v0.1.1 release/auth repair in progress)
   - GitHub Actions now opts JavaScript actions into Node 24 with `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true`.
   - Fixed the release workflow rename step so tag builds no longer fail when Inno Setup already emitted the expected `ReplyRightSetup-v0.1.1.exe` filename.
   - Installer security audit now treats `innoextract` format incompatibility as a warning and still audits the staged `dist\ReplyRight` payload plus installer output.
+  - Restored local SQLite authentication as a fallback for existing installed databases and fresh installs without Supabase service-role configuration. Supabase Auth is still used when configured; if unavailable or not configured, ReplyRight can authenticate local `users` rows and create local sessions.
+  - First-run setup can now create a local SQLite admin when no admin exists and Supabase service-role configuration is absent. It still does not ask users for API keys.
 - Local validation after the final v0.1.1 repair pass:
   - `.\build_exe.ps1` built `dist\ReplyRight\ReplyRight.exe`.
   - `dist\ReplyRight\ReplyRight.exe --health-smoke` exited successfully.
@@ -73,7 +75,7 @@ Last updated: 2026-05-19 (v0.1.1 release/auth repair in progress)
 - Confidence scoring (10–95%) is computed per email and shown as a color-coded pill in the UI.
 - Rule candidate engine mines local feedback for recurring correction patterns. Three matching corrections create visible candidates; five or more mark the rule as auto-promoted for hands-off shared learning.
 - Admin Suggested Rules now includes emergency `Reject` and `Dismiss` controls. Dismissed candidates are hidden locally; rejected candidates stay visible as rejected and are skipped by Supabase auto-promotion.
-- Login is gated by Supabase Auth. The configured admin account can still be repaired from `REPLYRIGHT_ADMIN_EMAIL` / `REPLYRIGHT_ADMIN_PASSWORD` when an admin already exists; if no admin exists, first-run setup can create one only when the required Supabase service-role configuration is already present. The app must not ask the user to enter API keys.
+- Login prefers Supabase Auth when configured, but falls back to local SQLite users/sessions for existing installed databases and offline/local-first installs. The configured admin account can still be repaired from `REPLYRIGHT_ADMIN_EMAIL` / `REPLYRIGHT_ADMIN_PASSWORD`; if no admin exists, first-run setup can create one without asking for API keys.
 - Login failures render a persistent static error message with an X close button and preserve the typed email address. Dashboard action failures such as invite/reset errors now use a persistent dismissable error toast.
 - Auth middleware protects `/api/auth/me` and admin endpoints again. Public auth routes are limited to login/logout/forgot-password/reset-password, fixing the post-login dashboard boot loop.
 - Admin view now has its own dashboard shell: the Refresh Inbox button is hidden while Admin is active, the topbar changes to Admin, and leaving Admin restores/rebinds the inbox queue/detail DOM so Inbox, Urgent, VIP, and Missing Info render correctly again.
@@ -167,7 +169,7 @@ Tests: `python -m unittest tests.test_kernel_plugins tests.test_kernel_orchestra
 3. **Emergency v0.1.1 Release**: after tests and installer smoke checks pass, push a tag (`git tag v0.1.1 && git push origin v0.1.1`) to trigger the release job. It must publish `ReplyRightSetup-v0.1.1.exe` as the primary asset, not a bare EXE.
 4. **Local classifier training (Phase 7 long-term)**: import historical completed emails → redact PII → AI-label → human-review samples → store sanitized Supabase training set → train lightweight local classifiers. Start with urgency, owner, category, status, missing_information targets only.
 5. **Refresh check**: click Refresh Inbox once and visually confirm the feedback box, resized window behavior, and Outlook-like independent scrolling.
-6. **Login check**: confirm the app never prompts for API keys. On a fresh install with no admin and configured Supabase service-role credentials, `/setup` creates the first admin; otherwise use the configured Supabase admin credentials. Bad credentials should show a persistent error with an X, good credentials should enter the app.
+6. **Login check**: confirm the app never prompts for API keys. On a fresh install with no admin, `/setup` creates the first admin through Supabase when service-role configuration exists and through local SQLite otherwise. Existing local database users should still be able to sign in. Bad credentials should show a persistent error with an X, good credentials should enter the app.
 7. **Spot-check triage**: review conversations formerly over-scored as urgency 4/5, especially completed CCA/payment form threads and friendly travel-agent replies.
 8. **If launch fails**: inspect `dist\ReplyRight\data\replyright-startup.log`. Look for `pythonnet (clr) is not available`; if seen, delete `.vendor` and re-run `.\build_exe.ps1` so pip re-installs pythonnet.
 9. **Use the roadmap**: read `docs/FUTURE_ROADMAP_SUPABASE_ADAPTIVE_LEARNING.md` before broad architecture work, especially Supabase shared learning and staged AI pipeline. Ignore multi-property/cross-property ideas unless Brian reopens them.

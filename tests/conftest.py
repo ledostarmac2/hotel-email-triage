@@ -149,6 +149,7 @@ def app_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Test
     get_settings.cache_clear()
     main._RATE_LIMIT_BUCKETS.clear()
     monkeypatch.setattr(main, "ensure_admin", lambda *args, **kwargs: None)
+    monkeypatch.setattr(main, "admin_user_exists", lambda: True)
     monkeypatch.setattr(main, "download_approved_rules", lambda: [])
     monkeypatch.setattr(main, "download_prompt_versions", lambda: [])
     monkeypatch.setattr(main, "download_known_senders", lambda: [])

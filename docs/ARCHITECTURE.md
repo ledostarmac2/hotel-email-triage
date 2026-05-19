@@ -95,11 +95,11 @@ Disallowed without a new explicit design:
 
 ## Authentication
 
-Dashboard login is backed by Supabase Auth. `auth.py` uses Supabase `/auth/v1/*` endpoints for password login, token refresh, logout, admin provisioning, user invite/delete, and password reset support.
+Dashboard login prefers Supabase Auth when configured. `auth.py` uses Supabase `/auth/v1/*` endpoints for password login, token refresh, logout, admin provisioning, user invite/delete, and password reset support.
 
 The `rr_session` cookie stores access and refresh tokens in an HttpOnly cookie. `_AuthMiddleware` validates or refreshes the token for protected routes.
 
-The local SQLite database may store password reset token metadata that points to Supabase user IDs, but local SQLite user tables are not the active auth source.
+For local-first continuity, `auth.py` also supports local SQLite users and sessions as a fallback when Supabase auth is unavailable or unconfigured. Local `users` rows from earlier installs remain valid, local session IDs can be stored in the same `rr_session` cookie, and first-run setup can create a local admin without asking for API keys.
 
 ## Persistence
 

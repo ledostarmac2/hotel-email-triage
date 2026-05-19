@@ -21,6 +21,7 @@ from .auth import (
     authenticate_user,
     create_first_admin,
     create_reset_token,
+    create_session,
     create_user,
     delete_session,
     delete_user,
@@ -107,10 +108,15 @@ async def lifespan(_: FastAPI):
         settings.graph_configured,
     )
     initialize_database(settings.database_path)
-    if settings.replyright_admin_email and settings.replyright_admin_password and admin_user_exists():
-        ensure_admin(settings.replyright_admin_email, settings.replyright_admin_password, settings.database_path)
-    elif settings.replyright_admin_email and settings.replyright_admin_password:
+    if (
+        settings.replyright_admin_email
+        and settings.replyright_admin_password
+        and admin_setup_available()
+        and not admin_user_exists()
+    ):
         _log.info("No Supabase admin found; first-run setup is available.")
+    elif settings.replyright_admin_email and settings.replyright_admin_password:
+        ensure_admin(settings.replyright_admin_email, settings.replyright_admin_password, settings.database_path)
     else:
         _log.warning("Admin account seed skipped: REPLYRIGHT_ADMIN_EMAIL/PASSWORD are not configured.")
     rules = download_approved_rules()
@@ -316,7 +322,7 @@ def credentials_setup_form() -> RedirectResponse:
 
 @app.get("/login", response_model=None)
 def login_page() -> HTMLResponse | RedirectResponse:
-    if admin_setup_available() and not admin_user_exists():
+    if not admin_user_exists():
         return RedirectResponse("/setup", status_code=303)
     return _login_response()
 
@@ -325,7 +331,7 @@ def login_page() -> HTMLResponse | RedirectResponse:
 def login_form(
     email: str = Form(...), password: str = Form(...), remember_email: str | None = Form(None)
 ) -> HTMLResponse | RedirectResponse:
-    if admin_setup_available() and not admin_user_exists():
+    if not admin_user_exists():
         return RedirectResponse("/setup", status_code=303)
     settings = get_settings()
     user = authenticate_user(email, password, settings.database_path)
@@ -335,24 +341,15 @@ def login_form(
         )
         _apply_remembered_email(response, email, bool(remember_email))
         return response
-    access_token = user.pop("_access_token", "")
-    refresh_token = user.pop("_refresh_token", "")
     response = RedirectResponse("/", status_code=303)
-    response.set_cookie(
-        "rr_session",
-        encode_session(access_token, refresh_token),
-        httponly=True,
-        samesite="lax",
-        max_age=60 * 60 * 24 * 30,
-        path="/",
-    )
+    _set_auth_cookie(response, user, settings.database_path)
     _apply_remembered_email(response, email, bool(remember_email))
     return response
 
 
 @app.get("/setup", response_model=None)
 def setup_page() -> HTMLResponse | RedirectResponse:
-    if admin_setup_available() and admin_user_exists():
+    if admin_user_exists():
         return RedirectResponse("/login", status_code=303)
     return _setup_response()
 
@@ -362,16 +359,13 @@ def setup_form(email: str = Form(...), password: str = Form(...)) -> HTMLRespons
     settings = get_settings()
     if len(password) < 8:
         return _setup_response(error_message="Password must be at least 8 characters.", email=email, status_code=400)
-    if not admin_setup_available():
-        return _setup_response(
-            error_message="First-run setup is unavailable because Supabase service-role configuration is missing.",
-            email=email,
-            status_code=503,
-        )
     if admin_user_exists():
         return RedirectResponse("/login", status_code=303)
     try:
-        user_id = create_first_admin(email, password, settings.database_path)
+        if admin_setup_available():
+            user_id = create_first_admin(email, password, settings.database_path)
+        else:
+            user_id = create_user(email, password, role="admin", db_path=settings.database_path)
     except Exception as exc:
         return _setup_response(error_message=str(exc), email=email, status_code=400)
     record_audit_event(
@@ -386,17 +380,8 @@ def setup_form(email: str = Form(...), password: str = Form(...)) -> HTMLRespons
     user = authenticate_user(email, password, settings.database_path)
     if not user:
         return RedirectResponse("/login", status_code=303)
-    access_token = user.pop("_access_token", "")
-    refresh_token = user.pop("_refresh_token", "")
     response = RedirectResponse("/", status_code=303)
-    response.set_cookie(
-        "rr_session",
-        encode_session(access_token, refresh_token),
-        httponly=True,
-        samesite="lax",
-        max_age=60 * 60 * 24 * 30,
-        path="/",
-    )
+    _set_auth_cookie(response, user, settings.database_path)
     return response
 
 
@@ -453,6 +438,23 @@ def _apply_remembered_email(response, email: str, should_remember: bool) -> None
         response.delete_cookie("rr_remembered_email", path="/")
 
 
+def _set_auth_cookie(response, user: dict, db_path: Path | None = None) -> None:
+    access_token = user.pop("_access_token", "")
+    refresh_token = user.pop("_refresh_token", "")
+    if access_token and refresh_token:
+        cookie_value = encode_session(access_token, refresh_token)
+    else:
+        cookie_value = create_session(str(user["id"]), db_path)
+    response.set_cookie(
+        "rr_session",
+        cookie_value,
+        httponly=True,
+        samesite="lax",
+        max_age=60 * 60 * 24 * 30,
+        path="/",
+    )
+
+
 @app.get("/reset-password")
 def reset_password_page() -> HTMLResponse:
     html = (STATIC_DIR / "reset_password.html").read_text(encoding="utf-8")
@@ -503,8 +505,6 @@ def api_login(payload: LoginRequest, request: Request):
     user = authenticate_user(payload.email, payload.password, settings.database_path)
     if not user:
         raise HTTPException(status_code=401, detail="Invalid email or password.")
-    access_token = user.pop("_access_token", "")
-    refresh_token = user.pop("_refresh_token", "")
     record_audit_event(
         action="auth.login",
         actor_user_id=None,
@@ -515,25 +515,20 @@ def api_login(payload: LoginRequest, request: Request):
         db_path=settings.database_path,
     )
     response = JSONResponse({"ok": True, "role": user["role"], "email": user["email"]})
-    response.set_cookie(
-        "rr_session",
-        encode_session(access_token, refresh_token),
-        httponly=True,
-        samesite="lax",
-        max_age=60 * 60 * 24 * 30,
-    )
+    _set_auth_cookie(response, user, settings.database_path)
     return response
 
 
 @app.post("/api/auth/setup")
 def api_setup_admin(payload: SetupAdminRequest, request: Request):
     settings = get_settings()
-    if not admin_setup_available():
-        raise HTTPException(status_code=503, detail="Supabase service-role configuration is required for setup.")
     if admin_user_exists():
         raise HTTPException(status_code=409, detail="An admin account already exists.")
     try:
-        user_id = create_first_admin(payload.email, payload.password, settings.database_path)
+        if admin_setup_available():
+            user_id = create_first_admin(payload.email, payload.password, settings.database_path)
+        else:
+            user_id = create_user(payload.email, payload.password, role="admin", db_path=settings.database_path)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     record_audit_event(
@@ -548,15 +543,7 @@ def api_setup_admin(payload: SetupAdminRequest, request: Request):
     user = authenticate_user(payload.email, payload.password, settings.database_path)
     response = JSONResponse({"ok": True, "email": payload.email.lower().strip(), "role": "admin"})
     if user:
-        access_token = user.pop("_access_token", "")
-        refresh_token = user.pop("_refresh_token", "")
-        response.set_cookie(
-            "rr_session",
-            encode_session(access_token, refresh_token),
-            httponly=True,
-            samesite="lax",
-            max_age=60 * 60 * 24 * 30,
-        )
+        _set_auth_cookie(response, user, settings.database_path)
     return response
 
 
