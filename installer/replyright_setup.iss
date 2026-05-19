@@ -1,6 +1,6 @@
 #define MyAppName "ReplyRight"
 #ifndef MyAppVersion
-  #define MyAppVersion "0.1.1"
+  #define MyAppVersion "0.1.3"
 #endif
 #define MyAppPublisher "Waldorf Astoria New York"
 #define MyAppExeName "ReplyRight.exe"
