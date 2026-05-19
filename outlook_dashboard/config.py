@@ -173,10 +173,12 @@ def write_local_env(values: dict[str, str]) -> Path:
 def get_settings() -> Settings:
     _load_env()
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    database_path = Path(os.getenv("SQLITE_DB_PATH", str(DATA_DIR / "hotel_email_triage.sqlite3")))
+    _db_env = os.getenv("SQLITE_DB_PATH", "").strip()
+    database_path = Path(_db_env) if _db_env else DATA_DIR / "hotel_email_triage.sqlite3"
     if not database_path.is_absolute():
         database_path = ROOT_DIR / database_path
-    outlook_export_dir = Path(os.getenv("OUTLOOK_EXPORT_DIR", str(DATA_DIR / "outlook_exports")))
+    _export_env = os.getenv("OUTLOOK_EXPORT_DIR", "").strip()
+    outlook_export_dir = Path(_export_env) if _export_env else DATA_DIR / "outlook_exports"
     if not outlook_export_dir.is_absolute():
         outlook_export_dir = ROOT_DIR / outlook_export_dir
     outlook_export_dir.mkdir(parents=True, exist_ok=True)

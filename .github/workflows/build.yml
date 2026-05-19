@@ -60,19 +60,19 @@ jobs:
           ANTHROPIC_MODEL=claude-opus-4-7
           SUPABASE_URL=${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}
-          SUPABASE_SERVICE_ROLE_KEY=
-          REPLYRIGHT_ADMIN_EMAIL=
-          REPLYRIGHT_ADMIN_PASSWORD=
+          SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          REPLYRIGHT_ADMIN_EMAIL=${{ secrets.REPLYRIGHT_ADMIN_EMAIL }}
+          REPLYRIGHT_ADMIN_PASSWORD=${{ secrets.REPLYRIGHT_ADMIN_PASSWORD }}
           SMTP_HOST=smtp.office365.com
           SMTP_PORT=587
-          SMTP_USER=
-          SMTP_PASSWORD=
-          SMTP_FROM=
+          SMTP_USER=${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}
+          SMTP_FROM=${{ secrets.SMTP_FROM }}
           "@ | Set-Content -Path .env -Encoding UTF8
       - name: Verify runtime keys for installer
         shell: pwsh
         run: |
-          $required = @("ANTHROPIC_API_KEY", "SUPABASE_URL", "SUPABASE_KEY")
+          $required = @("ANTHROPIC_API_KEY", "SUPABASE_URL", "SUPABASE_KEY", "SUPABASE_SERVICE_ROLE_KEY", "REPLYRIGHT_ADMIN_EMAIL", "REPLYRIGHT_ADMIN_PASSWORD")
           $values = @{}
           Get-Content ".env" | ForEach-Object {
             if ($_ -match "^\s*([^#=]+)=(.*)$") { $values[$Matches[1].Trim()] = $Matches[2].Trim() }
@@ -171,19 +171,19 @@ jobs:
           ANTHROPIC_MODEL=claude-opus-4-7
           SUPABASE_URL=${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}
-          SUPABASE_SERVICE_ROLE_KEY=
-          REPLYRIGHT_ADMIN_EMAIL=
-          REPLYRIGHT_ADMIN_PASSWORD=
+          SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          REPLYRIGHT_ADMIN_EMAIL=${{ secrets.REPLYRIGHT_ADMIN_EMAIL }}
+          REPLYRIGHT_ADMIN_PASSWORD=${{ secrets.REPLYRIGHT_ADMIN_PASSWORD }}
           SMTP_HOST=smtp.office365.com
           SMTP_PORT=587
-          SMTP_USER=
-          SMTP_PASSWORD=
-          SMTP_FROM=
+          SMTP_USER=${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}
+          SMTP_FROM=${{ secrets.SMTP_FROM }}
           "@ | Set-Content -Path .env -Encoding UTF8
       - name: Verify runtime keys for release installer
         shell: pwsh
         run: |
-          $required = @("ANTHROPIC_API_KEY", "SUPABASE_URL", "SUPABASE_KEY")
+          $required = @("ANTHROPIC_API_KEY", "SUPABASE_URL", "SUPABASE_KEY", "SUPABASE_SERVICE_ROLE_KEY", "REPLYRIGHT_ADMIN_EMAIL", "REPLYRIGHT_ADMIN_PASSWORD")
           $values = @{}
           Get-Content ".env" | ForEach-Object {
             if ($_ -match "^\s*([^#=]+)=(.*)$") { $values[$Matches[1].Trim()] = $Matches[2].Trim() }
