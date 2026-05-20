@@ -113,7 +113,7 @@ class MainWindow(QMainWindow):
             self._stack.setCurrentIndex(1)
             self._admin_panel.load()
         elif queue == "kyc":
-            self._current_queue = previous_queue if previous_queue in {"inbox", "urgent", "vip", "missing"} else "inbox"
+            self._current_queue = previous_queue if previous_queue in {"inbox", "review", "urgent", "vip", "missing"} else "inbox"
             self._sidebar.restore_queue(self._current_queue)
             self._open_kyc_window()
         elif queue == "settings":
@@ -125,7 +125,7 @@ class MainWindow(QMainWindow):
 
     def _on_filters_changed(self, filters: dict) -> None:
         self._current_filters = filters
-        if self._current_queue in {"inbox", "urgent", "vip", "missing"}:
+        if self._current_queue in {"inbox", "review", "urgent", "vip", "missing"}:
             self._load_emails()
 
     def _on_sync(self) -> None:
@@ -148,7 +148,7 @@ class MainWindow(QMainWindow):
         self._load_emails()
 
     def _load_emails(self) -> None:
-        if self._current_queue not in {"inbox", "urgent", "vip", "missing"}:
+        if self._current_queue not in {"inbox", "review", "urgent", "vip", "missing"}:
             return
         self._conv_list.set_loading(True)
         filters = self._current_filters

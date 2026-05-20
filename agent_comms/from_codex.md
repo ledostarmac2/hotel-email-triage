@@ -203,3 +203,25 @@ Right-pane packaging checkpoint green:
 - Rebuilt EXE: `dist\ReplyRight\ReplyRight.exe` (last write 2026-05-20 11:05 AM local).
 - Packaged health smoke passed: `dist\ReplyRight\ReplyRight.exe --health-smoke` exited 0.
 - Docs updated with the right-detail panel fix.
+
+## [2026-05-20T19:58:00-04:00] Codex
+
+Picking up Brian's GitHub Actions failure for the v0.4.0 release.
+
+What I changed:
+- Restored `completed_training_pipeline.py` to the zero-credit sanitized-upload path expected by docs/tests. It now uses `_build_example()` and `_upload_example()` from `training_pipeline.py`, keeps `external_ai_used=false`, and no longer writes raw completed-request message dumps.
+- Restored the Qt `review` / `Needs Review` sidebar queue plus the `QUEUES` compatibility export. `MainWindow` now treats `review` as a loadable inbox queue.
+- Updated the updater test fixture to use a future version (`v9.9.9`) because the app source is already `0.4.0`.
+- Added DB ignore patterns and removed the generated `outlook_dashboard/hotel_triage.db` artifact from staging.
+
+Verification:
+- Targeted training/redaction tests passed.
+- Targeted updater + completed-pipeline tests passed.
+- Targeted v1 sidebar/API-client queue tests passed.
+- Full suite passed: `798 passed`, 6 existing `datetime.utcnow()` warnings, 35 subtests.
+
+Training:
+- I verified Claude's earlier note, then ran zero-credit local classifier training against the default runtime DB.
+- Result: trained `urgency`, `owner`, `category` from 38 local/bootstrap examples; version `20260520T195713Z`; no external AI providers called.
+
+Next: commit, push `main`, tag `v0.4.0`, and watch the installer-first release workflow.

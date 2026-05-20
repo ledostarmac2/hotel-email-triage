@@ -33,6 +33,9 @@ __pycache__/
 htmlcov/
 
 data/
+*.sqlite
+*.sqlite3
+*.db
 
 # Labeling raw label files contain redacted but potentially sensitive email content
 labeling/inbox/*.json

@@ -17,18 +17,30 @@ from PySide6.QtWidgets import (
 
 from replyright_qt.widgets.line_icons import LineIcon
 
+QUEUES: list[tuple[str, str]] = [
+    ("inbox", "Inbox"),
+    ("review", "Needs Review"),
+    ("urgent", "Urgent"),
+    ("vip", "VIP"),
+    ("missing", "Missing Info"),
+    ("kyc", "KYC Inspections"),
+    ("settings", "Settings"),
+    ("admin", "Admin"),
+]
+
 _QUEUE_GROUPS: list[tuple[str, list[tuple[str, str, str]]]] = [
     (
         "QUEUES",
         [
             ("inbox", "inbox", "Inbox"),
+            ("review", "review", "Needs Review"),
             ("urgent", "urgent", "Urgent"),
             ("vip", "vip", "VIP"),
             ("missing", "missing", "Missing Info"),
             ("kyc", "kyc", "KYC Inspections"),
         ],
     ),
-    ("ADMIN", [("admin", "admin", "Admin"), ("settings", "settings", "Settings")]),
+    ("ADMIN", [("settings", "settings", "Settings"), ("admin", "admin", "Admin")]),
 ]
 
 _AVATAR_COLORS = [

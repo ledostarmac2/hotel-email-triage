@@ -1,11 +1,19 @@
 # Current State
 
-Last updated: 2026-05-20 (native UI visual repair + EXE rebuild)
+Last updated: 2026-05-20 (v0.4.0 CI/release training repair)
 
 ## Status
 
 - Product name is ReplyRight.
 - Current runnable app is `outlook_dashboard/` plus `run_desktop.py`.
+- 2026-05-20 v0.4.0 CI/release repair:
+  - Fixed the GitHub Actions lint failure in `tests/test_completed_training_pipeline.py` by restoring the Completed Requests training pipeline to the documented zero-credit sanitized-upload path.
+  - `outlook_dashboard/completed_training_pipeline.py` now imports read-only completed Outlook messages, labels them with local heuristics, builds redacted examples through the shared training helper, uploads sanitized records, and reports `external_ai_used=false`.
+  - Restored the PySide6 `Needs Review` queue and `QUEUES` compatibility export so v1 queue tests and native navigation agree with the API client's `needs_review=true` mapping.
+  - Updated the updater release test fixture to use a future semantic version now that app source is `0.4.0`.
+  - Added root SQLite/DB ignore patterns and removed the generated local classifier DB artifact from staging; runtime model/database files remain local-only.
+  - Validation passed: targeted training/updater/sidebar tests and full suite (`798 passed`, 6 existing `datetime.utcnow()` warnings, 35 subtests).
+  - Zero-credit local classifier training was started against the default runtime SQLite DB after the fix: 38 local/bootstrap examples, targets `urgency`, `owner`, and `category`, model version `20260520T195713Z`. No external AI providers were called.
 - 2026-05-20 native UI repair/polish:
   - The PySide6 inbox refresh action now calls the proven read-only Outlook desktop import endpoint (`/api/outlook-desktop/export-inbox`) instead of the Graph sync endpoint, preserving the current classic Outlook COM import path.
   - Native sidebar queue views now filter Inbox/Urgent/VIP/Missing Info in the Qt client and auto-select the first visible conversation after loading.

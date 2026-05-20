@@ -1,5 +1,40 @@
 # Handoff Log
 
+## 2026-05-20 - v0.4.0 CI/release training repair
+
+Summary:
+
+- Repaired the Completed Requests training pipeline contract after GitHub Actions failed on `tests/test_completed_training_pipeline.py`.
+- Restored sanitized Supabase training-example upload via the shared training pipeline helpers; the completed pipeline no longer dumps raw message JSON and continues to report `external_ai_used=false`.
+- Restored the native PySide6 `Needs Review` queue and `QUEUES` compatibility export, and allowed `MainWindow` to load the review queue through the existing API client mapping.
+- Updated the updater test fixture to use a future release version so it remains valid now that source version is `0.4.0`.
+- Added SQLite/DB ignore patterns and removed the generated `outlook_dashboard/hotel_triage.db` artifact from staging.
+- Started zero-credit local classifier training against the default runtime SQLite DB after tests passed.
+
+Files changed:
+
+- `.gitignore`
+- `outlook_dashboard/completed_training_pipeline.py`
+- `replyright_qt/widgets/sidebar_nav.py`
+- `replyright_qt/windows/main_window.py`
+- `tests/test_updater.py`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+
+Verification:
+
+- `python -m pytest tests/test_completed_training_pipeline.py tests/test_training_pipeline.py tests/test_redaction.py -q --timeout=60` - passed.
+- `python -m pytest tests/test_updater.py tests/test_completed_training_pipeline.py -q --timeout=60` - passed.
+- `python -m pytest tests/test_v1_features.py::TestSidebarNeedsReviewQueue tests/test_v1_features.py::TestApiClientQueueMapping -q --timeout=60` - passed.
+- `python -m py_compile replyright_qt\widgets\sidebar_nav.py replyright_qt\windows\main_window.py` - passed.
+- `python -m pytest tests/ -x --timeout=60` - 798 passed, 6 existing `datetime.utcnow()` warnings, 35 subtests passed.
+- Local classifier training result: trained `urgency`, `owner`, and `category` from 38 local/bootstrap examples; model version `20260520T195713Z`; no external AI used.
+
+Remaining work:
+
+- Push `main` and tag `v0.4.0` to trigger the installer-first GitHub release workflow.
+- Watch the GitHub Actions release job and confirm the primary asset is `ReplyRightSetup-v0.4.0.exe`.
+
 ## 2026-05-20 - native UI visual repair, settings, and KYC packaging
 
 Update after Brian review:

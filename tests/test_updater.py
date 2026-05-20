@@ -8,12 +8,12 @@ from outlook_dashboard import updater
 
 class FakeResponse:
     payload = {
-        "tag_name": "v0.1.4",
+        "tag_name": "v9.9.9",
         "html_url": "https://example.com/release",
         "assets": [
             {
-                "name": "ReplyRightSetup-v0.1.4.exe",
-                "browser_download_url": "https://example.com/ReplyRightSetup-v0.1.4.exe",
+                "name": "ReplyRightSetup-v9.9.9.exe",
+                "browser_download_url": "https://example.com/ReplyRightSetup-v9.9.9.exe",
             },
         ],
     }
@@ -37,9 +37,9 @@ def test_update_check_records_available_release() -> None:
     status = updater.get_update_status()
     assert status["checked"] is True
     assert status["available"] is True
-    assert status["version"] == "0.1.4"
+    assert status["version"] == "9.9.9"
     assert status["url"] == "https://example.com/release"
-    assert status["asset_url"] == "https://example.com/ReplyRightSetup-v0.1.4.exe"
+    assert status["asset_url"] == "https://example.com/ReplyRightSetup-v9.9.9.exe"
 
 
 def test_update_check_ignores_bare_exe_release_asset() -> None:
@@ -47,7 +47,7 @@ def test_update_check_ignores_bare_exe_release_asset() -> None:
 
     class BareExeResponse(FakeResponse):
         payload = {
-            "tag_name": "v0.1.4",
+            "tag_name": "v9.9.9",
             "html_url": "https://example.com/release",
             "assets": [
                 {
