@@ -1,6 +1,6 @@
 # Security And Privacy
 
-Last updated: 2026-05-19
+Last updated: 2026-05-20
 
 ## Core Posture
 
@@ -80,8 +80,7 @@ Refresh Inbox:
 Claude:
 
 - Reserved for explicit single-email Analyze/AI Suggestion.
-- Allowed for admin-explicit training refinement when `refine=true`.
-- Must not be used for bulk Refresh Inbox.
+- Must not be used for bulk Refresh Inbox or in-app training pipelines.
 
 AI-generated replies are suggestions only. A human must review before using them.
 
@@ -120,6 +119,8 @@ Training records must not include:
 - payment details
 - unredacted guest personal details
 
+Training endpoints must not spend Anthropic/OpenAI/Google credits. Agent-assisted label review should happen outside the running ReplyRight app and flow back through Supabase/human review.
+
 ## Authentication
 
 Login uses Supabase Auth. The `rr_session` cookie is HttpOnly and stores access/refresh token data for server-side validation and refresh.
@@ -129,6 +130,8 @@ Admin routes must stay protected by auth middleware.
 Password reset/invite flows must not leak whether a target email exists beyond the current intended behavior.
 
 ReplyRight must not ask end users to paste API keys or Supabase keys into the program. Secrets are provisioned outside the UI through ignored local files, machine environment variables, or release/build secrets.
+
+User onboarding is invite-first. Admin-created invites may email through configured SMTP; if SMTP is unavailable, the admin API returns a manual invite URL. Public self-signup is not part of the current security model.
 
 ## Audit Expectations
 
@@ -183,3 +186,4 @@ Until a UI setting exists, preserve the current code-level routing rules and con
 - The Supabase anon key (`SUPABASE_KEY`) is acceptable to bundle *only* if Row Level Security (RLS) is flawlessly configured.
 - The service-role key must be provisioned securely by the owner/IT outside the ReplyRight UI.
 - The local `.env` file stays on the machine and must be strictly excluded from all release artifacts.
+- The installer should remain per-user/no-admin unless a future enterprise deployment decision explicitly changes that.

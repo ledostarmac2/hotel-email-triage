@@ -1,5 +1,17 @@
 # Decisions
 
+## 2026-05-20: In-App Training Is Zero-Credit
+
+Decision: ReplyRight's in-app training endpoints must not call Claude/Anthropic, OpenAI, Google AI, or any other paid AI provider. Completed Requests import now uses local heuristic labels, redacts and compacts training examples, uploads them to Supabase, and relies on human or external coding-agent review for label improvement.
+
+Rationale: Brian wants to use Codex and Claude Code occasionally for grading without burning Anthropic platform API credits from the app. Training data should improve the local classifier through Supabase-reviewed examples, not by calling Claude once per completed email.
+
+## 2026-05-20: Per-User Installer And Invite-First Onboarding
+
+Decision: ReplyRight's Windows installer should avoid admin rights by default and install per-user under `%LOCALAPPDATA%\Programs\ReplyRight`. User onboarding remains invite-first: admins can create users, SMTP can send invite/reset emails, and the API returns a manual invite URL when SMTP is unavailable or fails.
+
+Rationale: Brian wants a deployable beta that can run on fresh Windows machines without requiring IT elevation. Open public signup is too broad for a hotel operations tool; invite-first onboarding keeps access controlled while still allowing trusted colleagues to join.
+
 ## 2026-05-19: Owner-Built Release Installer Includes Runtime Secrets
 
 Decision: The GitHub Actions owner-built release installer should include the CI-provisioned runtime `.env` from repository Actions secrets so ReplyRight has OpenAI, Google AI, Claude, Supabase, admin seed, SMTP, and Microsoft configuration available immediately after install. CI must verify required runtime secrets are present without printing values.

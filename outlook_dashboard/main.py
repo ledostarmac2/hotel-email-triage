@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import html as html_lib
 import os
+import platform
 import secrets
+import sys
 import time
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
@@ -637,19 +639,26 @@ def api_reset_password_confirm(payload: ResetPasswordConfirmRequest):
     return {"ok": True}
 
 
+def _local_base_url(request: Request) -> str:
+    """Return the current app origin without a trailing slash."""
+    return str(request.base_url).rstrip("/")
+
+
 @app.post("/api/auth/invite")
 def api_invite(payload: InviteRequest, request: Request):
     if request.state.user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin only.")
     settings = get_settings()
-    if not settings.smtp_configured:
-        raise HTTPException(status_code=503, detail="Email service not configured. Add SMTP settings to .env.")
     try:
         user_id = create_user(
             payload.email,
             secrets.token_hex(32),  # placeholder — user sets their own password via invite link
             role="user",
-            invited_by_id=request.state.user["id"],
+            invited_by_id=(
+                request.state.user["id"]
+                if admin_setup_available() or str(request.state.user["id"]).isdigit()
+                else None
+            ),
             db_path=settings.database_path,
         )
     except Exception as exc:
@@ -657,15 +666,56 @@ def api_invite(payload: InviteRequest, request: Request):
     token = create_reset_token(payload.email, settings.database_path, hours=24)
     if not token:
         raise HTTPException(status_code=500, detail="Could not generate invite token.")
-    base_url = f"http://{settings.app_host}:{settings.app_port}"
+    base_url = _local_base_url(request)
+    invite_url = f"{base_url}/reset-password?token={token}"
+    result = {
+        "ok": True,
+        "user_id": user_id,
+        "email_sent": False,
+        "invite_url": invite_url,
+        "manual_delivery_required": True,
+        "detail": "Invite created. Copy invite_url to the user or configure SMTP for email delivery.",
+    }
+    if not settings.smtp_configured:
+        record_audit_event(
+            action="auth.invite.created_manual_delivery",
+            actor_user_id=None,
+            actor_email=str(request.state.user["email"]),
+            entity_type="user",
+            entity_id=user_id,
+            metadata={"email_sent": False, "smtp_configured": False},
+            db_path=settings.database_path,
+        )
+        return result
     try:
         send_invite_email(payload.email, token, base_url, settings)
     except Exception as exc:
         _log.error("Invite email failed for %s: %s", payload.email, exc)
-        raise HTTPException(
-            status_code=503, detail="User created but invite email failed. Check SMTP settings."
-        ) from exc
-    return {"ok": True, "user_id": user_id}
+        result["detail"] = "User created but invite email failed. Copy invite_url manually."
+        result["email_error"] = "smtp_send_failed"
+        record_audit_event(
+            action="auth.invite.email_failed",
+            actor_user_id=None,
+            actor_email=str(request.state.user["email"]),
+            entity_type="user",
+            entity_id=user_id,
+            metadata={"email_sent": False, "smtp_configured": True},
+            db_path=settings.database_path,
+        )
+        return result
+    result["email_sent"] = True
+    result["manual_delivery_required"] = False
+    result["detail"] = "Invite email sent."
+    record_audit_event(
+        action="auth.invite.sent",
+        actor_user_id=None,
+        actor_email=str(request.state.user["email"]),
+        entity_type="user",
+        entity_id=user_id,
+        metadata={"email_sent": True},
+        db_path=settings.database_path,
+    )
+    return result
 
 
 @app.get("/api/auth/users")
@@ -711,6 +761,60 @@ def api_admin_stats(request: Request):
     }
 
 
+@app.get("/api/admin/deployment/diagnostics")
+def api_deployment_diagnostics(request: Request) -> dict[str, object]:
+    """Return a safe deployment readiness snapshot for support and beta rollout."""
+    if request.state.user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only.")
+    settings = get_settings()
+    build = get_build_info()
+    classifier_meta = get_model_meta(settings.database_path) or {}
+    checks = {
+        "runtime": {
+            "frozen": bool(getattr(sys, "frozen", False)),
+            "python_version": platform.python_version(),
+            "platform": platform.platform(),
+            "executable": Path(sys.executable).name,
+        },
+        "app": {
+            "version": build.get("version", ""),
+            "commit": build.get("commit", ""),
+            "build_date": build.get("build_date", ""),
+            "host": settings.app_host,
+            "port": settings.app_port,
+            "native_shell": "PySide6",
+        },
+        "storage": {
+            "database_path": str(settings.database_path),
+            "database_exists": settings.database_path.exists(),
+            "data_dir": str(DATA_DIR),
+        },
+        "services": {
+            "supabase_configured": bool(settings.supabase_url and settings.supabase_key),
+            "supabase_admin_configured": admin_setup_available(),
+            "smtp_configured": settings.smtp_configured,
+            "graph_configured": settings.graph_configured,
+            "openai_configured": settings.openai_configured,
+            "google_ai_configured": settings.google_ai_configured,
+            "anthropic_configured": settings.anthropic_configured,
+        },
+        "outlook": {
+            "windows": IS_WINDOWS,
+            "outlook_com_available": HAS_OUTLOOK_COM,
+            "mailbox": settings.outlook_export_mailbox,
+            "folder": settings.outlook_export_folder,
+        },
+        "classifier": {
+            "has_model": bool(classifier_meta.get("version_id")),
+            "version_id": classifier_meta.get("version_id", ""),
+            "trained_at": classifier_meta.get("trained_at", ""),
+            "targets": sorted((classifier_meta.get("targets") or {}).keys()),
+        },
+        "warnings": settings.runtime_warnings,
+    }
+    return checks
+
+
 @app.get("/api/admin/training/status")
 def api_training_status(request: Request) -> dict[str, object]:
     if request.state.user.get("role") != "admin":
@@ -748,7 +852,7 @@ def api_import_completed_requests(
     request: Request,
 ) -> dict[str, object]:
     """Import up to batch_size emails from the Completed Requests Outlook folder,
-    label them with Claude Sonnet, extract property knowledge, and store training examples.
+    label them with local heuristics, and store compact sanitized training examples.
     Requires admin role and Outlook running on the same Windows machine.
     """
     if request.state.user.get("role") != "admin":

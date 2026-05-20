@@ -1,6 +1,6 @@
 # Operations Guide
 
-Last updated: 2026-05-18
+Last updated: 2026-05-20
 
 ## Purpose
 
@@ -106,6 +106,12 @@ Before using a draft:
 The Admin training pipeline can export completed, redacted emails to Supabase as training examples. Human-reviewed examples can train the local classifier.
 
 Operators should focus on accurate feedback. Admins should review labels before classifier training.
+
+## Admin Onboarding And Diagnostics
+
+Admins can invite users from the Admin users panel. When SMTP is configured, ReplyRight sends the invite/reset email. When SMTP is unavailable, the invite API returns a manual invite URL that can be copied for beta onboarding.
+
+Admins can use deployment diagnostics to confirm app version, database status, Supabase, SMTP, Outlook COM, AI provider configuration, and classifier status without exposing secrets.
 
 ## What Not To Do
 

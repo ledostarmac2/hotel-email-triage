@@ -1,25 +1,25 @@
 """Training data pipeline.
 
 Pulls locally-completed emails, redacts PII, labels them using existing
-analysis or Claude (for heuristic-only emails when refine=True), then
-uploads sanitized training examples to Supabase training_examples table.
+analysis, then uploads sanitized training examples to Supabase
+training_examples table.
 
 PRIVACY CONTRACT
 - body_redacted stored in Supabase is always the output of redact_sensitive_text(),
   never the raw body_text.
 - sender_email and full subject are never stored; only sender_domain and
   sanitized subject_tokens (stop-word-filtered keywords ≥4 chars).
-- Claude labeling is only triggered for emails where analysis_engine='heuristic'
-  and only when the caller passes refine=True.
+- This module never calls external AI providers. Agent-assisted labels can be
+  created outside the app and imported/reviewed through Supabase.
 
 CREDIT USAGE
-- Default run (refine=False): zero AI credits. Uses existing email_analysis labels.
-- refine=True: one Claude call per heuristic-only email in the batch.
+- Zero AI credits. Uses existing email_analysis labels.
+- The refine argument is retained for backwards-compatible admin/API callers but
+  no longer triggers Claude/Anthropic calls.
 """
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 import re
 from pathlib import Path
@@ -27,7 +27,6 @@ from typing import Any
 
 from . import __version__
 from .ai import latest_message_text
-from .config import get_settings
 from .database import (
     get_training_pipeline_status,
     list_unprocessed_completed_emails,
@@ -35,7 +34,7 @@ from .database import (
 )
 from .redaction import redact_sensitive_text
 from .runtime_log import get_logger
-from .taxonomy import CATEGORIES, CONTACT_TYPES, DEPARTMENT_OWNERS, STATUSES
+from .taxonomy import CATEGORIES, DEPARTMENT_OWNERS, STATUSES
 
 _log = get_logger("training_pipeline")
 
@@ -81,27 +80,13 @@ def _fingerprint(sender_email: str, subject: str) -> str:
 
 
 def _label_with_claude(body_redacted: str, settings: Any) -> dict | None:
-    """Call Claude with a compact labeling prompt. Returns parsed dict or None."""
-    try:
-        from anthropic import Anthropic
-    except ImportError:
-        return None
-    prompt = _LABEL_PROMPT.replace("CATEGORIES", ", ".join(f'"{c}"' for c in CATEGORIES))
-    client = Anthropic(api_key=settings.anthropic_api_key)
-    message = client.messages.create(
-        model=settings.anthropic_model,
-        max_tokens=400,
-        system=_LABEL_SYSTEM,
-        messages=[{"role": "user", "content": prompt + body_redacted[:3000]}],
-    )
-    raw = (message.content[0].text or "").strip()
-    m = re.search(r"\{.*\}", raw, re.DOTALL)
-    if not m:
-        return None
-    try:
-        return json.loads(m.group(0))
-    except json.JSONDecodeError:
-        return None
+    """Deprecated no-op retained for old tests/imports.
+
+    Training labels are now created from existing local analysis or imported
+    after external coding-agent review. ReplyRight's in-app training endpoints
+    must not spend Anthropic API credits.
+    """
+    return None
 
 
 def _upload_example(example: dict) -> tuple[bool, str]:
@@ -197,17 +182,17 @@ def run_pipeline(
 
     Args:
         batch_size: Max emails to process per call (default 10).
-        refine: If True, re-label heuristic-only emails with Claude.
-                If False (default), use existing email_analysis labels — zero AI cost.
+        refine: Backwards-compatible flag. It is recorded in the response but
+                never calls Claude/Anthropic.
         db_path: Override SQLite path (tests).
 
     Returns:
         Summary dict: {processed, uploaded, skipped, failed, batch_size, refine}.
     """
-    settings = get_settings()
     rows = list_unprocessed_completed_emails(batch_size=batch_size, db_path=db_path)
     result = {"processed": 0, "uploaded": 0, "skipped": 0, "failed": 0,
-              "batch_size": batch_size, "refine": refine}
+              "batch_size": batch_size, "refine": refine,
+              "external_ai_used": False, "labeling_mode": "existing-labels"}
 
     for row in rows:
         email_id = int(row["id"])
@@ -224,21 +209,8 @@ def run_pipeline(
             continue
 
         analysis_engine = str(row.get("analysis_engine") or "heuristic")
-        use_claude = refine and analysis_engine == "heuristic" and settings.anthropic_configured
-
-        if use_claude:
-            body_redacted, _ = redact_sensitive_text(body_latest)
-            claude_labels = _label_with_claude(body_redacted, settings)
-            if claude_labels:
-                labels = claude_labels
-                labeling_engine = "claude"
-            else:
-                labels = dict(row)
-                labeling_engine = analysis_engine
-                _log.warning("training_pipeline: Claude labeling failed for email_id=%s, using existing labels", email_id)
-        else:
-            labels = dict(row)
-            labeling_engine = analysis_engine
+        labels = dict(row)
+        labeling_engine = analysis_engine
 
         try:
             example = _build_example(row, labels, labeling_engine)

@@ -23,10 +23,8 @@ def run_app(base_url: str) -> None:
     app.setStyle(QStyleFactory.create("Fusion"))
     app.setStyleSheet(STYLESHEET)
 
-    icon_path = os.path.join(
-        os.path.dirname(os.path.dirname(__file__)),
-        "outlook_dashboard", "static", "replyright.ico",
-    )
+    _base = sys._MEIPASS if getattr(sys, "frozen", False) else os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    icon_path = os.path.join(_base, "outlook_dashboard", "static", "replyright.ico")
     if os.path.exists(icon_path):
         app.setWindowIcon(QIcon(icon_path))
 

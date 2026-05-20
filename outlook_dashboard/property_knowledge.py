@@ -1,23 +1,20 @@
-"""Property-specific knowledge extraction and persistence.
+"""Property-specific knowledge persistence.
 
-Uses Claude Sonnet to analyze anonymized completed hotel email requests and
-extract both classification training labels AND Waldorf Astoria-specific
-knowledge: room types, rate plans, packages, offers, department SOPs.
+Stores property knowledge extracted by external coding-agent review or future
+offline import workflows: room types, rate plans, packages, offers, department
+SOPs, and routing notes.
 
 PRIVACY CONTRACT
-- Only operates on body_redacted (never raw body_text).
-- Only receives subject_tokens (never full subject).
-- No sender name, email address, or reservation numbers passed to Claude.
+- Do not store raw body_text.
+- Do not store full subject or sender email addresses.
+- Do not call external AI providers from ReplyRight training endpoints.
 """
 from __future__ import annotations
 
-import json
-import re
 from pathlib import Path
 from typing import Any
 
 from .runtime_log import get_logger
-from .taxonomy import CATEGORIES, DEPARTMENT_OWNERS
 
 _log = get_logger("property_knowledge")
 
@@ -79,45 +76,12 @@ def extract_with_claude(
     subject_tokens: str,
     settings: Any,
 ) -> dict[str, Any] | None:
-    """Call Claude Sonnet to extract training labels + property knowledge.
+    """Deprecated no-op retained for old imports.
 
-    Returns parsed dict on success, None on failure.
-    All inputs must be pre-sanitized (no raw PII).
+    Brian wants Codex/Claude Code style agent review to provide labels without
+    spending Anthropic platform API credits from inside ReplyRight.
     """
-    try:
-        from anthropic import Anthropic
-    except ImportError:
-        _log.warning("property_knowledge: anthropic package not installed")
-        return None
-
-    prompt = _CR_PROMPT.format(
-        owners=", ".join(f'"{o}"' for o in DEPARTMENT_OWNERS),
-        categories=", ".join(f'"{c}"' for c in CATEGORIES),
-        subject_tokens=subject_tokens or "(none)",
-    )
-
-    try:
-        client = Anthropic(api_key=settings.anthropic_api_key)
-        message = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=600,
-            system=_CR_SYSTEM,
-            messages=[{"role": "user", "content": prompt + body_redacted[:3500]}],
-        )
-    except Exception as exc:
-        _log.warning("property_knowledge: Claude call failed: %s", exc)
-        return None
-
-    raw = (message.content[0].text or "").strip() if message.content else ""
-    m = re.search(r"\{.*\}", raw, re.DOTALL)
-    if not m:
-        _log.warning("property_knowledge: no JSON in Claude response")
-        return None
-    try:
-        return json.loads(m.group(0))
-    except json.JSONDecodeError as exc:
-        _log.warning("property_knowledge: JSON parse failed: %s", exc)
-        return None
+    return None
 
 
 def store_knowledge_items(

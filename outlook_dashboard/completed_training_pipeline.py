@@ -1,21 +1,20 @@
 """Completed Requests training pipeline.
 
-Imports emails from the Outlook 'Completed Requests' folder, labels them
-with Claude Sonnet, extracts property-specific knowledge, stores sanitized
-training examples, and rebuilds training/PROPERTY_KNOWLEDGE.md.
+Imports emails from the Outlook "Completed Requests" folder, classifies them
+with local heuristics, stores compact sanitized training examples, and uploads
+them to Supabase for review/classifier training.
 
-PRIVACY CONTRACT — same as training_pipeline.py:
-- Raw body_text is NEVER passed to Claude. Only body_redacted.
-- Full sender_email is NEVER stored. Only sender_domain.
-- Full subject is NEVER stored. Only subject_tokens (stop-word-filtered keywords).
+PRIVACY CONTRACT - same as training_pipeline.py:
+- Raw body_text is never sent to external AI by this pipeline.
+- Full sender_email is never stored. Only sender_domain.
+- Full subject is never stored. Only subject_tokens.
 
 CREDIT USAGE
-- One Claude Sonnet call per unprocessed email in the batch.
+- Zero API credits. Agent-assisted grading should happen outside ReplyRight and
+  be imported/reviewed through Supabase, not through the Anthropic API.
 """
 from __future__ import annotations
 
-import json
-import re
 from pathlib import Path
 from typing import Any
 
@@ -31,14 +30,7 @@ from .database import (
     save_analysis,
     upsert_email,
 )
-from .property_knowledge import (
-    extract_with_claude,
-    rebuild_knowledge_file,
-    store_knowledge_items,
-)
-from .redaction import redact_sensitive_text
 from .runtime_log import get_logger
-from .taxonomy import CATEGORIES, DEPARTMENT_OWNERS, STATUSES
 from .training_pipeline import _build_example, _fingerprint, _subject_tokens, _upload_example
 
 _log = get_logger("completed_training_pipeline")
@@ -50,30 +42,7 @@ def run_completed_pipeline(
     batch_size: int = DEFAULT_BATCH_SIZE,
     db_path: Path | None = None,
 ) -> dict[str, Any]:
-    """Run one batch of the Completed Requests training pipeline.
-
-    Steps per email:
-    1. Import from Outlook (read-only COM).
-    2. Upsert into local emails table with status='Completed'.
-    3. Run heuristic_analysis for base labels.
-    4. Call Claude Sonnet for enhanced labels + property knowledge.
-    5. Store training example (compatible with existing Supabase schema).
-    6. Store property knowledge items.
-    7. Mark as processed in completed_requests_log.
-
-    Args:
-        mailbox_name: Outlook mailbox display name (e.g. shared inbox name).
-        folder_name: Sub-folder to read from.
-        batch_size: Max emails to process per call.
-        db_path: Override SQLite path (tests/dev).
-
-    Returns:
-        Summary dict with counts and property knowledge stats.
-    """
-    from .config import get_settings
-
-    settings = get_settings()
-
+    """Run one zero-credit batch of the Completed Requests training pipeline."""
     result: dict[str, Any] = {
         "imported": 0,
         "labeled": 0,
@@ -83,9 +52,10 @@ def run_completed_pipeline(
         "failed": 0,
         "folder": folder_name,
         "mailbox": mailbox_name,
+        "external_ai_used": False,
+        "labeling_mode": "heuristic",
     }
 
-    # ── 1. Import from Outlook ────────────────────────────────────────────────
     try:
         import_result = read_completed_requests(
             mailbox_name=mailbox_name,
@@ -102,10 +72,6 @@ def run_completed_pipeline(
     result["imported"] = len(messages)
     _log.info("completed_training_pipeline: imported %d messages from %r", len(messages), folder_name)
 
-    if not messages:
-        return result
-
-    # ── 2-7. Process each message ─────────────────────────────────────────────
     for msg in messages:
         entry_id = str(msg.get("outlook_entry_id") or msg.get("graph_message_id") or "")
         sender_email = str(msg.get("sender_email") or "")
@@ -114,7 +80,6 @@ def run_completed_pipeline(
         domain = (sender_email.split("@")[-1] if "@" in sender_email else "").lower() or None
         tokens = _subject_tokens(subject)
 
-        # 2. Upsert into emails table with status=Completed
         try:
             email_id, _inserted = upsert_email(
                 {**msg, "status": "Completed"},
@@ -126,10 +91,8 @@ def run_completed_pipeline(
             result["failed"] += 1
             continue
 
-        # 3. Heuristic analysis for base labels
         body_raw = str(msg.get("body_text") or "")
         body_latest = latest_message_text(body_raw, max_chars=4000)
-
         if len(body_latest.strip()) < 40:
             _log.info("completed_training_pipeline: body too short, skipping email_id=%d", email_id)
             log_training_example(email_id, fp, "skipped", "body too short", db_path=db_path)
@@ -139,22 +102,10 @@ def run_completed_pipeline(
 
         heuristic = heuristic_analysis(msg)
         save_analysis(email_id, heuristic, db_path=db_path)
+        result["labeled"] += 1
 
-        # 4. Claude Sonnet — enhanced labels + property knowledge
-        body_redacted, _ = redact_sensitive_text(body_latest)
-        claude_result = None
-        if settings.anthropic_configured:
-            claude_result = extract_with_claude(body_redacted, tokens, settings)
-            if claude_result:
-                result["labeled"] += 1
-            else:
-                _log.warning("completed_training_pipeline: Claude failed for email_id=%d, using heuristic", email_id)
-
-        # 5. Build and upload training example
-        labels = claude_result if claude_result else dict(heuristic)
-        labeling_engine = "claude" if claude_result else "heuristic"
         try:
-            example = _build_example(msg, labels, labeling_engine)
+            example = _build_example(msg, dict(heuristic), "heuristic")
         except Exception as exc:
             _log.warning("completed_training_pipeline: build_example failed email_id=%d: %s", email_id, exc)
             log_training_example(email_id, fp, "failed", str(exc)[:200], db_path=db_path)
@@ -166,32 +117,19 @@ def run_completed_pipeline(
         if ok:
             log_training_example(email_id, fp, "uploaded", db_path=db_path)
             result["uploaded"] += 1
-            _log.info("completed_training_pipeline: uploaded fp=%.12s engine=%s", fp, labeling_engine)
+            _log.info("completed_training_pipeline: uploaded fp=%.12s engine=heuristic", fp)
         else:
             log_training_example(email_id, fp, "failed", error, db_path=db_path)
             result["failed"] += 1
             _log.warning("completed_training_pipeline: upload failed email_id=%d: %s", email_id, error)
 
-        # 6. Store property knowledge
-        if claude_result:
-            n = store_knowledge_items(claude_result, source_email_id=email_id, db_path=db_path)
-            result["knowledge_items"] += n
-
-        # 7. Mark as processed
-        mark_processed(entry_id, labeling_engine, tokens, domain, db_path=db_path)
-
-    # ── Rebuild PROPERTY_KNOWLEDGE.md ─────────────────────────────────────────
-    if result["knowledge_items"] > 0:
-        try:
-            rebuild_knowledge_file(db_path=db_path)
-        except Exception as exc:
-            _log.warning("completed_training_pipeline: knowledge file rebuild failed: %s", exc)
+        mark_processed(entry_id, "heuristic", tokens, domain, db_path=db_path)
 
     return result
 
 
 def completed_pipeline_status(db_path: Path | None = None) -> dict[str, Any]:
-    """Return counts from the completed_requests_log and property_knowledge_items."""
+    """Return counts from completed_requests_log and property_knowledge_items."""
     from .database import managed_connect
 
     try:
@@ -210,13 +148,15 @@ def completed_pipeline_status(db_path: Path | None = None) -> dict[str, Any]:
                 "SELECT COUNT(*) FROM completed_requests_log"
             ).fetchone()[0]
     except Exception:
-        return {"processed": 0, "knowledge": {}}
+        return {"processed": 0, "knowledge": {}, "external_ai_used": False}
 
     return {
         "processed": int(total_processed),
-        "labeled": counts.get("claude", 0) + counts.get("heuristic", 0),
+        "labeled": counts.get("heuristic", 0),
         "failed": counts.get("failed", 0),
         "skipped": counts.get("skipped", 0),
         "knowledge": knowledge,
         "total_knowledge_items": sum(knowledge.values()),
+        "external_ai_used": False,
+        "labeling_mode": "heuristic",
     }

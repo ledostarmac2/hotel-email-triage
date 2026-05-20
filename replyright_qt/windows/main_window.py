@@ -15,8 +15,8 @@ from replyright_qt.widgets.admin_panel import AdminPanel
 from replyright_qt.widgets.conversation_detail import ConversationDetailWidget
 from replyright_qt.widgets.conversation_list import ConversationListWidget
 from replyright_qt.widgets.filter_bar import FilterBar
-from replyright_qt.widgets.kyc_panel import KycPanel
 from replyright_qt.widgets.sidebar_nav import SidebarNav
+from replyright_qt.windows.kyc_window import KycWindow
 
 
 class MainWindow(QMainWindow):
@@ -37,6 +37,7 @@ class MainWindow(QMainWindow):
         self._sync_worker: ApiWorker | None = None
         self._current_queue = "inbox"
         self._current_filters: dict = {}
+        self._kyc_window: KycWindow | None = None
 
         self.setWindowTitle("ReplyRight")
         self.setMinimumSize(1100, 680)
@@ -82,14 +83,10 @@ class MainWindow(QMainWindow):
         # Admin panel (swapped in when Admin queue is active)
         self._admin_panel = AdminPanel(self._client)
 
-        # KYC panel (swapped in when KYC Inspections queue is active)
-        self._kyc_panel = KycPanel(self._client)
-
-        # Stack: page 0 = email list+detail, page 1 = admin panel, page 2 = KYC
+        # Stack: page 0 = email list+detail, page 1 = admin panel
         self._stack = QStackedWidget()
         self._stack.addWidget(splitter)
         self._stack.addWidget(self._admin_panel)
-        self._stack.addWidget(self._kyc_panel)
 
         root_layout.addWidget(self._sidebar)
         root_layout.addWidget(self._stack)
@@ -125,8 +122,12 @@ class MainWindow(QMainWindow):
             self._stack.setCurrentIndex(1)
             self._admin_panel.load()
         elif queue == "kyc":
-            self._stack.setCurrentIndex(2)
-            self._kyc_panel.activate()
+            # KYC opens as a standalone floating window
+            if self._kyc_window is None:
+                self._kyc_window = KycWindow(self._client)
+            self._kyc_window.activate()
+            # Keep the main content area showing the email list
+            self._stack.setCurrentIndex(0)
         else:
             self._stack.setCurrentIndex(0)
             self._detail.clear()

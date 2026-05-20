@@ -1,5 +1,48 @@
 # Handoff Log
 
+## 2026-05-20 - zero-credit training guardrail
+
+Summary:
+
+- Pulled latest `main`; repository was already up to date.
+- Removed in-app Claude/Anthropic usage from the Completed Requests training pipeline.
+- Kept `refine=true` on the existing training endpoint for backwards compatibility, but it no longer triggers Claude labeling.
+- Completed Requests import now uses local heuristic labels, redacts/compacts examples, uploads to Supabase, marks rows as `heuristic`, and reports `external_ai_used=false`.
+- Updated the shared agent training README and project docs to route Codex/Claude Code grading outside the running app.
+- Posted a coordination note to Claude requesting PySide6 UI/KYC work and warning that training files are Codex-owned for this pass.
+
+Files changed:
+
+- `outlook_dashboard/completed_training_pipeline.py`
+- `outlook_dashboard/training_pipeline.py`
+- `outlook_dashboard/property_knowledge.py`
+- `outlook_dashboard/main.py`
+- `tests/test_completed_training_pipeline.py`
+- `tests/test_training_pipeline.py`
+- `training/README.md`
+- `docs/ARCHITECTURE.md`
+- `docs/TRAINING_PIPELINE.md`
+- `docs/SECURITY_AND_PRIVACY.md`
+- `docs/DECISIONS.md`
+- `docs/CHANGELOG_AI.md`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+- `agent_comms/from_codex.md`
+
+Verification:
+
+- `python -m py_compile outlook_dashboard\training_pipeline.py outlook_dashboard\completed_training_pipeline.py outlook_dashboard\property_knowledge.py outlook_dashboard\main.py` - passed.
+- `.\.venv\Scripts\python.exe -m pytest tests/test_training_pipeline.py tests/test_completed_training_pipeline.py tests/test_redaction.py -q --timeout=60` - 62 passed.
+- `git diff --check` - passed with line-ending warnings only.
+- `.\.venv\Scripts\python.exe -m pytest tests/ -q --timeout=60` - timed out in `tests/test_api_full_coverage.py::test_emails_export_inbox` while exercising real Outlook COM folder access; not related to the training changes.
+
+Remaining work:
+
+- Build a cleaner reviewed-label import path for external Codex/Claude Code grading outputs.
+- Claude should continue the PySide6 UI/KYC popup-panel work without touching the training pipeline files from this pass.
+
+---
+
 ## 2026-05-19 - repository structure cleanup
 
 Summary:

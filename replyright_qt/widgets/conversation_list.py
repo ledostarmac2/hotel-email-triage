@@ -54,11 +54,6 @@ class ConversationRow(QWidget):
         urgency_str = _urgency_label(priority)
         time_str = _fmt_time(email.get("received_datetime", ""))
 
-        top_row = QWidget()
-        top_layout = QVBoxLayout(top_row)
-        top_layout.setContentsMargins(0, 0, 0, 0)
-        top_layout.setSpacing(0)
-
         sender = QLabel(email.get("sender_name") or email.get("sender_email", "Unknown"))
         sender.setStyleSheet("font-weight: bold; font-size: 13px;")
 

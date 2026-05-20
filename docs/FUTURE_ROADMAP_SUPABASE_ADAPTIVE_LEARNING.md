@@ -49,7 +49,7 @@ GitHub Repository
 
 | Component | Platform |
 | --- | --- |
-| Desktop application | Python + FastAPI + pywebview/WebView2 |
+| Desktop application | Python + FastAPI backend + native PySide6 shell |
 | AI engine | OpenAI API |
 | Central database | Supabase (PostgreSQL) |
 | Authentication | Supabase Auth |
@@ -58,7 +58,7 @@ GitHub Repository
 | IDE | VS Code |
 | Primary coding agent | Codex |
 
-Note: PySide6 was mentioned in an earlier future direction, but the current working desktop app is FastAPI + pywebview/WebView2. Do not migrate UI frameworks without a deliberate migration plan.
+Note: the current desktop direction is FastAPI for the local backend plus a native PySide6 shell. Do not reintroduce pywebview, `QWebEngineView`, Electron, Tauri, or another browser/WebView shell.
 
 ## Why Supabase
 

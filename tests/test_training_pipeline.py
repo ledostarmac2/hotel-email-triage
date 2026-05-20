@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -197,25 +197,14 @@ def test_run_pipeline_does_not_reprocess(db: Path):
     assert result2["processed"] == 0
 
 
-def test_run_pipeline_refine_calls_claude(db: Path):
+def test_run_pipeline_refine_true_still_skips_claude(db: Path):
     _insert_completed_email(db, email_id=1)
-    claude_labels = {
-        "urgency": 4, "owner": "Front Desk", "category": "General inquiry",
-        "status": "New", "sentiment": "Neutral",
-        "missing_info": False, "reply_required": True, "escalation_required": False,
-    }
     with patch("outlook_dashboard.training_pipeline._upload_example", return_value=(True, "")):
-        with patch("outlook_dashboard.training_pipeline._label_with_claude", return_value=claude_labels) as mock_claude:
-            with patch("outlook_dashboard.training_pipeline.get_settings") as mock_settings:
-                mock_settings.return_value = MagicMock(
-                    anthropic_configured=True,
-                    anthropic_api_key="test-key",
-                    anthropic_model="claude-opus-4-7",
-                    database_path=db,
-                )
-                result = run_pipeline(batch_size=5, refine=True, db_path=db)
-    assert mock_claude.call_count == 1
+        with patch("outlook_dashboard.training_pipeline._label_with_claude") as mock_claude:
+            result = run_pipeline(batch_size=5, refine=True, db_path=db)
+    mock_claude.assert_not_called()
     assert result["uploaded"] == 1
+    assert result["external_ai_used"] is False
 
 
 def test_run_pipeline_refine_false_skips_claude(db: Path):

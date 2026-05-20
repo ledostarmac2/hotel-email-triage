@@ -42,6 +42,7 @@ labeling/ChatGPT/*.json
 build/
 dist/
 installer/output/
+installer/*.exe
 *.spec
 
 # Generated at build time â€” not meaningful if committed from dev machine

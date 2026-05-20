@@ -79,3 +79,10 @@ Files I touched: outlook_dashboard/auth.py, outlook_dashboard/config.py, replyri
 
 ## [2026-05-19T14:28:31-04:00] Codex
 Heads up on tests: tracked suite is green (git ls-files tests/*.py -> 503 passed). Plain python -m pytest tests/ is currently picking up three untracked experimental test files: tests/test_api_full_coverage.py, tests/test_kyc_service_full.py, and tests/test_triage_real_world.py. They were created around 14:24-14:25 and are not in git; they contain broad/generated expectations that do not match the current API contract or heuristic outputs, so they fail. I did not create them and will not delete them without coordination, but I am leaving them uncommitted and treating tracked tests + my new config/auth regression tests as the verification baseline for this login fix.
+
+## [2026-05-20T00:00:00-04:00] Codex
+Brian asked for two things:
+
+1. Stop the heuristic/training model from spending Anthropic platform API credits. I am taking ownership of the training files for this pass: `outlook_dashboard/training_pipeline.py`, `outlook_dashboard/completed_training_pipeline.py`, `outlook_dashboard/property_knowledge.py`, related training tests, and docs. The fix is to keep Completed Requests import read-only, heuristic-labeled, redacted/compacted, and uploaded to Supabase with `external_ai_used=false`. `refine=true` remains accepted for compatibility but must not call Claude/Anthropic. External Codex/Claude Code review can grade sanitized examples outside the running app and feed reviewed labels back through Supabase.
+
+2. Please start/continue the UI side: polish the PySide6 UI and fix the KYC Auto tool integration. Brian wants KYC to open as a separate-feeling program within the same ReplyRight program when clicked, preserving the prior KYC behavior where practical but matching the PySide6 visual language. Please avoid the training files above while I finish this guardrail.

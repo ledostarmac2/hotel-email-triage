@@ -1,6 +1,6 @@
 # Deployment
 
-Last updated: 2026-05-18
+Last updated: 2026-05-20
 
 ## Active Deployment Shape
 
@@ -18,15 +18,88 @@ Installed executable:
 ReplyRight.exe
 ```
 
-The EXE contains:
+Runtime shape:
 
-- `run_desktop.py`
-- FastAPI app in `outlook_dashboard/`
-- static dashboard assets
-- pywebview desktop shell
-- bundled Python dependencies collected by PyInstaller
+```text
+ReplyRight.exe
+  -> run_desktop.py
+  -> FastAPI backend on 127.0.0.1
+  -> health-gated startup through /healthz
+  -> native PySide6 desktop shell
+  -> local SQLite data under the install data folder
+```
 
-Runtime data is written next to the executable under `dist\ReplyRight\data\` for packaged builds.
+The desktop shell must not use `QWebEngineView`, Electron, Tauri, pywebview, or another browser/WebView wrapper.
+
+## Fresh Windows Install
+
+The installer bundles the Python runtime application and PyInstaller-collected dependencies. A normal user should not need to install Python, pip, Node, or project dependencies.
+
+Fresh machine requirements:
+
+- Windows 10/11.
+- Classic Outlook for live Outlook COM inbox refresh.
+- Access to the configured shared mailbox, usually `NYCWA_Reservations`.
+- Network access for optional Supabase, SMTP invite/reset emails, AI providers, and GitHub update checks.
+
+Outlook remains read-only. ReplyRight reads/imports messages and writes local SQLite state; it does not send, move, delete, mark read, or categorize Outlook messages.
+
+## Installer Contract
+
+The Inno Setup installer is per-user by default and should avoid admin rights.
+
+Current contract:
+
+- `PrivilegesRequired=lowest`.
+- Default install directory: `%LOCALAPPDATA%\Programs\ReplyRight`.
+- Desktop shortcut is created under the current user's desktop only.
+- Runtime data, SQLite databases, logs, and local `.env` files are excluded from the installer payload.
+
+Do not change this to a Program Files/admin install unless there is a deliberate enterprise deployment decision.
+
+## User Onboarding
+
+Supabase Auth is the shared identity source when configured.
+
+Supported today:
+
+- First admin seeding/repair from deployment config.
+- Admin user listing.
+- Admin-created invite.
+- Password reset by token.
+- Manual invite-link fallback when SMTP is not configured or send fails.
+
+Important limitation:
+
+- Invite/reset links are local app links (`http://127.0.0.1:<port>/reset-password?...`). They work best on the machine where the local ReplyRight backend is running. For broad multi-machine rollout, add a public redirect service, Supabase-hosted invite flow, or a temporary-password/on-first-login reset flow.
+
+SMTP:
+
+- Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_FROM` for invite/reset emails.
+- If SMTP is unavailable, admins can copy the returned `invite_url` from `/api/auth/invite`.
+
+## Email Source
+
+ReplyRight does not receive email itself.
+
+Current source of truth:
+
+```text
+Classic Outlook profile
+  -> shared mailbox/folder
+  -> read-only COM import
+  -> local SQLite
+  -> analysis and queue UI
+```
+
+Default config:
+
+```text
+OUTLOOK_EXPORT_MAILBOX=NYCWA_Reservations
+OUTLOOK_EXPORT_FOLDER=Inbox
+```
+
+Microsoft Graph code exists but is not the active path because tenant/enterprise access can block it. A future centralized mailbox worker would require a separate approved Graph app registration or another server-side mail ingestion design.
 
 ## Local Build
 
@@ -37,81 +110,63 @@ From the repository root:
 .\installer\build_installer.ps1
 ```
 
-`build_exe.ps1` builds the internal PyInstaller onedir app at `dist\ReplyRight\ReplyRight.exe`.
+`build_exe.ps1` builds the internal PyInstaller onedir app at:
 
-`installer\build_installer.ps1` builds the Inno Setup installer at `installer\output\ReplyRightSetup-v{version}.exe`.
+```text
+dist\ReplyRight\ReplyRight.exe
+```
+
+`installer\build_installer.ps1` builds:
+
+```text
+installer\output\ReplyRightSetup-v{version}.exe
+```
 
 The setup installer is the artifact users should download. The onedir EXE is an internal build input.
 
-Important dynamic dependency collection includes:
+## Smoke Tests
 
-- `outlook_dashboard`
-- `anthropic`
-- `pythonnet`
-- `pywin32` / COM support
-- `sklearn`
-- `scikit_learn`
-- `dateparser`
-- `joblib`
-- `threadpoolctl`
-
-Keep the sklearn/dateparser/joblib/threadpoolctl flags in the same PyInstaller collection block.
-
-## Runtime Requirements
-
-- Windows 10/11
-- WebView2 runtime
-- Classic Outlook for direct COM import
-- `pywin32` bundled for direct Outlook import
-- Network access for optional Supabase, OpenAI, Google AI, Claude, GitHub releases, and Microsoft Graph
-
-If Outlook COM is unavailable, the legacy VBA macro path remains a fallback.
-
-## Local Run
+Packaged health smoke:
 
 ```powershell
-python run_desktop.py
+dist\ReplyRight\ReplyRight.exe --health-smoke
 ```
 
-Default URL:
+Source tests:
+
+```powershell
+python -m pytest tests/test_desktop_startup.py tests/test_installer_contract.py tests/test_api_workflow_pytest.py -q --timeout=60
+```
+
+Manual clean-machine smoke:
+
+1. Install `ReplyRightSetup-v{version}.exe` as a normal user.
+2. Confirm no UAC prompt appears.
+3. Launch from Start Menu or desktop shortcut.
+4. Confirm the PySide6 login window opens only after backend health succeeds.
+5. Sign in with the seeded/admin account.
+6. Open Admin diagnostics and verify Supabase, SMTP, Outlook, classifier, and version status.
+7. Click Refresh Inbox with classic Outlook open and the shared mailbox available.
+8. Confirm imported messages render and no Outlook messages are mutated.
+
+## Diagnostics
+
+Admins can call:
 
 ```text
-http://127.0.0.1:8000
+GET /api/admin/deployment/diagnostics
 ```
 
-## Smoke Test The EXE
+The response intentionally contains no secrets. It reports:
 
-Start the EXE in the background or off-screen:
-
-```powershell
-Start-Process "dist\ReplyRight\ReplyRight.exe"
-Start-Sleep -Seconds 8
-Invoke-RestMethod http://127.0.0.1:8000/healthz
-```
-
-Expected:
-
-```text
-ok = true
-```
-
-The desktop launcher also checks `/healthz` before opening pywebview. If startup fails, it should show a controlled ReplyRight error dialog with the startup log path. It must not open an external browser fallback or show a localhost refused-to-connect page.
-
-Stop the process after testing if it is not needed:
-
-```powershell
-Get-Process ReplyRight -ErrorAction SilentlyContinue | Stop-Process
-```
-
-## Training Pipeline Packaging Check
-
-Confirm the packaged SQLite database has the training log table:
-
-```powershell
-python -c "import sqlite3; c=sqlite3.connect(r'dist\ReplyRight\data\hotel_email_triage.sqlite3'); print(c.execute(\"SELECT name FROM sqlite_master WHERE type='table' AND name='training_pipeline_log'\").fetchall())"
-```
-
-Trigger a training run through the API only after authenticated admin login. Do not print passwords, cookies, or service-role keys.
+- app version/commit/build date
+- Python/runtime/frozen state
+- database path/existence
+- Supabase/SMTP/Graph/provider configured booleans
+- Outlook COM/platform status
+- mailbox/folder names
+- local classifier version/targets
+- runtime warnings
 
 ## GitHub Release Path
 
@@ -125,72 +180,48 @@ ReplyRightSetup-v{version}.exe
 
 Raw `dist\ReplyRight\ReplyRight.exe` must not be attached as the default user download.
 
-Typical release flow:
-
-```powershell
-git tag v0.1.1
-git push origin v0.1.1
-```
-
 Before tagging:
 
-- Run tests.
+- Run targeted tests.
 - Build locally.
 - Build the installer locally.
-- Run packaged health smoke: `dist\ReplyRight\ReplyRight.exe --health-smoke`.
-- Smoke-test packaged `/healthz`.
+- Run `dist\ReplyRight\ReplyRight.exe --health-smoke`.
 - Confirm installer output exists.
-- Confirm `docs/CURRENT_STATE.md` and `docs/HANDOFF.md` are current.
+- Confirm docs and handoff are current.
 - Confirm ignored runtime files are not staged.
-
-## Installer
-
-The Inno Setup installer files live under:
-
-```text
-installer/replyright_setup.iss
-installer/build_installer.ps1
-```
-
-Use them after the onedir app build is known good. The installer bundles `dist\ReplyRight\*` and excludes local `.env`, runtime data, DBs, and logs. See `docs/INSTALLER_STRATEGY.md`.
-
-## Auto-Updater
-
-`outlook_dashboard/updater.py` checks GitHub releases for updates. Update diagnostics and release notes should be improved before broader rollout.
 
 ## Troubleshooting
 
 If the EXE fails to launch:
 
-1. Check `dist\ReplyRight\data\replyright-startup.log`.
-2. Confirm WebView2 is installed.
+1. Check `data\replyright-startup.log` under the installed app folder.
+2. Run `ReplyRight.exe --health-smoke`.
 3. Confirm bundled dependencies were collected.
-4. Delete partial `.vendor` or build temp folders if dependency installation short-circuited.
-5. Re-run `.\build_exe.ps1`.
-6. Rebuild the installer with `.\installer\build_installer.ps1`.
+4. Rebuild with a clean `.vendor` if packaging looks stale.
 
 If Outlook refresh fails:
 
 1. Confirm classic Outlook is installed and open.
-2. Confirm the shared mailbox/folder exists: `NYCWA_Reservations > Inbox`.
-3. Confirm `pywin32` was bundled.
-4. Use the VBA macro fallback only when direct COM import is unavailable.
+2. Confirm the shared mailbox/folder exists.
+3. Confirm the signed-in Windows/Outlook user has access.
+4. Confirm bundled `pywin32` is present.
+5. Use the VBA macro fallback only when direct COM import is unavailable.
 
-If classifier imports fail in the EXE:
+If invites do not email:
 
-1. Confirm PyInstaller collects sklearn/scikit_learn/joblib/threadpoolctl.
-2. Confirm hidden imports for sklearn C extensions remain in `build_exe.ps1`.
-3. Rebuild and rerun `/api/health`.
+1. Check Admin diagnostics for `smtp_configured`.
+2. Confirm SMTP credentials outside ReplyRight.
+3. Use the manual `invite_url` fallback for a beta test.
+4. For multi-machine production rollout, implement a public/Supabase-hosted invite redirect flow.
 
 ## Do Not Commit or Bundle
 
-- `dist\ReplyRight\ReplyRight.exe`
+- `.env`
 - `dist\ReplyRight\.env`
-- `dist\ReplyRight\data\*`
 - local SQLite databases
+- runtime data
 - startup logs
-- build folders
-- vendored dependencies
-- secrets (e.g., `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`)
-
-**Never commit the service-role key or provider API keys to source code.** ReplyRight must not ask end users for API keys in the app. Deployment credentials are supplied through ignored local files, machine environment variables, or GitHub Actions secrets during the release workflow. The local `.env` must not be committed.
+- `.msg` exports
+- packaged EXE or installer binaries
+- service-role keys
+- provider API keys

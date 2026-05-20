@@ -110,6 +110,32 @@ def test_export_inbox_returns_clear_503_on_non_windows(app_client: TestClient, m
     assert response.json()["detail"] == "Outlook COM integration is Windows-only."
 
 
+def test_admin_invite_returns_manual_link_when_smtp_unconfigured(app_client: TestClient) -> None:
+    response = app_client.post("/api/auth/invite", json={"email": "agent@example.com"})
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["email_sent"] is False
+    assert payload["manual_delivery_required"] is True
+    assert payload["invite_url"].startswith("http://testserver/reset-password?token=")
+    assert "user_id" in payload
+
+
+def test_admin_deployment_diagnostics_are_safe_and_useful(app_client: TestClient) -> None:
+    response = app_client.get("/api/admin/deployment/diagnostics")
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["app"]["native_shell"] == "PySide6"
+    assert payload["storage"]["database_exists"] is True
+    assert payload["services"]["smtp_configured"] is False
+    assert payload["services"]["supabase_configured"] is False
+    assert payload["outlook"]["mailbox"] == "NYCWA_Reservations"
+    assert "password" not in str(payload).lower()
+    assert "service_role" not in str(payload).lower()
+
+
 def test_auth_rate_limit_returns_429(tmp_path, monkeypatch) -> None:
     db_path = tmp_path / "rate-limit.sqlite3"
     monkeypatch.setenv("SQLITE_DB_PATH", str(db_path))

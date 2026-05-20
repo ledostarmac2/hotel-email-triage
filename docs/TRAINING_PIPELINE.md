@@ -1,35 +1,35 @@
 # Training Pipeline
 
-Last updated: 2026-05-18
+Last updated: 2026-05-20
 
 ## Purpose
 
-ReplyRight's training pipeline turns completed local emails into privacy-preserving, labeled training examples for the local classifier.
+ReplyRight's training pipeline turns completed emails into privacy-preserving, labeled training examples for the local classifier.
 
-The default pipeline is zero-credit. It uses labels already stored in local `email_analysis`. Claude refinement is optional, admin-explicit, and only applies to heuristic-only rows when `refine=true`.
+The in-app pipeline is zero-credit. It uses local heuristic or existing `email_analysis` labels, redacts and compacts the latest message, uploads sanitized records to Supabase, and leaves human/agent review as the quality gate.
 
 ## Runtime Components
 
-- `outlook_dashboard/training_pipeline.py` builds and uploads sanitized training examples.
+- `outlook_dashboard/training_pipeline.py` exports completed local email rows.
+- `outlook_dashboard/completed_requests_importer.py` reads Outlook "Completed Requests" through read-only COM.
+- `outlook_dashboard/completed_training_pipeline.py` imports completed requests, applies heuristic labels, and uploads sanitized examples.
 - `outlook_dashboard/redaction.py` removes payment-like and sensitive identifiers.
-- `outlook_dashboard/database.py` lists eligible completed emails and writes `training_pipeline_log`.
-- `outlook_dashboard/main.py` exposes admin endpoints.
-- `docs/supabase_schema.sql` defines Supabase `training_examples`.
-- `outlook_dashboard/local_classifier.py` trains from human-reviewed examples.
+- `outlook_dashboard/local_classifier.py` trains from human-reviewed Supabase examples.
 
 ## Data Flow
 
 ```text
-Completed local email
-  -> list_unprocessed_completed_emails()
-  -> latest_message_text()
+Completed local email or Completed Requests folder
+  -> latest-message cleanup
+  -> local heuristic/existing analysis labels
   -> redact_sensitive_text()
-  -> subject token extraction
-  -> label mapping from existing email_analysis
-  -> optional Claude refinement if refine=True
+  -> compact subject tokens + body_redacted
   -> upload to Supabase training_examples with service-role key
-  -> log_training_example() in local SQLite
+  -> human or agent-assisted review
+  -> train local classifier from reviewed examples
 ```
+
+ReplyRight training endpoints do not call Claude/Anthropic, OpenAI, or Google AI.
 
 ## Privacy Contract
 
@@ -70,10 +70,10 @@ Important columns:
 
 ## Admin Endpoints
 
-Current admin endpoints include:
-
 - `POST /api/admin/training/run`
+- `POST /api/admin/training/import-completed-requests`
 - `GET /api/admin/training/status`
+- `GET /api/admin/training/completed-requests/status`
 - `GET /api/admin/training/examples`
 - `PATCH /api/admin/training/examples/{id}/review`
 - `POST /api/admin/classifier/train`
@@ -95,23 +95,21 @@ Invoke-WebRequest -Uri http://127.0.0.1:8000/login -Method POST -WebSession $ses
 Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/admin/training/run?batch_size=50" -Method POST -WebSession $session
 ```
 
+Completed Requests import:
+
+```powershell
+Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/admin/training/import-completed-requests" -Method POST -WebSession $session -ContentType "application/json" -Body (@{
+  mailbox_name = "NYCWA_Reservations"
+  folder_name = "Completed Requests"
+  batch_size = 50
+} | ConvertTo-Json)
+```
+
 Do not print passwords, cookies, or service-role keys.
 
-## Claude Refinement
+## Agent-Assisted Review
 
-`refine=false`:
-
-- Uses existing labels.
-- Zero AI credit usage.
-- Default and preferred mode.
-
-`refine=true`:
-
-- May call Claude for heuristic-only emails.
-- Must remain admin-explicit.
-- Should only run on redacted/latest-message text.
-
-Claude must not be called during bulk Refresh Inbox.
+Brian may use Codex or Claude Code outside the running app to inspect sanitized examples and grade labels. Those reviewed labels should be written back through the review/Supabase workflow. ReplyRight itself should not spend Anthropic platform credits for training.
 
 ## Human Review
 
@@ -132,8 +130,7 @@ Human review should prioritize:
 Targeted tests:
 
 ```powershell
-python -m pytest tests/test_training_pipeline.py -v
-python -m pytest tests/test_redaction.py -v
+python -m pytest tests/test_training_pipeline.py tests/test_completed_training_pipeline.py tests/test_redaction.py -v
 ```
 
 End-to-end packaged smoke checks:
@@ -147,5 +144,5 @@ End-to-end packaged smoke checks:
 ## Known Gaps
 
 - Enough human-reviewed examples are required before the classifier can train.
-- The pipeline currently exports from completed local email rows; broader historical import workflows remain future work.
-- `dateparser` is now listed in the active dependency file.
+- Broader historical import workflows remain future work beyond Completed Requests.
+- Agent-reviewed label import ergonomics can be improved.

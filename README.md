@@ -15,7 +15,7 @@ outlook_dashboard/
 run_desktop.py
 ```
 
-The desktop build is a PyInstaller-packaged FastAPI server inside a pywebview/WebView2 window. The default local URL is:
+The desktop build is a PyInstaller-packaged FastAPI server with a native PySide6 shell. The backend health check runs on:
 
 ```text
 http://127.0.0.1:8000
@@ -31,7 +31,7 @@ The `app/` directory is an inactive Next.js scaffold. Do not treat it as the act
 - Uses Supabase Auth for login/session validation and Supabase tables for shared feedback, approved rules, known senders, prompt versions, and training examples.
 - Runs deterministic triage and local classifier prediction where available.
 - Uses OpenAI for bulk Refresh Inbox classification when configured, Google AI as refresh fallback, and local deterministic triage when external AI is unavailable.
-- Uses Claude only for explicit single-email Analyze/AI Suggestion actions and optional admin-explicit training refinement.
+- Uses Claude only for explicit single-email Analyze/AI Suggestion actions.
 - Redacts payment-like and sensitive identifiers before external AI calls or training export.
 - Provides admin tools for training pipeline runs, human review of training examples, local classifier training, prompt management, users, rules, and diagnostics.
 
@@ -87,15 +87,18 @@ The app does not seed mock/demo messages in the active dashboard path. Refresh I
 
 ```powershell
 .\build_exe.ps1
+.\installer\build_installer.ps1
 ```
 
 Output:
 
 ```text
-dist\ReplyRight.exe
+dist\ReplyRight\ReplyRight.exe
 ```
 
-The EXE starts the local FastAPI server inside a standalone desktop window. Runtime data, copied secrets, logs, and the EXE binary are ignored by git.
+The EXE starts the local FastAPI server, waits for `/healthz`, then opens the native PySide6 desktop shell. Runtime data, copied secrets, logs, and packaged binaries are ignored by git.
+
+User-facing releases should distribute `installer\output\ReplyRightSetup-v{version}.exe`. The installer is per-user/no-admin and installs under `%LOCALAPPDATA%\Programs\ReplyRight`.
 
 ## Training Pipeline
 
@@ -112,7 +115,7 @@ completed local email
   -> training_pipeline_log entry in SQLite
 ```
 
-`refine=true` may call Claude for heuristic-only rows and should only be used from explicit admin action.
+`refine=true` is retained for backwards compatibility but does not call Claude/Anthropic.
 
 The local classifier trains from human-reviewed Supabase examples and stores model artifacts in local SQLite.
 

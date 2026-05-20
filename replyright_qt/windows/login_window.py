@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import os
+import sys
+
 from PySide6.QtCore import QSettings, Qt, Signal
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QFrame,
@@ -33,6 +36,10 @@ class LoginWindow(QWidget):
         self.setObjectName("login-root")
         self.setWindowTitle("ReplyRight - Sign In")
         self.setMinimumSize(520, 560)
+        _base = sys._MEIPASS if getattr(sys, "frozen", False) else os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        self._icon_path = os.path.join(_base, "outlook_dashboard", "static", "replyright.ico")
+        if os.path.exists(self._icon_path):
+            self.setWindowIcon(QIcon(self._icon_path))
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -54,9 +61,19 @@ class LoginWindow(QWidget):
         card_layout.setContentsMargins(38, 36, 38, 34)
         card_layout.setSpacing(12)
 
-        brand_mark = QLabel("RR")
-        brand_mark.setObjectName("login-mark")
+        brand_mark = QLabel()
         brand_mark.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        if os.path.exists(self._icon_path):
+            px = QPixmap(self._icon_path).scaled(
+                52, 52,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            brand_mark.setPixmap(px)
+            brand_mark.setFixedSize(52, 52)
+        else:
+            brand_mark.setText("RR")
+            brand_mark.setObjectName("login-mark")
 
         title = QLabel("ReplyRight")
         title.setObjectName("login-title")

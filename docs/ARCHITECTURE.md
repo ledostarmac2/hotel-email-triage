@@ -49,7 +49,7 @@ Older root-level planning files are historical unless `docs/CURRENT_STATE.md` sa
 PyInstaller ReplyRight.exe
   -> run_desktop.py
   -> FastAPI app in outlook_dashboard/main.py
-  -> native PySide6 Qt desktop shell
+  -> health-gated native PySide6 Qt desktop shell
   -> local JSON API at http://127.0.0.1:8000
   -> SQLite runtime DB under data/
   -> optional Outlook COM, Microsoft Graph, Supabase, OpenAI, Google AI, Claude
@@ -110,6 +110,8 @@ Dashboard login uses Supabase Auth whenever Supabase is configured. `auth.py` us
 The `rr_session` cookie stores access and refresh tokens in an HttpOnly cookie. `_AuthMiddleware` validates or refreshes the token for protected routes.
 
 For no-key development and local-first continuity, `auth.py` still supports local SQLite users and sessions only when Supabase is not configured. Once Supabase URL and anon key are present, password login is Supabase-authoritative and does not silently accept local SQLite credentials.
+
+Admin-created invites are the current onboarding model. SMTP can send invite/reset emails; when SMTP is unavailable or sending fails, the invite endpoint returns a manual local invite URL for beta use. A future broad multi-machine rollout should replace local reset links with a public/Supabase-hosted redirect or equivalent centralized invite flow.
 
 ## Persistence
 
@@ -207,10 +209,11 @@ Single-email Analyze/AI Suggestion:
 - Claude/Anthropic only, when configured.
 - If Claude is unavailable, the UI should show a clear error/fallback state rather than treating refresh OpenAI as the same feature.
 
-Training refinement:
+Training:
 
-- The default pipeline is zero-credit and uses existing analysis labels.
-- `refine=true` may call Claude for heuristic-only completed emails and must remain admin-explicit.
+- The in-app training pipelines are zero-credit and use existing analysis labels or local heuristics.
+- `refine=true` is retained only as a backwards-compatible API flag and must not call Claude/Anthropic.
+- Codex/Claude Code style agent-assisted grading can happen outside the running app, then reviewed labels can be written back through Supabase.
 
 ## Training Pipeline
 
@@ -222,7 +225,6 @@ completed local email
   -> redact_sensitive_text()
   -> subject tokenization
   -> label mapping from existing analysis
-  -> optional Claude refinement only when refine=True
   -> Supabase training_examples upload with service-role key
   -> training_pipeline_log entry in SQLite
 ```
@@ -246,6 +248,8 @@ Admin actions should remain protected and auditable.
 ## Build And Packaging
 
 `build_exe.ps1` packages `run_desktop.py` with PyInstaller, embeds the ReplyRight icon, collects project modules and important dynamic dependencies, and attempts to create Desktop and Start Menu shortcuts.
+
+The Inno Setup installer is per-user/no-admin by default. It installs under `%LOCALAPPDATA%\Programs\ReplyRight`, uses `PrivilegesRequired=lowest`, and should not install to Program Files unless a future enterprise deployment decision changes that.
 
 Important bundled/dynamic dependency areas:
 

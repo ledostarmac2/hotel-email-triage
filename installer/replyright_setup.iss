@@ -1,6 +1,6 @@
 #define MyAppName "ReplyRight"
 #ifndef MyAppVersion
-  #define MyAppVersion "0.1.3"
+  #define MyAppVersion "0.2.0"
 #endif
 #define MyAppPublisher "Waldorf Astoria New York"
 #define MyAppExeName "ReplyRight.exe"
@@ -21,7 +21,6 @@ Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=lowest
-PrivilegesRequiredOverridesAllowed=dialog
 UninstallDisplayIcon={app}\{#MyAppExeName}
 ArchitecturesInstallIn64BitMode=x64
 
@@ -37,8 +36,7 @@ Source: "sample.env"; DestDir: "{app}"; DestName: "sample.env"; Flags: ignorever
 
 [Icons]
 Name: "{group}\ReplyRight"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"
-Name: "{commondesktop}\ReplyRight"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; Tasks: desktopicon; Check: IsAdminInstallMode
-Name: "{userdesktop}\ReplyRight"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; Tasks: desktopicon; Check: not IsAdminInstallMode
+Name: "{userdesktop}\ReplyRight"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch ReplyRight"; Flags: nowait postinstall skipifsilent
@@ -46,8 +44,5 @@ Filename: "{app}\{#MyAppExeName}"; Description: "Launch ReplyRight"; Flags: nowa
 [Code]
 function GetDefaultDir(Param: String): String;
 begin
-  if IsAdminInstallMode then
-    Result := ExpandConstant('{autopf}\ReplyRight')
-  else
-    Result := ExpandConstant('{localappdata}\Programs\ReplyRight');
+  Result := ExpandConstant('{localappdata}\Programs\ReplyRight');
 end;

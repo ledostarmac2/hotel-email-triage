@@ -35,8 +35,8 @@ The current desktop architecture is:
 PyInstaller Windows EXE
   -> run_desktop.py
   -> FastAPI server in outlook_dashboard/main.py
-  -> pywebview / WebView2 desktop shell
-  -> http://127.0.0.1:8000 UI
+  -> health-gated native PySide6 desktop shell
+  -> local API at http://127.0.0.1:8000
   -> SQLite + Supabase + Outlook COM/Graph + optional AI APIs
 ```
 
@@ -203,7 +203,7 @@ Supabase-approved rules sit above local prediction as explicit business logic. R
 
 ### Optional AI Fallback
 
-OpenAI and Google AI support refresh classification. Claude is reserved for explicit single-email analysis/drafting and admin-explicit training refinement. External AI is not required for baseline classification.
+OpenAI and Google AI support refresh classification. Claude is reserved for explicit single-email analysis/drafting. In-app training pipelines are zero-credit and do not call Anthropic, OpenAI, or Google AI. External AI is not required for baseline classification.
 
 ## 5. Roadmap By Phase
 

@@ -29,6 +29,16 @@ def test_inno_installer_bundles_onedir_app_and_excludes_runtime_secrets() -> Non
     assert "*.log" in iss
 
 
+def test_inno_installer_is_per_user_and_no_admin_override() -> None:
+    iss = Path("installer/replyright_setup.iss").read_text(encoding="utf-8")
+    assert "PrivilegesRequired=lowest" in iss
+    assert "PrivilegesRequiredOverridesAllowed" not in iss
+    assert "{localappdata}\\Programs\\ReplyRight" in iss
+    assert "{autopf}" not in iss
+    assert "{commondesktop}" not in iss
+    assert "{userdesktop}\\ReplyRight" in iss
+
+
 def test_inno_installer_version_is_overridable() -> None:
     iss = Path("installer/replyright_setup.iss").read_text(encoding="utf-8")
     assert "#ifndef MyAppVersion" in iss

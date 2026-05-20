@@ -1,5 +1,12 @@
 # AI Change Log
 
+## 2026-05-20 - Zero-credit training pipeline guardrail
+
+- Removed in-app Claude/Anthropic calls from the Completed Requests training pipeline.
+- Kept `refine=true` as a backwards-compatible training API flag, but it no longer triggers Claude labeling.
+- Completed Requests import now uses local heuristic labels, redacts/compacts examples, uploads to Supabase, and reports `external_ai_used=false`.
+- Added regression coverage so training remains zero-credit even when Anthropic credentials exist.
+
 ## 2026-05-19 - KYC operations backend integration
 
 - Added `outlook_dashboard/kyc/` as the backend foundation for an integrated KYC Inspections module.

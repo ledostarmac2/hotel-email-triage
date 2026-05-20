@@ -1,11 +1,22 @@
 # Current State
 
-Last updated: 2026-05-19 (massive test expansion + bug fix)
+Last updated: 2026-05-20 (deployment hardening)
 
 ## Status
 
 - Product name is ReplyRight.
 - Current runnable app is `outlook_dashboard/` plus `run_desktop.py`.
+- 2026-05-20 deployment hardening:
+  - Installer is now hard per-user/no-admin: `%LOCALAPPDATA%\Programs\ReplyRight`, `PrivilegesRequired=lowest`, no admin override, and current-user desktop shortcuts only.
+  - Admin invite now creates a manual `invite_url` fallback instead of failing when SMTP is unavailable or email delivery errors.
+  - Added authenticated admin deployment diagnostics at `/api/admin/deployment/diagnostics` with safe version/runtime/Supabase/SMTP/Outlook/classifier readiness fields and no secrets.
+  - Updated deployment docs and sample installer config to describe PySide6, invite/onboarding limits, SMTP, Outlook as the email source, and clean Windows install expectations.
+- 2026-05-20 training guardrail:
+  - Pulled `main`; repo was already up to date.
+  - Completed Requests training import no longer calls Claude Sonnet/Anthropic when an API key exists.
+  - `POST /api/admin/training/import-completed-requests` now reads Outlook read-only, applies local heuristic labels, redacts/compacts examples, uploads to Supabase `training_examples`, and returns `external_ai_used=false`.
+  - `POST /api/admin/training/run?refine=true` keeps the parameter for compatibility but does not call Claude/Anthropic; it exports existing local labels only.
+  - Agent-assisted grading should happen outside the running app via Codex/Claude Code and flow back through Supabase/human review, so training improves the local classifier without burning API credits.
 - 2026-05-19 login incident repair:
   - Supabase Auth is authoritative when `SUPABASE_URL` and `SUPABASE_KEY` are configured; local SQLite login is now only for unconfigured/no-key fallback.
   - Local PyInstaller onedir builds now look for the repo-root `.env` when `dist\ReplyRight\.env` is absent, so Brian's local test EXE can use the configured Supabase credentials without copying secrets into `dist`.
@@ -28,7 +39,7 @@ Last updated: 2026-05-19 (massive test expansion + bug fix)
   - Old generated binaries such as `dist2/ReplyRight.exe` and the temporary `new_dependencies.txt` handoff file are removed from tracking.
 - v0.1.0 is blocked as a user release because the downloaded app could show a WebView/Edge `127.0.0.1 refused to connect` page and the release path was not installer-first enough for real users.
 - v0.1.1 repair is now in source:
-  - `GET /healthz` is public and used by the desktop launcher before opening pywebview.
+  - `GET /healthz` is public and used by the desktop launcher before opening the PySide6 shell.
   - `run_desktop.py` waits up to 30 seconds for backend health before creating the window.
   - Browser fallback was removed; startup failure now shows a controlled ReplyRight error dialog with `replyright-startup.log`.
   - The launcher prefers configured `APP_PORT` and chooses a dynamic available port only if the preferred port is occupied.
@@ -72,7 +83,7 @@ Last updated: 2026-05-19 (massive test expansion + bug fix)
   - `build_exe.ps1` now captures pip vendor-install output under non-terminating PowerShell error handling and checks the real native exit code, preventing successful pip installs with dependency-warning stderr from aborting clean CI builds.
   - `.github/workflows/build.yml` now gives pytest a 60-second per-test timeout to reduce Windows runner flakiness.
   - `outlook_dashboard/hotel_entities.py` bounds fuzzy date parsing on oversized inputs and skips expensive full-text `dateparser.search_dates()` calls when no date-like token exists.
-- Documentation hardening pass completed: `README.md`, `AGENTS.md`, `docs/ARCHITECTURE.md`, `docs/ROADMAP.md`, `docs/TRAINING_PIPELINE.md`, `docs/CLASSIFIER.md`, `docs/SECURITY_AND_PRIVACY.md`, `docs/DEPLOYMENT.md`, `docs/OPERATIONS_GUIDE.md`, and `docs/FUTURE_ROADMAP_SUPABASE_ADAPTIVE_LEARNING.md` now describe the active FastAPI/pywebview app, inactive `app/` scaffold, experimental `replyright_kernel/`, training pipeline, local classifier, privacy boundaries, deployment workflow, and operator workflow.
+  - Documentation hardening pass completed: `README.md`, `AGENTS.md`, `docs/ARCHITECTURE.md`, `docs/ROADMAP.md`, `docs/TRAINING_PIPELINE.md`, `docs/CLASSIFIER.md`, `docs/SECURITY_AND_PRIVACY.md`, `docs/DEPLOYMENT.md`, `docs/OPERATIONS_GUIDE.md`, and `docs/FUTURE_ROADMAP_SUPABASE_ADAPTIVE_LEARNING.md` now describe the active FastAPI/PySide6 app, inactive `app/` scaffold, experimental `replyright_kernel/`, training pipeline, local classifier, privacy boundaries, deployment workflow, and operator workflow.
 - Phase 7 hotel domain intelligence layer is implemented and now used by `heuristic_analysis()` / `triage_email()` while keeping the modules themselves pure:
   - `outlook_dashboard/hotel_entities.py` exposes `extract_entities(subject, body, received_at=None)` for confirmation numbers, stay dates, nights, room category, rate code, guest counts, arrival window, and billing amounts.
   - `outlook_dashboard/travel_programs.py` exposes `detect_program(sender_email, body, signature=None)` for luxury travel program and advisor/agency detection.
@@ -131,7 +142,7 @@ Last updated: 2026-05-19 (massive test expansion + bug fix)
 
 ## Known Local Build/Launch Notes
 
-- Desktop launcher uses **pywebview** (`webview.start(gui="edgechromium")`). WebView2 runtime ships with Windows 10/11 (22H2+) but must be present on any machine running the EXE.
+- Desktop launcher starts FastAPI, waits for `/healthz`, then opens the native PySide6 shell. Do not reintroduce pywebview/WebView2 as the shell.
 - `run_desktop.py` does a pre-flight `import clr` check and raises a descriptive error if pythonnet is missing, rather than crashing natively with no log entry.
 - Startup logging is in `run_desktop.py`; packaged builds write to `dist\ReplyRight\data\replyright-startup.log`.
 - `build_exe.ps1` auto-skips `.venv` and `.build-venv` to find system Python (VS Code auto-activates project venvs). If `.vendor` exists but is empty/partial, delete it and rebuild — the existence check short-circuits pip install.
