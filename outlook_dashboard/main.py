@@ -49,11 +49,13 @@ from .database import (
     detect_rule_candidates,
     emails_without_analysis,
     get_email,
+    get_purgeable_email_ids,
     initialize_database,
     list_conversation_emails,
     list_emails,
     list_feedback_for_conversation,
     list_recent_triage_feedback,
+    purge_email_bodies,
     record_audit_event,
     record_sync_run,
     save_analysis,
@@ -849,6 +851,41 @@ def api_training_run(request: Request, batch_size: int = 10, refine: bool = Fals
     return result
 
 
+@app.post("/api/admin/training/purge-bodies")
+def api_purge_bodies(
+    request: Request,
+    min_age_days: int = Query(default=0, ge=0, description="Only purge emails received this many days ago or earlier"),
+    require_analyzed: bool = Query(default=True, description="Only purge emails with a completed analysis"),
+    dry_run: bool = Query(default=False, description="Report what would be purged without making changes"),
+) -> dict[str, object]:
+    """Null out email body_text and body_content for analyzed emails to free storage.
+
+    Part of the import→train→delete workflow. Safe to run repeatedly.
+    Returns the IDs purged and the total count.
+    """
+    if request.state.user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only.")
+    settings = get_settings()
+    ids = get_purgeable_email_ids(
+        min_age_days=min_age_days,
+        require_analyzed=require_analyzed,
+        db_path=settings.database_path,
+    )
+    if dry_run:
+        return {"dry_run": True, "purgeable_count": len(ids), "purgeable_ids": ids}
+    purged = purge_email_bodies(ids, db_path=settings.database_path)
+    record_audit_event(
+        action="training.bodies.purged",
+        actor_user_id=None,
+        actor_email=str(request.state.user["email"]),
+        entity_type="email_bodies",
+        entity_id=None,
+        metadata={"purged_count": purged, "min_age_days": min_age_days, "require_analyzed": require_analyzed},
+        db_path=settings.database_path,
+    )
+    return {"purged_count": purged, "purged_ids": ids, "dry_run": False}
+
+
 class CompletedRequestsImportBody(BaseModel):
     mailbox_name: str = Field(..., min_length=1, description="Outlook mailbox display name")
     folder_name: str = Field("Completed Requests", min_length=1)
@@ -1425,7 +1462,13 @@ def export_outlook_desktop_inbox() -> dict[str, object]:
 
 
 @app.post("/api/outlook-desktop/import-json")
-def import_outlook_desktop_json(payload: DesktopOutlookImport) -> dict[str, object]:
+def import_outlook_desktop_json(
+    payload: DesktopOutlookImport,
+    purge_after_analyze: bool = Query(
+        default=False,
+        description="Null out body_text/body_content after analysis (import→train→delete workflow)",
+    ),
+) -> dict[str, object]:
     settings = get_settings()
     messages = [_desktop_message_to_email(message, payload.mailbox, payload.folder) for message in payload.messages]
     result = _store_and_optionally_analyze(messages, settings, analyze=True)
@@ -1438,11 +1481,16 @@ def import_outlook_desktop_json(payload: DesktopOutlookImport) -> dict[str, obje
         analyzed_count=result["analyzed_count"],
         db_path=settings.database_path,
     )
+    purged_count = 0
+    if purge_after_analyze:
+        ids = get_purgeable_email_ids(require_analyzed=True, db_path=settings.database_path)
+        purged_count = purge_email_bodies(ids, db_path=settings.database_path)
     return {
         "source": "outlook_desktop",
         "mailbox": payload.mailbox,
         "folder": payload.folder,
         "fetched_count": len(messages),
+        "bodies_purged": purged_count,
         **result,
     }
 

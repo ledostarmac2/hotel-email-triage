@@ -131,6 +131,32 @@ def _download_training_examples(limit: int = 5000) -> list[dict]:
     return []
 
 
+def _load_local_examples(db_path=None, limit: int = 5000) -> list[dict]:
+    """Load training examples from local triage_feedback corrections.
+
+    Used when Supabase is unavailable. Returns zero examples rather than
+    raising, so callers can safely merge with Supabase results.
+    """
+    try:
+        from .database import get_local_training_examples
+        return get_local_training_examples(limit=limit, db_path=db_path)
+    except Exception as exc:
+        _log.warning("local_classifier: local example load error: %s", exc)
+    return []
+
+
+def _merge_examples(supabase: list[dict], local: list[dict]) -> list[dict]:
+    """Merge Supabase and local feedback examples, deduplicating by subject+body fingerprint."""
+    seen: set[str] = set()
+    merged: list[dict] = []
+    for ex in supabase + local:
+        key = f"{ex.get('subject_tokens', '')}|{ex.get('body_redacted', '')[:120]}"
+        if key not in seen:
+            seen.add(key)
+            merged.append(ex)
+    return merged
+
+
 def _make_input_text(example: dict) -> str:
     """Combine subject tokens + body with subject weighted 3x."""
     subject = str(example.get("subject_tokens") or "")
@@ -185,6 +211,9 @@ def _top_features(pipe, n: int = 15) -> dict[str, list[str]]:
 def train(db_path: Path | None = None) -> dict:
     """Download human-reviewed training examples and train/persist classifiers.
 
+    Falls back to local triage_feedback corrections when Supabase has fewer
+    than MIN_TRAINING_EXAMPLES. Merges both sources, deduplicating by content.
+
     Returns a detailed summary dict with accuracy metrics, label distributions,
     and feature importance snippets per target.
     """
@@ -193,7 +222,13 @@ def train(db_path: Path | None = None) -> dict:
     from sklearn.linear_model import LogisticRegression
     from sklearn.pipeline import Pipeline
 
-    examples = _download_training_examples()
+    supabase_examples = _download_training_examples()
+    local_examples = _load_local_examples(db_path=db_path)
+    examples = _merge_examples(supabase_examples, local_examples)
+    _log.info(
+        "local_classifier: %s supabase + %s local = %s merged examples",
+        len(supabase_examples), len(local_examples), len(examples),
+    )
     n = len(examples)
     if n < MIN_TRAINING_EXAMPLES:
         _log.info("local_classifier: only %s examples, need %s — skipping", n, MIN_TRAINING_EXAMPLES)
@@ -293,6 +328,8 @@ def train(db_path: Path | None = None) -> dict:
         "trained": bool(models),
         "version_id": version_id,
         "examples": n,
+        "examples_supabase": len(supabase_examples),
+        "examples_local": len(local_examples),
         "targets": targets_trained,
         "accuracy": {t: target_meta[t].get("cv_accuracy") for t in targets_trained},
         "label_distributions": {t: target_meta[t].get("label_distribution") for t in targets_trained},

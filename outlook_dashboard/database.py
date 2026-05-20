@@ -1380,3 +1380,94 @@ def list_property_knowledge(db_path: Path | None = None) -> list[dict[str, Any]]
     except sqlite3.OperationalError:
         return []
     return [dict(row) for row in rows]
+
+
+# ── Import→train→delete (body purge) ─────────────────────────────────────────
+
+def purge_email_bodies(email_ids: list[int], db_path: Path | None = None) -> int:
+    """Null out body_text and body_content for the given email IDs.
+
+    Safe to call repeatedly; returns the number of rows actually updated.
+    Used by the import→train→delete workflow to free storage once emails
+    have been analyzed and their training features extracted.
+    """
+    if not email_ids:
+        return 0
+    with managed_connect(db_path) as db:
+        placeholders = ",".join("?" * len(email_ids))
+        cur = db.execute(
+            f"UPDATE emails SET body_text = NULL, body_content = NULL WHERE id IN ({placeholders})",
+            email_ids,
+        )
+        return cur.rowcount
+
+
+def get_purgeable_email_ids(
+    min_age_days: int = 0,
+    require_analyzed: bool = True,
+    db_path: Path | None = None,
+) -> list[int]:
+    """Return email IDs whose body can be safely purged.
+
+    Criteria:
+    - body_text or body_content is not already NULL
+    - Optional: email has a completed analysis record
+    - Optional: received more than min_age_days ago
+    """
+    from .text_utils import utc_now_iso  # local import to avoid circular
+    clauses = ["(e.body_text IS NOT NULL OR e.body_content IS NOT NULL)"]
+    params: list[Any] = []
+    if require_analyzed:
+        clauses.append("EXISTS (SELECT 1 FROM email_analysis a WHERE a.email_id = e.id AND a.ai_summary IS NOT NULL)")
+    if min_age_days > 0:
+        clauses.append("e.received_datetime < datetime('now', ?)")
+        params.append(f"-{min_age_days} days")
+    where = " AND ".join(clauses)
+    with managed_connect(db_path) as db:
+        rows = db.execute(f"SELECT e.id FROM emails e WHERE {where}", params).fetchall()
+    return [row[0] for row in rows]
+
+
+def get_local_training_examples(limit: int = 5000, db_path: Path | None = None) -> list[dict[str, Any]]:
+    """Return training examples derived from local triage_feedback corrections.
+
+    Used as fallback when Supabase is unreachable. Joins feedback with emails and
+    analysis to produce the same schema as _download_training_examples().
+    Only includes feedback rows where a corrected_owner or corrected_status was set
+    (i.e., the human made a meaningful correction).
+    """
+    with managed_connect(db_path) as db:
+        rows = db.execute(
+            """
+            SELECT
+                e.subject,
+                e.body_text,
+                e.body_preview,
+                a.category         AS label_category,
+                a.urgency_score    AS label_urgency,
+                a.recommended_department_owner AS label_owner,
+                tf.corrected_owner AS corrected_owner,
+                tf.corrected_status AS corrected_status,
+                tf.summary_quality_rating,
+                tf.reply_quality_rating
+            FROM triage_feedback tf
+            JOIN emails e ON e.id = tf.email_id
+            LEFT JOIN email_analysis a ON a.email_id = tf.email_id
+            WHERE tf.corrected_owner IS NOT NULL
+               OR tf.corrected_status IS NOT NULL
+            ORDER BY tf.created_at DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+    results = []
+    for row in rows:
+        d = dict(row)
+        # Use corrected labels when available
+        if d.get("corrected_owner"):
+            d["label_owner"] = d["corrected_owner"]
+        d["body_redacted"] = d.get("body_text") or d.get("body_preview") or ""
+        d["subject_tokens"] = d.get("subject") or ""
+        d["labeling_engine"] = "local_feedback"
+        results.append(d)
+    return results

@@ -302,6 +302,24 @@ class ApiClient:
         resp = self._session.post(self._url("/api/admin/classifier/train"), timeout=120)
         return self._raise_for(resp)
 
+    def purge_email_bodies(
+        self,
+        min_age_days: int = 0,
+        require_analyzed: bool = True,
+        dry_run: bool = False,
+    ) -> dict:
+        """POST /api/admin/training/purge-bodies — free storage after import+train."""
+        resp = self._session.post(
+            self._url("/api/admin/training/purge-bodies"),
+            params={
+                "min_age_days": min_age_days,
+                "require_analyzed": str(require_analyzed).lower(),
+                "dry_run": str(dry_run).lower(),
+            },
+            timeout=30,
+        )
+        return self._raise_for(resp)
+
 
 class ApiWorker(QThread):
     """Generic QThread that runs a single ApiClient call and emits the result."""
