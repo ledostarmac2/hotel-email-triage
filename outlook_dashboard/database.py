@@ -242,6 +242,17 @@ def initialize_database(db_path: Path | None = None) -> None:
             );
             CREATE UNIQUE INDEX IF NOT EXISTS idx_tpl_email_id ON training_pipeline_log (email_id);
             CREATE INDEX IF NOT EXISTS idx_tpl_status ON training_pipeline_log (status);
+
+            CREATE TABLE IF NOT EXISTS training_bootstrap (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                subject_tokens TEXT NOT NULL,
+                body_redacted  TEXT NOT NULL,
+                label_urgency  INTEGER NOT NULL,
+                label_owner    TEXT NOT NULL,
+                label_category TEXT NOT NULL,
+                source         TEXT NOT NULL DEFAULT 'bootstrap',
+                created_at     TEXT NOT NULL
+            );
             """
         )
         db.executescript(
@@ -273,6 +284,18 @@ def initialize_database(db_path: Path | None = None) -> None:
         from .kyc.repository import ensure_kyc_schema
 
         ensure_kyc_schema(db)
+
+    # Seed bootstrap training examples on first run (no-op if already seeded)
+    try:
+        from .training_bootstrap_data import seed_bootstrap_examples
+        inserted = seed_bootstrap_examples(db_path)
+        if inserted:
+            import logging
+            logging.getLogger("outlook_dashboard.database").info(
+                "training_bootstrap: seeded %s labeled examples", inserted
+            )
+    except Exception:
+        pass
 
 
 def _ensure_column(db: sqlite3.Connection, table: str, column: str, definition: str) -> None:
@@ -1444,7 +1467,7 @@ def get_local_training_examples(limit: int = 5000, db_path: Path | None = None) 
                 e.body_text,
                 e.body_preview,
                 a.category         AS label_category,
-                a.urgency_score    AS label_urgency,
+                a.priority_level   AS raw_priority,
                 a.recommended_department_owner AS label_owner,
                 tf.corrected_owner AS corrected_owner,
                 tf.corrected_status AS corrected_status,
@@ -1460,9 +1483,12 @@ def get_local_training_examples(limit: int = 5000, db_path: Path | None = None) 
             """,
             (limit,),
         ).fetchall()
+    _priority_to_urgency = {"Low": 1, "Normal": 2, "High": 4, "Immediate": 5}
     results = []
     for row in rows:
         d = dict(row)
+        # Map priority_level text → numeric urgency label
+        d["label_urgency"] = _priority_to_urgency.get(d.pop("raw_priority", None) or "", 2)
         # Use corrected labels when available
         if d.get("corrected_owner"):
             d["label_owner"] = d["corrected_owner"]

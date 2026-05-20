@@ -66,16 +66,14 @@ def _save_models(models: dict, meta: dict, db_path: Path | None = None) -> None:
             )"""
         )
         now = utc_now_iso()
-        # Rotate current -> prev before overwriting
-        db.execute(
-            "INSERT OR IGNORE INTO app_kv (key, value, updated_at) VALUES (?, ?, ?)",
-            (_MODELS_KEY_PREV, b"", now),
-        )
-        db.execute(
-            "UPDATE app_kv SET value = (SELECT value FROM app_kv WHERE key = ?), updated_at = ? "
-            "WHERE key = ?",
-            (_MODELS_KEY, now, _MODELS_KEY_PREV),
-        )
+        # Rotate current → prev before overwriting (only if a current model exists)
+        existing = db.execute("SELECT value FROM app_kv WHERE key = ?", (_MODELS_KEY,)).fetchone()
+        if existing:
+            db.execute(
+                "INSERT INTO app_kv (key, value, updated_at) VALUES (?, ?, ?) "
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
+                (_MODELS_KEY_PREV, existing[0], now),
+            )
         for key, value in [(_MODELS_KEY, blob), (_META_KEY, meta_blob)]:
             db.execute(
                 "INSERT INTO app_kv (key, value, updated_at) VALUES (?, ?, ?) "
@@ -132,17 +130,22 @@ def _download_training_examples(limit: int = 5000) -> list[dict]:
 
 
 def _load_local_examples(db_path=None, limit: int = 5000) -> list[dict]:
-    """Load training examples from local triage_feedback corrections.
+    """Load training examples from local triage_feedback + bootstrap seed data.
 
-    Used when Supabase is unavailable. Returns zero examples rather than
-    raising, so callers can safely merge with Supabase results.
+    Returns zero examples rather than raising.
     """
+    results: list[dict] = []
     try:
         from .database import get_local_training_examples
-        return get_local_training_examples(limit=limit, db_path=db_path)
+        results.extend(get_local_training_examples(limit=limit, db_path=db_path))
     except Exception as exc:
-        _log.warning("local_classifier: local example load error: %s", exc)
-    return []
+        _log.warning("local_classifier: feedback example load error: %s", exc)
+    try:
+        from .training_bootstrap_data import get_bootstrap_examples
+        results.extend(get_bootstrap_examples(db_path=db_path))
+    except Exception as exc:
+        _log.warning("local_classifier: bootstrap example load error: %s", exc)
+    return results
 
 
 def _merge_examples(supabase: list[dict], local: list[dict]) -> list[dict]:
@@ -274,18 +277,25 @@ def train(db_path: Path | None = None) -> dict:
 
         # Base pipeline — CalibratedClassifierCV for better probability estimates
         base_lr = LogisticRegression(max_iter=600, C=1.0, class_weight="balanced", solver="lbfgs")
+        from collections import Counter as _Counter
+        min_class_size = min(_Counter(y).values())
         cv_count = min(5, max(2, len(y) // 20))
-        calibrated = CalibratedClassifierCV(base_lr, method="sigmoid", cv=cv_count)
+        # cv must not exceed the smallest class size; skip calibration when only 1 example/class
+        cv_count = min(cv_count, min_class_size)
+        use_calibration = cv_count >= 2
+        clf = CalibratedClassifierCV(base_lr, method="sigmoid", cv=cv_count) if use_calibration else base_lr
 
+        # min_df=1 when dataset is small so no tokens are discarded
+        min_df = 2 if len(x_filtered) >= 50 else 1
         pipe = Pipeline([
             ("tfidf", TfidfVectorizer(
                 max_features=8000,
                 ngram_range=(1, 3),
                 sublinear_tf=True,
-                min_df=2,
+                min_df=min_df,
                 strip_accents="unicode",
             )),
-            ("clf", calibrated),
+            ("clf", clf),
         ])
         pipe.fit(x_filtered, y)
 

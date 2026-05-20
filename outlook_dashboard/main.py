@@ -851,6 +851,20 @@ def api_training_run(request: Request, batch_size: int = 10, refine: bool = Fals
     return result
 
 
+@app.post("/api/admin/training/bootstrap")
+def api_training_bootstrap(request: Request) -> dict[str, object]:
+    """Seed the local classifier with labeled hotel-email examples (one-time, idempotent).
+
+    Inserts ~33 realistic hotel email scenarios so the classifier can make
+    useful predictions even before real feedback accumulates.
+    """
+    if request.state.user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only.")
+    from .training_bootstrap_data import seed_bootstrap_examples
+    inserted = seed_bootstrap_examples(db_path=get_settings().database_path)
+    return {"inserted": inserted, "already_seeded": inserted == 0}
+
+
 @app.post("/api/admin/training/purge-bodies")
 def api_purge_bodies(
     request: Request,
