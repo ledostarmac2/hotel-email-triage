@@ -902,7 +902,7 @@ def api_purge_bodies(
 
 class CompletedRequestsImportBody(BaseModel):
     mailbox_name: str = Field(..., min_length=1, description="Outlook mailbox display name")
-    folder_name: str = Field("Completed Requests", min_length=1)
+    folder_name: str = Field("Completed Request", min_length=1)
     batch_size: int = Field(50, ge=1, le=200)
 
 

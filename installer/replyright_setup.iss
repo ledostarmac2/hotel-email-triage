@@ -9,7 +9,11 @@
 AppId={{58E9D4F9-EC76-48C9-B899-3FA76F3FCF24}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
+AppVerName={#MyAppName} {#MyAppVersion}
 AppPublisher={#MyAppPublisher}
+AppPublisherURL=https://www.waldorfastorianewyork.com/
+AppSupportURL=https://www.waldorfastorianewyork.com/
+AppUpdatesURL=https://github.com/ledostarmac2/hotel-email-triage/releases
 DefaultDirName={code:GetDefaultDir}
 DefaultGroupName={#MyAppName}
 DisableDirPage=no
@@ -22,10 +26,21 @@ SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=lowest
 UninstallDisplayIcon={app}\{#MyAppExeName}
+UninstallDisplayName={#MyAppName}
+VersionInfoCompany={#MyAppPublisher}
+VersionInfoDescription=ReplyRight hotel reservations email triage
+VersionInfoProductName={#MyAppName}
+VersionInfoProductVersion={#MyAppVersion}
 ArchitecturesInstallIn64BitMode=x64
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
+
+[Messages]
+WelcomeLabel1=Welcome to the ReplyRight Setup Wizard
+WelcomeLabel2=This will install ReplyRight, the read-only hotel reservations email triage assistant, on your computer.
+FinishedHeadingLabel=ReplyRight is ready
+FinishedLabel=Setup has finished installing ReplyRight. You can launch it now or from the Start Menu shortcut.
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription: "Additional shortcuts:"; Flags: checkedonce

@@ -1,77 +1,118 @@
-# Training Folder - ReplyRight Completed Requests Pipeline
+# Training Folder — ReplyRight Completed Requests Pipeline
 
-This folder is shared between agents such as Codex and Claude Code.
+This folder is shared between all agents (Claude and Codex) and contains:
 
-- `README.md` - this file
-- `PROPERTY_KNOWLEDGE.md` - optional generated property knowledge notes
+- `README.md` — this file; describes how to trigger training
+- `PROPERTY_KNOWLEDGE.md` — **auto-generated**; property-specific entities extracted from completed email examples
 
-## What The In-App Pipeline Does
+---
 
-The Completed Requests pipeline imports emails from the Outlook "Completed Requests" folder and:
+## What this pipeline does
 
-1. Reads a batch from that folder through read-only Outlook COM.
-2. Runs local heuristic classification.
-3. Redacts and compacts each latest-message body.
-4. Stores sanitized training examples in Supabase `training_examples`.
-5. Marks Outlook EntryIDs as processed in local SQLite so reruns skip old rows.
+The Completed Requests pipeline imports emails from the **"Completed Requests"** Outlook folder (a sub-folder of the shared reservations inbox) and:
 
-It does not call Claude, Anthropic, OpenAI, Google AI, or any other paid AI API.
+1. Reads up to 50 emails per batch from that folder (read-only; never mutates Outlook)
+2. Runs PII redaction on each email body
+3. Dumps the email locally to `training/dumps/` as JSON files.
+4. The developer provides these JSON dumps to their AI Agent (Gemini/Claude in chat), who manually extracts property knowledge and training labels.
+5. The AI Agent manually rebuilds `PROPERTY_KNOWLEDGE.md` to avoid automated LLM API costs.
 
-## Agent-Assisted Grading
+---
 
-Brian may occasionally use Codex or Claude Code outside the running ReplyRight app to inspect sanitized examples, grade labels, and prepare reviewed training material. That work should be written back through the review/Supabase workflow. Do not wire ReplyRight itself to spend Anthropic platform credits for batch training.
+## How to trigger training
 
-## Admin API
+### Via the Admin API (preferred)
 
 ```http
 POST /api/admin/training/import-completed-requests
+Authorization: <session cookie>
 Content-Type: application/json
 
 {
-  "mailbox_name": "NYCWA_Reservations",
+  "mailbox_name": "Waldorf Reservations",
   "folder_name": "Completed Requests",
   "batch_size": 50
 }
 ```
 
-Response includes:
-
+Response:
 ```json
 {
   "imported": 47,
-  "labeled": 47,
-  "uploaded": 47,
-  "knowledge_items": 0,
-  "skipped": 0,
+  "labeled": 45,
+  "uploaded": 45,
+  "knowledge_items": 182,
+  "skipped": 2,
   "failed": 0,
-  "external_ai_used": false,
-  "labeling_mode": "heuristic"
+  "folder": "Completed Requests",
+  "mailbox": "Waldorf Reservations"
 }
 ```
 
-## Other Endpoints
+### Check status
 
 ```http
 GET /api/admin/training/completed-requests/status
-GET /api/admin/training/property-knowledge
-POST /api/admin/training/run?batch_size=10
 ```
 
-`refine=true` is retained only for compatibility and does not call Claude.
+### Retrieve extracted property knowledge
 
-## Privacy Contract
+```http
+GET /api/admin/training/property-knowledge
+GET /api/admin/training/property-knowledge?item_type=sop
+GET /api/admin/training/property-knowledge?item_type=room_type
+GET /api/admin/training/property-knowledge?item_type=rate_plan
+```
 
-- Raw email bodies are not sent to external AI by the in-app training pipeline.
-- Full sender email addresses are never stored in training data. Only `sender_domain`.
-- Full subjects are never stored. Only `subject_tokens`.
-- Supabase receives redacted latest-message text, labels, and metadata.
+---
 
-## Key Source Files
+## Existing pipeline (emails already imported to the inbox)
+
+To process emails already imported to the main inbox with status=`Completed`:
+
+```http
+POST /api/admin/training/run?batch_size=10&refine=true
+```
+
+---
+
+## Privacy contract
+
+- Raw email bodies are **never** passed to Claude. Only `body_redacted` (output of `redact_sensitive_text()`).
+- Full sender email addresses are **never** stored in training data. Only `sender_domain`.
+- Full subjects are **never** stored. Only `subject_tokens` (stop-word-filtered keywords ≥4 chars).
+- No reservation numbers, payment details, or guest names leave the local machine in raw form.
+
+---
+
+## Key source files
 
 | File | Purpose |
-| --- | --- |
-| `outlook_dashboard/completed_requests_importer.py` | Read-only Outlook COM importer for "Completed Requests" |
-| `outlook_dashboard/completed_training_pipeline.py` | Import, heuristic label, compact, upload |
-| `outlook_dashboard/training_pipeline.py` | Existing completed local email export pipeline |
+|------|---------|
+| `outlook_dashboard/completed_requests_importer.py` | Read-only Outlook COM importer for "Completed Requests" folder |
+| `outlook_dashboard/property_knowledge.py` | Claude Sonnet extraction + persistence |
+| `outlook_dashboard/completed_training_pipeline.py` | Orchestration: import → label → store → rebuild |
+| `outlook_dashboard/training_pipeline.py` | Existing pipeline for inbox-imported emails |
 | `outlook_dashboard/local_classifier.py` | TF-IDF + LogisticRegression local classifier |
-| `training/PROPERTY_KNOWLEDGE.md` | Optional generated property knowledge notes |
+| `training/PROPERTY_KNOWLEDGE.md` | Auto-generated property knowledge base |
+
+---
+
+## For agents: starting a training run
+
+To start training the model, call the `run_completed_pipeline()` function in Python:
+
+```python
+from outlook_dashboard.completed_training_pipeline import run_completed_pipeline
+
+result = run_completed_pipeline(
+    mailbox_name="YOUR_MAILBOX_NAME",  # e.g. "Waldorf Reservations"
+    folder_name="Completed Requests",
+    batch_size=50,
+)
+print(result)
+```
+
+Or use the HTTP endpoint above if the FastAPI server is running.
+
+> **Note for Codex**: The `completed_requests_log` table in SQLite tracks which Outlook EntryIDs have already been processed so the pipeline is safe to run repeatedly — it will only process new emails each time.

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import requests
 from PySide6.QtCore import QThread, Signal
 
@@ -86,11 +88,14 @@ class ApiClient:
             params["risk"] = risk
         if q:
             params["q"] = q
+        params["limit"] = "500"
         resp = self._session.get(self._url("/api/emails"), params=params, timeout=15)
         data = self._raise_for(resp)
         if isinstance(data, list):
-            return data
-        return data.get("emails", [])
+            emails = data
+        else:
+            emails = data.get("emails", [])
+        return self._filter_queue(emails, queue)
 
     def get_email_detail(self, email_id: str) -> dict:
         resp = self._session.get(self._url(f"/api/emails/{email_id}"), timeout=10)
@@ -121,8 +126,51 @@ class ApiClient:
     # ── Sync ──────────────────────────────────────────────────────────────────
 
     def sync_outlook(self) -> dict:
-        resp = self._session.post(self._url("/api/sync/outlook"), timeout=60)
+        resp = self._session.post(self._url("/api/outlook-desktop/export-inbox"), timeout=180)
         return self._raise_for(resp)
+
+    def _filter_queue(self, emails: list[dict], queue: str) -> list[dict]:
+        if queue == "urgent":
+            return [email for email in emails if self._urgency(email) >= 4]
+        if queue == "vip":
+            return [
+                email
+                for email in emails
+                if str(email.get("importance", "")).lower() == "high"
+                or "VIP" in self._as_list(email.get("risk_flags"))
+            ]
+        if queue == "missing":
+            return [email for email in emails if self._as_list(email.get("missing_information"))]
+        return emails
+
+    @staticmethod
+    def _urgency(email: dict) -> int:
+        value = (
+            email.get("urgency_score")
+            or email.get("priority_level")
+            or (email.get("analysis") or {}).get("priority_level")
+            or 0
+        )
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return 0
+
+    @staticmethod
+    def _as_list(value: object) -> list:
+        if isinstance(value, list):
+            return value
+        if not value:
+            return []
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+                if isinstance(parsed, list):
+                    return parsed
+            except Exception:
+                pass
+            return [part.strip() for part in value.split(",") if part.strip()]
+        return [value]
 
     # ── Taxonomy & config ──────────────────────────────────────────────────────
 

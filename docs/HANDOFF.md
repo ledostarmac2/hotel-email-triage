@@ -1,47 +1,109 @@
 # Handoff Log
 
-## 2026-05-20 - zero-credit training guardrail
+## 2026-05-20 - native UI visual repair, settings, and KYC packaging
+
+Update after Brian review:
+
+- Brian explicitly wants KYC Inspection Reminder as a themed popup window, not an integrated main-page stack view.
+- Rewired the sidebar KYC item to open `KycReminderWindow` as a popup and restored the previous queue selection after launching it.
+- Restyled `KycReminderWindow` as a dark ReplyRight-native popup with current status, action controls, settings, on-phones checklist, and history.
+- Added a native Qt-drawn line icon set for sidebar navigation instead of text stand-ins such as `IN`, `!`, and `K`.
+- Added Settings support to choose or clear a profile photo; the sidebar avatar updates and persists through `QSettings`.
+- Added a Waldorf Astoria text/monogram treatment in the sidebar footer.
+- Hardened conversation row styling so labels inside rows paint transparent backgrounds and do not create gray highlight blocks.
+
+Additional verification:
+
+- `python -m py_compile replyright_qt\widgets\line_icons.py replyright_qt\widgets\sidebar_nav.py replyright_qt\widgets\settings_panel.py replyright_qt\windows\main_window.py replyright_qt\windows\kyc_reminder_window.py replyright_qt\styles\theme.py` - passed.
+- Offscreen Qt constructor/theme smoke for `MainWindow`, `KycReminderWindow`, and light/dark stylesheet switching - passed.
+- `python -m pytest tests/test_pyside6_no_browser_engine.py tests/test_installer_contract.py -q --timeout=60` - 16 passed.
+- `python -m pytest tests/ -x --timeout=60` - 729 passed, 5 existing `datetime.utcnow()` warnings, 35 subtests passed.
+- `.\build_exe.ps1` - rebuilt `dist\ReplyRight\ReplyRight.exe` and recreated Desktop/Start Menu shortcuts.
+- `.\dist\ReplyRight\ReplyRight.exe --health-smoke` - passed.
+- Brian flagged the right detail pane after the rebuild: horizontal scrollbar, raw Exchange DN sender string, and over-wide message bodies. `ConversationDetailWidget` now disables horizontal scrolling, wraps message/draft browsers to widget width, hides Exchange DN sender addresses, uses a compact status/action grid, and renders triage metrics in two columns.
+- Additional verification for the right-pane fix: `python -m py_compile replyright_qt\widgets\conversation_detail.py` passed; offscreen synthetic render with a `/O=EXCHANGELABS/.../CN=...` sender and long body passed; `python -m pytest tests/test_pyside6_no_browser_engine.py tests/test_api_workflow_pytest.py -q --timeout=60` passed with 13 tests; `.\build_exe.ps1` rebuilt the EXE; `.\dist\ReplyRight\ReplyRight.exe --health-smoke` passed.
 
 Summary:
 
-- Pulled latest `main`; repository was already up to date.
-- Removed in-app Claude/Anthropic usage from the Completed Requests training pipeline.
-- Kept `refine=true` on the existing training endpoint for backwards compatibility, but it no longer triggers Claude labeling.
-- Completed Requests import now uses local heuristic labels, redacts/compacts examples, uploads to Supabase, marks rows as `heuristic`, and reports `external_ai_used=false`.
-- Updated the shared agent training README and project docs to route Codex/Claude Code grading outside the running app.
-- Posted a coordination note to Claude requesting PySide6 UI/KYC work and warning that training files are Codex-owned for this pass.
+- Coordinated with Claude/Gemini through `agent_comms/from_codex.md` and incorporated Claude's screenshot-based UI spec notes.
+- Reworked the Qt theme into `get_stylesheet(mode)` with light/dark modes and kept `STYLESHEET` as the light default.
+- Added a native Settings page for theme switching, password reset request, basic workflow preferences, and safety copy.
+- Rebuilt the sidebar toward the requested dark navy dashboard: logo/tagline, user card, queue/admin groups, count badges, Waldorf Astoria footer, and subtler read-only status.
+- Restyled the login logo on a navy brand panel so it is legible on the sign-in card.
+- KYC Inspections is a themed native popup window launched from the sidebar, not a main stacked page.
+- Hardened `MainWindow` and `ConversationDetailWidget` worker lifetimes to reduce crash risk during rapid queue changes such as Missing Info.
+- Updated `build_exe.ps1` to include local `.external\KYC-Auto\Files\kyc_automation.py` and `msedgedriver.exe` in the PyInstaller output when present.
+- Replaced the raw KYC missing-module path with a clean user-facing unavailable message.
 
 Files changed:
 
-- `outlook_dashboard/completed_training_pipeline.py`
-- `outlook_dashboard/training_pipeline.py`
-- `outlook_dashboard/property_knowledge.py`
-- `outlook_dashboard/main.py`
-- `tests/test_completed_training_pipeline.py`
-- `tests/test_training_pipeline.py`
-- `training/README.md`
-- `docs/ARCHITECTURE.md`
-- `docs/TRAINING_PIPELINE.md`
-- `docs/SECURITY_AND_PRIVACY.md`
-- `docs/DECISIONS.md`
-- `docs/CHANGELOG_AI.md`
+- `build_exe.ps1`
+- `outlook_dashboard/kyc/automation.py`
+- `replyright_qt/app.py`
+- `replyright_qt/styles/theme.py`
+- `replyright_qt/widgets/settings_panel.py`
+- `replyright_qt/widgets/sidebar_nav.py`
+- `replyright_qt/widgets/conversation_list.py`
+- `replyright_qt/widgets/conversation_detail.py`
+- `replyright_qt/widgets/filter_bar.py`
+- `replyright_qt/windows/login_window.py`
+- `replyright_qt/windows/main_window.py`
 - `docs/CURRENT_STATE.md`
 - `docs/HANDOFF.md`
 - `agent_comms/from_codex.md`
 
 Verification:
 
-- `python -m py_compile outlook_dashboard\training_pipeline.py outlook_dashboard\completed_training_pipeline.py outlook_dashboard\property_knowledge.py outlook_dashboard\main.py` - passed.
-- `.\.venv\Scripts\python.exe -m pytest tests/test_training_pipeline.py tests/test_completed_training_pipeline.py tests/test_redaction.py -q --timeout=60` - 62 passed.
-- `git diff --check` - passed with line-ending warnings only.
-- `.\.venv\Scripts\python.exe -m pytest tests/ -q --timeout=60` - timed out in `tests/test_api_full_coverage.py::test_emails_export_inbox` while exercising real Outlook COM folder access; not related to the training changes.
+- `python -m py_compile outlook_dashboard\kyc\automation.py replyright_qt\app.py replyright_qt\styles\theme.py replyright_qt\widgets\settings_panel.py replyright_qt\widgets\sidebar_nav.py replyright_qt\widgets\conversation_list.py replyright_qt\widgets\conversation_detail.py replyright_qt\widgets\filter_bar.py replyright_qt\windows\login_window.py replyright_qt\windows\main_window.py` - passed.
+- Offscreen Qt constructor/theme smoke for `LoginWindow`, `MainWindow`, and light/dark stylesheet switching - passed.
+- `python -m pytest tests/test_pyside6_no_browser_engine.py tests/test_api_workflow_pytest.py tests/test_api_full_coverage.py::test_emails_export_inbox tests/test_api_full_coverage.py::test_sync_outlook_no_credentials tests/test_installer_contract.py -q --timeout=60` - 23 passed.
+- `python -m pytest tests/ -x --timeout=60` - 729 passed, 5 existing `datetime.utcnow()` warnings, 35 subtests passed.
+- `.\build_exe.ps1` - built `dist\ReplyRight\ReplyRight.exe` and recreated Desktop/Start Menu shortcuts.
+- `.\dist\ReplyRight\ReplyRight.exe --health-smoke` - passed.
 
 Remaining work:
 
-- Build a cleaner reviewed-label import path for external Codex/Claude Code grading outputs.
-- Claude should continue the PySide6 UI/KYC popup-panel work without touching the training pipeline files from this pass.
+- Manually launch the rebuilt app to inspect the UI against Brian's screenshot on the real display.
+- The detail panel is improved but still has room for a stricter pixel pass against the full screenshot spec, especially the confidence/context card layout and row chip density.
 
----
+## 2026-05-20 - native UI triage repair and polish
+
+Summary:
+
+- Repaired the main PySide6 inbox flow after the webview-to-native migration.
+- Changed the native Refresh Inbox action to call `/api/outlook-desktop/export-inbox`, matching the working read-only Outlook COM import path.
+- Added native client filtering for Inbox, Urgent, VIP, and Missing Info queues, with first-conversation auto-selection after loads.
+- Rebuilt the native detail pane so it consumes `conversation_messages`, shows triage metrics, risk and missing-info chips, next steps, message cards, suggested draft text, valid status updates, and structured feedback controls.
+- Fixed native feedback submission by including required feedback text and using centralized taxonomy values for urgency/category/owner/contact/status/rating corrections.
+- Polished the login/sidebar/inbox surface with ReplyRight logo usage, a clearer Refresh Inbox toolbar, refresh status text, stronger row cards, and detail-panel styling.
+- Added cleaner Inno Setup metadata plus branded welcome/finish installer copy.
+
+Files changed:
+
+- `replyright_qt/api_client.py`
+- `replyright_qt/widgets/filter_bar.py`
+- `replyright_qt/widgets/conversation_list.py`
+- `replyright_qt/widgets/conversation_detail.py`
+- `replyright_qt/widgets/sidebar_nav.py`
+- `replyright_qt/windows/main_window.py`
+- `replyright_qt/windows/login_window.py`
+- `replyright_qt/styles/theme.py`
+- `installer/replyright_setup.iss`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+
+Verification:
+
+- `python -m py_compile replyright_qt\api_client.py replyright_qt\widgets\filter_bar.py replyright_qt\widgets\conversation_list.py replyright_qt\widgets\conversation_detail.py replyright_qt\widgets\sidebar_nav.py replyright_qt\windows\main_window.py replyright_qt\windows\login_window.py replyright_qt\styles\theme.py` - passed.
+- `python -m pytest tests/test_pyside6_no_browser_engine.py tests/test_api_workflow_pytest.py tests/test_api_full_coverage.py::test_emails_export_inbox tests/test_api_full_coverage.py::test_sync_outlook_no_credentials -q --timeout=60` - 15 passed.
+- `python -m pytest tests/test_installer_contract.py -q --timeout=60` - 8 passed.
+- Offscreen Qt construction smoke for `LoginWindow` and `MainWindow` - passed.
+- `python -m pytest tests/ -x --timeout=60` - 729 passed, 5 existing `datetime.utcnow()` warnings, 35 subtests passed.
+
+Remaining work:
+
+- Launch `python run_desktop.py`, sign in, and manually click through Refresh Inbox, queue tabs, status update, AI Suggestion, feedback save, Admin, and KYC on the live desktop shell.
+- The installer wizard can still be branded further with custom Inno bitmap assets in a later packaging-only pass.
 
 ## 2026-05-19 - repository structure cleanup
 

@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import os
-import sys
 
 from PySide6.QtCore import QSettings, Qt, Signal
-from PySide6.QtGui import QColor, QIcon, QPixmap
+from PySide6.QtGui import QColor, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QFrame,
@@ -36,10 +35,6 @@ class LoginWindow(QWidget):
         self.setObjectName("login-root")
         self.setWindowTitle("ReplyRight - Sign In")
         self.setMinimumSize(520, 560)
-        _base = sys._MEIPASS if getattr(sys, "frozen", False) else os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        self._icon_path = os.path.join(_base, "outlook_dashboard", "static", "replyright.ico")
-        if os.path.exists(self._icon_path):
-            self.setWindowIcon(QIcon(self._icon_path))
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -61,19 +56,30 @@ class LoginWindow(QWidget):
         card_layout.setContentsMargins(38, 36, 38, 34)
         card_layout.setSpacing(12)
 
-        brand_mark = QLabel()
+        logo_panel = QWidget()
+        logo_panel.setObjectName("login-logo-panel")
+        logo_panel_layout = QVBoxLayout(logo_panel)
+        logo_panel_layout.setContentsMargins(14, 10, 14, 10)
+        logo_panel_layout.setSpacing(2)
+        brand_mark = QLabel("ReplyRight")
+        brand_mark.setObjectName("login-mark")
         brand_mark.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        if os.path.exists(self._icon_path):
-            px = QPixmap(self._icon_path).scaled(
-                52, 52,
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-            brand_mark.setPixmap(px)
-            brand_mark.setFixedSize(52, 52)
-        else:
-            brand_mark.setText("RR")
-            brand_mark.setObjectName("login-mark")
+        logo_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+            "outlook_dashboard",
+            "static",
+            "replyright-logo.png",
+        )
+        if os.path.exists(logo_path):
+            pixmap = QPixmap(logo_path)
+            if not pixmap.isNull():
+                brand_mark.setPixmap(pixmap.scaledToWidth(138, Qt.TransformationMode.SmoothTransformation))
+                brand_mark.setObjectName("login-logo")
+        logo_panel_layout.addWidget(brand_mark, alignment=Qt.AlignmentFlag.AlignCenter)
+        logo_tagline = QLabel("The right response, every time.")
+        logo_tagline.setObjectName("login-logo-tagline")
+        logo_tagline.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        logo_panel_layout.addWidget(logo_tagline)
 
         title = QLabel("ReplyRight")
         title.setObjectName("login-title")
@@ -132,7 +138,7 @@ class LoginWindow(QWidget):
         options_row.addStretch(1)
         options_row.addWidget(forgot_btn)
 
-        card_layout.addWidget(brand_mark, alignment=Qt.AlignmentFlag.AlignCenter)
+        card_layout.addWidget(logo_panel, alignment=Qt.AlignmentFlag.AlignCenter)
         card_layout.addSpacing(6)
         card_layout.addWidget(title)
         card_layout.addWidget(subtitle)

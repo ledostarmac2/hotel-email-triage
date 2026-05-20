@@ -3,8 +3,10 @@ from __future__ import annotations
 import textwrap
 from datetime import datetime, timezone
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtWidgets import (
+    QComboBox,
+    QHBoxLayout,
     QLabel,
     QListWidget,
     QListWidgetItem,
@@ -15,13 +17,13 @@ from PySide6.QtWidgets import (
 
 
 def _fmt_time(iso: str) -> str:
-    """Format an ISO datetime string to a short relative label."""
     try:
         dt = datetime.fromisoformat(iso.replace("Z", "+00:00"))
         now = datetime.now(timezone.utc)
         delta = now - dt
         if delta.days == 0:
-            return dt.strftime("%H:%M")
+            local = dt.astimezone()
+            return local.strftime("%I:%M %p").lstrip("0")
         if delta.days == 1:
             return "Yesterday"
         if delta.days < 7:
@@ -31,50 +33,104 @@ def _fmt_time(iso: str) -> str:
         return ""
 
 
-def _urgency_label(priority: int | str | None) -> str:
+def _urgency_value(email: dict) -> int:
+    triage = email.get("analysis") or {}
+    value = email.get("urgency_score") or email.get("priority_level") or triage.get("priority_level")
     try:
-        p = int(priority or 0)
-    except (ValueError, TypeError):
-        return ""
-    labels = {1: "Low", 2: "Routine", 3: "Moderate", 4: "High", 5: "Critical"}
-    return labels.get(p, "")
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 class ConversationRow(QWidget):
-    """Custom widget rendered inside each QListWidgetItem."""
+    """A single email row: avatar + content + right-side meta."""
 
     def __init__(self, email: dict) -> None:
         super().__init__()
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 8, 12, 8)
-        layout.setSpacing(3)
+        self.setObjectName("conversation-row")
+        outer = QHBoxLayout(self)
+        outer.setContentsMargins(14, 10, 14, 10)
+        outer.setSpacing(10)
 
         triage = email.get("analysis") or {}
-        priority = triage.get("priority_level") or triage.get("urgency")
-        urgency_str = _urgency_label(priority)
+        priority = _urgency_value(email)
         time_str = _fmt_time(email.get("received_datetime", ""))
 
-        sender = QLabel(email.get("sender_name") or email.get("sender_email", "Unknown"))
-        sender.setStyleSheet("font-weight: bold; font-size: 13px;")
+        # Avatar
+        sender_name = email.get("sender_name") or email.get("sender_email", "Unknown")
+        parts = str(sender_name).replace(".", " ").replace("_", " ").split()
+        initials = "".join(p[:1] for p in parts[:2]).upper() or "?"
+        avatar = QLabel(initials[:2])
+        avatar.setObjectName("avatar")
+        avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        avatar.setFixedSize(QSize(36, 36))
 
-        subject = QLabel(textwrap.shorten(email.get("subject", "(no subject)"), width=60, placeholder="…"))
-        subject.setStyleSheet("font-size: 12px; color: #4a5568;")
+        # Center content column
+        content_col = QVBoxLayout()
+        content_col.setContentsMargins(0, 0, 0, 0)
+        content_col.setSpacing(2)
 
-        meta_parts = []
-        if urgency_str:
-            meta_parts.append(urgency_str)
+        sender = QLabel(sender_name)
+        sender.setObjectName("row-sender")
+        sender.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+
+        subject = QLabel(textwrap.shorten(email.get("subject", "(no subject)"), width=70, placeholder="..."))
+        subject.setObjectName("row-subject")
+
+        content_col.addWidget(sender)
+        content_col.addWidget(subject)
+
+        preview = email.get("ai_summary") or email.get("body_preview") or ""
+        if preview:
+            summary = QLabel(textwrap.shorten(preview, width=110, placeholder="..."))
+            summary.setObjectName("row-preview")
+            summary.setWordWrap(True)
+            content_col.addWidget(summary)
+
+        # Category chips
+        category = email.get("category") or triage.get("category", "")
+        contact = email.get("contact_type") or triage.get("contact_type", "")
+        chip_texts = [t.replace("_", " ").title() for t in (category, contact) if t]
+        if chip_texts:
+            chips_row = QHBoxLayout()
+            chips_row.setContentsMargins(0, 3, 0, 0)
+            chips_row.setSpacing(5)
+            for text in chip_texts[:3]:
+                chip = QLabel(text)
+                chip.setObjectName("row-chip")
+                chips_row.addWidget(chip)
+            chips_row.addStretch()
+            content_col.addLayout(chips_row)
+
+        # Right column: time, urgency badge, unread dot
+        right_col = QVBoxLayout()
+        right_col.setContentsMargins(0, 0, 0, 0)
+        right_col.setSpacing(4)
+
         if time_str:
-            meta_parts.append(time_str)
-        category = triage.get("category", "")
-        if category:
-            meta_parts.append(category.replace("_", " ").title())
+            time_lbl = QLabel(time_str)
+            time_lbl.setObjectName("row-time")
+            time_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
+            right_col.addWidget(time_lbl)
 
-        meta = QLabel("  ·  ".join(meta_parts))
-        meta.setStyleSheet("font-size: 11px; color: #718096;")
+        if priority:
+            badge = QLabel(f"U{priority}")
+            badge.setObjectName(f"badge-urgency-{min(max(priority, 1), 5)}")
+            badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            badge.setFixedSize(QSize(30, 22))
+            right_col.addWidget(badge, alignment=Qt.AlignmentFlag.AlignRight)
 
-        layout.addWidget(sender)
-        layout.addWidget(subject)
-        layout.addWidget(meta)
+        if not email.get("is_read", True):
+            dot = QLabel("")
+            dot.setObjectName("unread-dot")
+            dot.setFixedSize(10, 10)
+            right_col.addWidget(dot, alignment=Qt.AlignmentFlag.AlignRight)
+
+        right_col.addStretch()
+
+        outer.addWidget(avatar, alignment=Qt.AlignmentFlag.AlignTop)
+        outer.addLayout(content_col, stretch=1)
+        outer.addLayout(right_col)
 
 
 class ConversationListWidget(QWidget):
@@ -93,23 +149,47 @@ class ConversationListWidget(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
+        # Count + sort header bar
+        self._list_header = QWidget()
+        self._list_header.setObjectName("list-header")
+        header_row = QHBoxLayout(self._list_header)
+        header_row.setContentsMargins(14, 6, 14, 6)
+        header_row.setSpacing(8)
+
+        self._count_lbl = QLabel("0 messages")
+        self._count_lbl.setObjectName("list-count-lbl")
+
+        sort_combo = QComboBox()
+        sort_combo.setObjectName("sort-combo")
+        sort_combo.addItem("Newest")
+        sort_combo.addItem("Oldest")
+        sort_combo.setFixedHeight(26)
+        sort_combo.setFixedWidth(90)
+
+        header_row.addWidget(self._count_lbl, stretch=1)
+        header_row.addWidget(sort_combo)
+
         self._list = QListWidget()
         self._list.setUniformItemSizes(False)
         self._list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._list.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self._list.currentRowChanged.connect(self._on_row_changed)
 
-        self._empty_label = QLabel("No emails in this queue.")
+        self._empty_label = QLabel("No conversations match this view.")
         self._empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._empty_label.setStyleSheet("color: #a0aec0; font-size: 13px;")
         self._empty_label.hide()
 
+        layout.addWidget(self._list_header)
         layout.addWidget(self._list)
         layout.addWidget(self._empty_label)
 
     def populate(self, emails: list[dict]) -> None:
         self._list.clear()
         self._email_ids = []
+
+        count = len(emails)
+        self._count_lbl.setText(f"{count} message{'s' if count != 1 else ''}")
 
         if not emails:
             self._list.hide()
@@ -120,17 +200,23 @@ class ConversationListWidget(QWidget):
         self._list.show()
 
         for email in emails:
-            email_id = email.get("id") or email.get("email_id", "")
+            email_id = str(email.get("id") or email.get("email_id", ""))
             self._email_ids.append(email_id)
-
             item = QListWidgetItem()
             row_widget = ConversationRow(email)
             item.setSizeHint(row_widget.sizeHint())
             self._list.addItem(item)
             self._list.setItemWidget(item, row_widget)
+        self._list.setCurrentRow(0)
 
     def set_loading(self, loading: bool) -> None:
         self._list.setEnabled(not loading)
+        if loading:
+            self._empty_label.setText("Loading conversations...")
+            self._empty_label.show()
+            self._count_lbl.setText("Loading...")
+        else:
+            self._empty_label.setText("No conversations match this view.")
 
     def _on_row_changed(self, row: int) -> None:
         if 0 <= row < len(self._email_ids):

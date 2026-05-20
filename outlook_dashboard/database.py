@@ -416,9 +416,9 @@ def upsert_email(email: dict[str, Any], db_path: Path | None = None) -> tuple[in
                 body_content, body_text, conversation_id, importance,
                 has_attachments, source, mailbox_mode, status, created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'New', ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (email["graph_message_id"],) + values[:-1] + (now, now),
+            (email["graph_message_id"],) + values[:-1] + (email.get("status", "New"), now, now),
         )
         return int(cursor.lastrowid), True
 

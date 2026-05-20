@@ -19,6 +19,7 @@ from .outlook_desktop import (
     _com_str,
     _find_named_folder,
     _format_datetime,
+    _get_outlook_app,
     _importance_name,
     _limit,
 )
@@ -28,7 +29,7 @@ from .text_utils import utc_now_iso
 
 _log = get_logger("completed_requests_importer")
 
-DEFAULT_FOLDER = "Completed Requests"
+DEFAULT_FOLDER = "Completed Request"
 DEFAULT_BATCH_SIZE = 50
 
 
@@ -62,19 +63,91 @@ def read_completed_requests(
 
     pythoncom.CoInitialize()
     try:
-        outlook = win32com.client.Dispatch("Outlook.Application")
+        outlook = _get_outlook_app()
         ns = outlook.GetNamespace("MAPI")
 
         mailbox = _find_named_folder(ns.Folders, mailbox_name)
         if mailbox is None:
             raise OutlookDesktopExportError(f"Mailbox not found: {mailbox_name!r}")
 
+        folder = None
+
+        # 1. Direct child of mailbox root
         try:
             folder = mailbox.Folders.Item(folder_name)
-        except Exception as exc:
+        except Exception:
+            pass
+
+        # 2. Inbox → subfolder (documented path: NYCWA_Reservations → Inbox → Completed Request)
+        if folder is None:
+            try:
+                inbox = mailbox.Folders.Item("Inbox")
+                folder = inbox.Folders.Item(folder_name)
+            except Exception:
+                pass
+
+        # 3. GetSharedDefaultFolder — bypasses Exchange Cached Mode for shared mailboxes
+        if folder is None:
+            try:
+                from .config import get_settings
+                smtp = get_settings().shared_mailbox_email
+                if not smtp:
+                    # Auto-resolve SMTP from display name via GAL
+                    recipient_probe = ns.CreateRecipient(mailbox_name)
+                    recipient_probe.Resolve()
+                    if bool(_com_get(recipient_probe, "Resolved", False)):
+                        try:
+                            ae = recipient_probe.AddressEntry
+                            ex_user = ae.GetExchangeUser()
+                            if ex_user:
+                                smtp = _com_str(ex_user, "PrimarySmtpAddress")
+                        except Exception:
+                            pass
+                        if not smtp:
+                            try:
+                                smtp = ae.PropertyAccessor.GetProperty(
+                                    "http://schemas.microsoft.com/mapi/proptag/0x39FE001E"
+                                )
+                            except Exception:
+                                pass
+                if smtp:
+                    recipient = ns.CreateRecipient(smtp)
+                    recipient.Resolve()
+                    if bool(_com_get(recipient, "Resolved", False)):
+                        _OL_FOLDER_INBOX = 6
+                        shared_inbox = ns.GetSharedDefaultFolder(recipient, _OL_FOLDER_INBOX)
+                        folder = shared_inbox.Folders.Item(folder_name)
+            except Exception:
+                pass
+
+        # 4. GetFolderFromID — derive folder EntryID from a previously-imported email's parent
+        #    Works even when Exchange Cached Mode hides the folder from the tree.
+        if folder is None:
+            try:
+                known_entry_id = _get_known_entry_id(db_path)
+                if known_entry_id:
+                    item = ns.GetItemFromID(known_entry_id)
+                    parent = item.Parent
+                    if _com_str(parent, "Name") == folder_name:
+                        folder = parent
+            except Exception:
+                pass
+
+        # 5. Search one level inside each top-level folder
+        if folder is None:
+            for top_idx in range(1, int(_com_get(mailbox.Folders, "Count", 0) or 0) + 1):
+                try:
+                    top = mailbox.Folders.Item(top_idx)
+                    candidate = top.Folders.Item(folder_name)
+                    folder = candidate
+                    break
+                except Exception:
+                    continue
+
+        if folder is None:
             raise OutlookDesktopExportError(
                 f"Folder {folder_name!r} not found in {mailbox_name!r}."
-            ) from exc
+            )
 
         items = folder.Items
         try:
@@ -190,3 +263,15 @@ def _load_processed_entry_ids(db_path: Path | None) -> set[str]:
             return {str(r["outlook_entry_id"]) for r in rows}
     except Exception:
         return set()
+
+
+def _get_known_entry_id(db_path: Path | None) -> str | None:
+    """Return any previously-processed EntryID so we can navigate to its parent folder."""
+    try:
+        with managed_connect(db_path) as db:
+            row = db.execute(
+                "SELECT outlook_entry_id FROM completed_requests_log WHERE result='dumped' LIMIT 1"
+            ).fetchone()
+            return str(row["outlook_entry_id"]) if row else None
+    except Exception:
+        return None

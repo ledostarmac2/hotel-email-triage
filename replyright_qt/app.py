@@ -4,10 +4,11 @@ import os
 import sys
 
 from PySide6.QtGui import QIcon
+from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import QApplication, QStyleFactory
 
 from replyright_qt.api_client import ApiClient, ApiWorker
-from replyright_qt.styles.theme import STYLESHEET
+from replyright_qt.styles.theme import get_stylesheet
 from replyright_qt.windows.credentials_setup_window import CredentialsSetupWindow
 from replyright_qt.windows.login_window import LoginWindow
 from replyright_qt.windows.main_window import MainWindow
@@ -21,7 +22,8 @@ def run_app(base_url: str) -> None:
     app.setApplicationName("ReplyRight")
     app.setOrganizationName("ReplyRight")
     app.setStyle(QStyleFactory.create("Fusion"))
-    app.setStyleSheet(STYLESHEET)
+    settings = QSettings("ReplyRight", "ReplyRight")
+    app.setStyleSheet(get_stylesheet(str(settings.value("theme", "light", str) or "light")))
 
     _base = sys._MEIPASS if getattr(sys, "frozen", False) else os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     icon_path = os.path.join(_base, "outlook_dashboard", "static", "replyright.ico")

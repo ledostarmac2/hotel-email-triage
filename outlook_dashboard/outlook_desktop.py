@@ -57,7 +57,7 @@ def _export_mailbox_with_pywin32(mailbox_name: str, folder_name: str, export_roo
 
     pythoncom.CoInitialize()
     try:
-        outlook = win32com.client.Dispatch("Outlook.Application")
+        outlook = _get_outlook_app()
         namespace = outlook.GetNamespace("MAPI")
         mailbox = _find_named_folder(namespace.Folders, mailbox_name)
         if mailbox is None:
@@ -182,6 +182,15 @@ def _bounded_msg_path(export_dir: Path, received: str, subject: str, index: int)
         subject = subject[:-8].rstrip()
         file_path = export_dir / f"{received}_{subject}_{index}.msg"
     return file_path
+
+
+def _get_outlook_app():
+    """Return the running Outlook instance; only launches a new one as a last resort."""
+    import win32com.client
+    try:
+        return win32com.client.GetActiveObject("Outlook.Application")
+    except Exception:
+        return win32com.client.Dispatch("Outlook.Application")
 
 
 def _find_named_folder(folders, name: str):

@@ -161,6 +161,16 @@ $buildInfoJson = "{`"commit`":`"$gitShort`",`"build_date`":`"$buildDate`",`"vers
 $buildInfoJson | Set-Content "outlook_dashboard\build_info.json" -Encoding utf8
 Write-Host "Build metadata: $buildInfoJson"
 
+$kycDataArgs = @()
+$kycAutomation = ".external\KYC-Auto\Files\kyc_automation.py"
+$kycEdgeDriver = ".external\KYC-Auto\Files\msedgedriver.exe"
+if (Test-Path $kycAutomation) {
+    $kycDataArgs += @("--add-data", "$kycAutomation;.external\KYC-Auto\Files")
+}
+if (Test-Path $kycEdgeDriver) {
+    $kycDataArgs += @("--add-data", "$kycEdgeDriver;.")
+}
+
 & $PYTHON -m PyInstaller `
     --onedir `
     --clean `
@@ -170,6 +180,7 @@ Write-Host "Build metadata: $buildInfoJson"
     --paths $vendorPath `
     --add-data "outlook_dashboard/static;outlook_dashboard/static" `
     --add-data "outlook_dashboard/build_info.json;outlook_dashboard" `
+    $kycDataArgs `
     --collect-all PySide6 `
     --collect-all outlook_dashboard `
     --collect-all replyright_qt `

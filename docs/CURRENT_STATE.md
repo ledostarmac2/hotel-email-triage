@@ -1,22 +1,30 @@
 # Current State
 
-Last updated: 2026-05-20 (deployment hardening)
+Last updated: 2026-05-20 (native UI visual repair + EXE rebuild)
 
 ## Status
 
 - Product name is ReplyRight.
 - Current runnable app is `outlook_dashboard/` plus `run_desktop.py`.
-- 2026-05-20 deployment hardening:
-  - Installer is now hard per-user/no-admin: `%LOCALAPPDATA%\Programs\ReplyRight`, `PrivilegesRequired=lowest`, no admin override, and current-user desktop shortcuts only.
-  - Admin invite now creates a manual `invite_url` fallback instead of failing when SMTP is unavailable or email delivery errors.
-  - Added authenticated admin deployment diagnostics at `/api/admin/deployment/diagnostics` with safe version/runtime/Supabase/SMTP/Outlook/classifier readiness fields and no secrets.
-  - Updated deployment docs and sample installer config to describe PySide6, invite/onboarding limits, SMTP, Outlook as the email source, and clean Windows install expectations.
-- 2026-05-20 training guardrail:
-  - Pulled `main`; repo was already up to date.
-  - Completed Requests training import no longer calls Claude Sonnet/Anthropic when an API key exists.
-  - `POST /api/admin/training/import-completed-requests` now reads Outlook read-only, applies local heuristic labels, redacts/compacts examples, uploads to Supabase `training_examples`, and returns `external_ai_used=false`.
-  - `POST /api/admin/training/run?refine=true` keeps the parameter for compatibility but does not call Claude/Anthropic; it exports existing local labels only.
-  - Agent-assisted grading should happen outside the running app via Codex/Claude Code and flow back through Supabase/human review, so training improves the local classifier without burning API credits.
+- 2026-05-20 native UI repair/polish:
+  - The PySide6 inbox refresh action now calls the proven read-only Outlook desktop import endpoint (`/api/outlook-desktop/export-inbox`) instead of the Graph sync endpoint, preserving the current classic Outlook COM import path.
+  - Native sidebar queue views now filter Inbox/Urgent/VIP/Missing Info in the Qt client and auto-select the first visible conversation after loading.
+  - The native detail pane now reads `conversation_messages` from the API, renders triage metrics, risk/missing-info chips, next steps, message cards, suggested draft text, status controls, and structured correction feedback.
+  - Native feedback submission now includes the required `feedback_text` and supports urgency, category, owner, contact type, status, summary quality, and reply quality corrections using the centralized taxonomy values.
+  - Native status updates now use valid ReplyRight status labels and refresh the queue after a successful update.
+  - Login/sidebar polish now uses the ReplyRight logo asset where available; the inbox toolbar was restyled around a clear `Refresh Inbox` action and visible refresh status.
+  - The installer script now has cleaner app metadata, support/update URLs, and branded welcome/finish copy while keeping the installer-first release path.
+  - Validation passed: PySide6 compile/import smoke, offscreen Login/MainWindow construction, targeted Qt/API/installer checks, and the full suite (`729 passed`, 5 existing `datetime.utcnow()` warnings, 35 subtests).
+- 2026-05-20 native UI visual repair follow-up:
+  - Reworked the PySide6 theme into a light/dark stylesheet factory and added a Settings page with theme switching, password reset request, and basic workflow/safety settings.
+  - Restyled the sidebar toward the target dark navy dashboard: logo/tagline, user card, queue/admin sections, queue count badges, Waldorf Astoria footer, and a subtler read-only status badge.
+  - Restyled the login logo presentation by placing the ReplyRight mark on a navy brand panel so it remains legible on the white sign-in card.
+  - KYC Inspections now opens as a themed native PySide6 popup window from the sidebar. This is the intended design; do not move it back into the main stacked inbox page.
+  - Hardened `MainWindow` and `ConversationDetailWidget` worker lifetime handling so rapid queue changes such as Missing Info do not destroy active `QThread` workers.
+  - Changed KYC automation missing-module failures to a clean user-facing message and updated `build_exe.ps1` to bundle the local KYC automation file and Edge driver when present.
+  - Validation passed: targeted Qt/API/installer checks, offscreen Qt popup smoke, full suite (`729 passed`, 5 existing `datetime.utcnow()` warnings, 35 subtests), `.\build_exe.ps1`, and packaged `dist\ReplyRight\ReplyRight.exe --health-smoke`.
+  - Follow-up visual repairs after Brian review: conversation row labels now paint transparent backgrounds to remove gray text blocks; sidebar uses a native Qt line-icon set instead of text stand-ins; Settings can choose/clear a profile photo; the sidebar has a Waldorf Astoria text/monogram footer.
+  - Right detail pane follow-up: horizontal scrolling is disabled, message/draft bodies wrap to panel width, the status/action controls and triage cards are more compact, and raw Exchange distinguished-name sender strings are hidden from the header.
 - 2026-05-19 login incident repair:
   - Supabase Auth is authoritative when `SUPABASE_URL` and `SUPABASE_KEY` are configured; local SQLite login is now only for unconfigured/no-key fallback.
   - Local PyInstaller onedir builds now look for the repo-root `.env` when `dist\ReplyRight\.env` is absent, so Brian's local test EXE can use the configured Supabase credentials without copying secrets into `dist`.
@@ -39,7 +47,7 @@ Last updated: 2026-05-20 (deployment hardening)
   - Old generated binaries such as `dist2/ReplyRight.exe` and the temporary `new_dependencies.txt` handoff file are removed from tracking.
 - v0.1.0 is blocked as a user release because the downloaded app could show a WebView/Edge `127.0.0.1 refused to connect` page and the release path was not installer-first enough for real users.
 - v0.1.1 repair is now in source:
-  - `GET /healthz` is public and used by the desktop launcher before opening the PySide6 shell.
+  - `GET /healthz` is public and used by the desktop launcher before opening pywebview.
   - `run_desktop.py` waits up to 30 seconds for backend health before creating the window.
   - Browser fallback was removed; startup failure now shows a controlled ReplyRight error dialog with `replyright-startup.log`.
   - The launcher prefers configured `APP_PORT` and chooses a dynamic available port only if the preferred port is occupied.
@@ -83,7 +91,7 @@ Last updated: 2026-05-20 (deployment hardening)
   - `build_exe.ps1` now captures pip vendor-install output under non-terminating PowerShell error handling and checks the real native exit code, preventing successful pip installs with dependency-warning stderr from aborting clean CI builds.
   - `.github/workflows/build.yml` now gives pytest a 60-second per-test timeout to reduce Windows runner flakiness.
   - `outlook_dashboard/hotel_entities.py` bounds fuzzy date parsing on oversized inputs and skips expensive full-text `dateparser.search_dates()` calls when no date-like token exists.
-  - Documentation hardening pass completed: `README.md`, `AGENTS.md`, `docs/ARCHITECTURE.md`, `docs/ROADMAP.md`, `docs/TRAINING_PIPELINE.md`, `docs/CLASSIFIER.md`, `docs/SECURITY_AND_PRIVACY.md`, `docs/DEPLOYMENT.md`, `docs/OPERATIONS_GUIDE.md`, and `docs/FUTURE_ROADMAP_SUPABASE_ADAPTIVE_LEARNING.md` now describe the active FastAPI/PySide6 app, inactive `app/` scaffold, experimental `replyright_kernel/`, training pipeline, local classifier, privacy boundaries, deployment workflow, and operator workflow.
+- Documentation hardening pass completed: `README.md`, `AGENTS.md`, `docs/ARCHITECTURE.md`, `docs/ROADMAP.md`, `docs/TRAINING_PIPELINE.md`, `docs/CLASSIFIER.md`, `docs/SECURITY_AND_PRIVACY.md`, `docs/DEPLOYMENT.md`, `docs/OPERATIONS_GUIDE.md`, and `docs/FUTURE_ROADMAP_SUPABASE_ADAPTIVE_LEARNING.md` now describe the active FastAPI/pywebview app, inactive `app/` scaffold, experimental `replyright_kernel/`, training pipeline, local classifier, privacy boundaries, deployment workflow, and operator workflow.
 - Phase 7 hotel domain intelligence layer is implemented and now used by `heuristic_analysis()` / `triage_email()` while keeping the modules themselves pure:
   - `outlook_dashboard/hotel_entities.py` exposes `extract_entities(subject, body, received_at=None)` for confirmation numbers, stay dates, nights, room category, rate code, guest counts, arrival window, and billing amounts.
   - `outlook_dashboard/travel_programs.py` exposes `detect_program(sender_email, body, signature=None)` for luxury travel program and advisor/agency detection.
@@ -142,7 +150,7 @@ Last updated: 2026-05-20 (deployment hardening)
 
 ## Known Local Build/Launch Notes
 
-- Desktop launcher starts FastAPI, waits for `/healthz`, then opens the native PySide6 shell. Do not reintroduce pywebview/WebView2 as the shell.
+- Desktop launcher starts FastAPI, waits for `/healthz`, then opens the native **PySide6** shell. Do not reintroduce pywebview, QWebEngineView, Electron, Tauri, or another browser/WebView shell.
 - `run_desktop.py` does a pre-flight `import clr` check and raises a descriptive error if pythonnet is missing, rather than crashing natively with no log entry.
 - Startup logging is in `run_desktop.py`; packaged builds write to `dist\ReplyRight\data\replyright-startup.log`.
 - `build_exe.ps1` auto-skips `.venv` and `.build-venv` to find system Python (VS Code auto-activates project venvs). If `.vendor` exists but is empty/partial, delete it and rebuild — the existence check short-circuits pip install.
@@ -205,7 +213,7 @@ Tests: `python -m unittest tests.test_kernel_plugins tests.test_kernel_orchestra
 ## Recommended Next Steps
 
 1. **Supabase schema**: if not yet run, paste `docs/supabase_schema.sql` into the Supabase SQL Editor (project `dxalumiijcfmwzmosijf`) and execute it once to create all tables.
-2. **KYC frontend integration**: finish/verify the native PySide6 sidebar/panel/dialog work against `/api/kyc/*`; keep it inside ReplyRight's native UI and do not reintroduce `QWebEngineView` or a standalone KYC app window.
+2. **KYC popup validation**: keep KYC Inspection Reminder as a themed native PySide6 popup launched from the sidebar. Do not move it back into the main stacked inbox page, and do not reintroduce `QWebEngineView` or a browser/WebView shell.
 3. **KYC automation decision**: decide later whether the old Selenium `run_kyc_inspection()` behavior should be wrapped behind an explicit, human-triggered action. Do not store KYC passwords in ReplyRight or auto-run browser automation without approval.
 4. **GitHub Secrets**: in the GitHub repo Settings → Secrets → Actions, confirm `ANTHROPIC_API_KEY`, `SUPABASE_URL`, `SUPABASE_KEY`, `SUPABASE_SERVICE_ROLE_KEY` are set so CI can build and test.
 5. **Emergency v0.1.1 Release**: after tests and installer smoke checks pass, push a tag (`git tag v0.1.1 && git push origin v0.1.1`) to trigger the release job. It must publish `ReplyRightSetup-v0.1.1.exe` as the primary asset, not a bare EXE.
