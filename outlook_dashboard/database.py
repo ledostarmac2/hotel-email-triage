@@ -224,9 +224,12 @@ def initialize_database(db_path: Path | None = None) -> None:
         _ensure_column(db, "email_analysis", "contact_type", "TEXT")
         _ensure_column(db, "email_analysis", "confidence_score", "INTEGER")
         _ensure_column(db, "email_analysis", "confidence_reason", "TEXT")
+        _ensure_column(db, "email_analysis", "needs_review", "INTEGER NOT NULL DEFAULT 0")
         _ensure_column(db, "triage_feedback", "corrected_status", "TEXT")
         _ensure_column(db, "triage_feedback", "summary_quality_rating", "INTEGER")
         _ensure_column(db, "triage_feedback", "reply_quality_rating", "INTEGER")
+        _ensure_column(db, "triage_feedback", "correction_reason", "TEXT")
+        _ensure_column(db, "triage_feedback", "quality_state", "TEXT NOT NULL DEFAULT 'raw'")
         db.executescript(
             """
             CREATE TABLE IF NOT EXISTS training_pipeline_log (
@@ -399,6 +402,7 @@ def upsert_email(email: dict[str, Any], db_path: Path | None = None) -> tuple[in
 
 def save_analysis(email_id: int, analysis: dict[str, Any], db_path: Path | None = None) -> None:
     now = utc_now_iso()
+    needs_review = 1 if analysis.get("needs_review") else 0
     values = (
         email_id,
         analysis.get("ai_summary", ""),
@@ -417,6 +421,7 @@ def save_analysis(email_id: int, analysis: dict[str, Any], db_path: Path | None 
         _encode_json(analysis.get("redaction_counts", {})),
         analysis.get("confidence_score"),
         analysis.get("confidence_reason", ""),
+        needs_review,
         now,
         now,
     )
@@ -436,7 +441,7 @@ def save_analysis(email_id: int, analysis: dict[str, Any], db_path: Path | None 
                     suggested_reply_draft = ?,
                     model = ?, analysis_engine = ?, analysis_error = ?,
                     redaction_counts = ?, confidence_score = ?, confidence_reason = ?,
-                    updated_at = ?
+                    needs_review = ?, updated_at = ?
                 WHERE email_id = ?
                 """,
                 values[1:-2] + (now, email_id),
@@ -449,9 +454,9 @@ def save_analysis(email_id: int, analysis: dict[str, Any], db_path: Path | None 
                 internal_next_steps, missing_information, risk_flags,
                 recommended_department_owner, contact_type, suggested_reply_draft, model,
                 analysis_engine, analysis_error, redaction_counts,
-                confidence_score, confidence_reason, created_at, updated_at
+                confidence_score, confidence_reason, needs_review, created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             values,
         )
@@ -465,7 +470,7 @@ def get_email(email_id: int, db_path: Path | None = None) -> dict[str, Any] | No
                    a.internal_next_steps, a.missing_information, a.risk_flags,
                    a.recommended_department_owner, a.contact_type, a.suggested_reply_draft,
                    a.model, a.analysis_engine, a.analysis_error, a.redaction_counts,
-                   a.confidence_score, a.confidence_reason,
+                   a.confidence_score, a.confidence_reason, a.needs_review,
                    a.created_at AS analysis_created_at, a.updated_at AS analysis_updated_at
             FROM emails e
             LEFT JOIN email_analysis a ON a.email_id = e.id
@@ -483,6 +488,7 @@ def list_emails(
     status: str | None = None,
     risk: str | None = None,
     query: str | None = None,
+    needs_review: bool | None = None,
     limit: int = 100,
     db_path: Path | None = None,
 ) -> list[dict[str, Any]]:
@@ -500,6 +506,8 @@ def list_emails(
     if risk:
         clauses.append("a.risk_flags LIKE ?")
         params.append(f"%{risk}%")
+    if needs_review is True:
+        clauses.append("a.needs_review = 1")
     if query:
         clauses.append("(e.subject LIKE ? OR e.sender_email LIKE ? OR e.sender_name LIKE ? OR e.body_preview LIKE ?)")
         pattern = f"%{query}%"
@@ -516,7 +524,7 @@ def list_emails(
                    a.priority_level, a.guest_sentiment, a.internal_next_steps,
                    a.missing_information, a.risk_flags, a.recommended_department_owner,
                    a.contact_type, a.suggested_reply_draft, a.analysis_engine,
-                   e.conversation_id
+                   a.confidence_score, a.needs_review, e.conversation_id
             FROM emails e
             LEFT JOIN email_analysis a ON a.email_id = e.id
             {where}
@@ -591,6 +599,7 @@ def save_triage_feedback(
     corrected_status: str | None = None,
     summary_quality_rating: int | None = None,
     reply_quality_rating: int | None = None,
+    correction_reason: str | None = None,
     db_path: Path | None = None,
 ) -> int:
     with managed_connect(db_path) as db:
@@ -600,9 +609,10 @@ def save_triage_feedback(
                 conversation_id, email_id, feedback_text, corrected_urgency,
                 corrected_category, corrected_owner, corrected_contact_type,
                 corrected_sentiment, corrected_status, summary_quality_rating,
-                reply_quality_rating, applied_short_term, created_at
+                reply_quality_rating, correction_reason, quality_state,
+                applied_short_term, created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'raw', 1, ?)
             """,
             (
                 conversation_id,
@@ -616,10 +626,27 @@ def save_triage_feedback(
                 corrected_status,
                 summary_quality_rating,
                 reply_quality_rating,
+                correction_reason,
                 utc_now_iso(),
             ),
         )
         return int(cursor.lastrowid)
+
+
+def update_feedback_quality_state(
+    feedback_id: int,
+    quality_state: str,
+    db_path: Path | None = None,
+) -> None:
+    """Advance a feedback row's quality_state (raw → reviewed → training_ready | excluded)."""
+    allowed = {"raw", "reviewed", "training_ready", "excluded"}
+    if quality_state not in allowed:
+        raise ValueError(f"quality_state must be one of {allowed}")
+    with managed_connect(db_path) as db:
+        db.execute(
+            "UPDATE triage_feedback SET quality_state = ? WHERE id = ?",
+            (quality_state, feedback_id),
+        )
 
 
 def list_recent_triage_feedback(limit: int = 100, db_path: Path | None = None) -> list[dict[str, Any]]:
@@ -1063,6 +1090,9 @@ def admin_overview_stats(db_path: Path | None = None) -> dict[str, Any]:
         low_conf = db.execute(
             "SELECT COUNT(*) FROM email_analysis WHERE confidence_score IS NOT NULL AND confidence_score < 50"
         ).fetchone()[0]
+        needs_review_count = db.execute(
+            "SELECT COUNT(*) FROM email_analysis WHERE needs_review = 1"
+        ).fetchone()[0]
         feedback_trend = db.execute(
             """
             SELECT DATE(created_at) AS day, COUNT(*) AS cnt
@@ -1076,6 +1106,7 @@ def admin_overview_stats(db_path: Path | None = None) -> dict[str, Any]:
         "total_feedback": total_feedback,
         "total_users": total_users,
         "low_confidence_count": low_conf,
+        "needs_review_count": needs_review_count,
         "last_sync": dict(last_sync) if last_sync else None,
         "engine_breakdown": [dict(r) for r in engine_rows],
         "feedback_trend": [dict(r) for r in feedback_trend],
@@ -1156,7 +1187,8 @@ def admin_low_confidence_emails(limit: int = 20, db_path: Path | None = None) ->
         rows = db.execute(
             """
             SELECT e.id, e.subject, e.sender_name, e.sender_email, e.received_datetime,
-                   a.category, a.confidence_score, a.confidence_reason, a.analysis_engine
+                   a.category, a.confidence_score, a.confidence_reason, a.analysis_engine,
+                   a.needs_review
             FROM email_analysis a JOIN emails e ON e.id = a.email_id
             WHERE a.confidence_score IS NOT NULL AND a.confidence_score < 50
             ORDER BY a.confidence_score ASC

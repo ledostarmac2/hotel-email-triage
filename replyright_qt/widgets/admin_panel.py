@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QGroupBox,
@@ -7,12 +9,14 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QInputDialog,
     QLabel,
+    QLineEdit,
     QMessageBox,
     QPushButton,
     QSizePolicy,
     QTabWidget,
     QTableWidget,
     QTableWidgetItem,
+    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -66,7 +70,7 @@ def _build_corrections_table(rows: list[dict]) -> QTableWidget:
 
 
 def _build_low_confidence_table(rows: list[dict]) -> QTableWidget:
-    cols = ["Subject", "Sender", "Category", "Confidence"]
+    cols = ["Subject", "Sender", "Category", "Confidence", "Needs Review"]
     table = QTableWidget(len(rows), len(cols))
     table.setHorizontalHeaderLabels(cols)
     table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
@@ -79,6 +83,11 @@ def _build_low_confidence_table(rows: list[dict]) -> QTableWidget:
         table.setItem(i, 2, _read_only_item(row.get("category", "")))
         conf = row.get("confidence_score")
         table.setItem(i, 3, _read_only_item(f"{conf:.0f}%" if conf is not None else "—"))
+        nr = "Yes" if row.get("needs_review") else "No"
+        item = _read_only_item(nr)
+        if nr == "Yes":
+            item.setForeground(Qt.GlobalColor.red)
+        table.setItem(i, 4, item)
     return table
 
 
@@ -326,8 +335,157 @@ class _TrainingTab(QWidget):
             self._action_status.setStyleSheet("font-size: 12px; color: #38a169;")
 
 
+class _SignalInspectorTab(QWidget):
+    """Signal Inspector tab — enter an email ID to view extracted signals and entities."""
+
+    def __init__(self, client: ApiClient) -> None:
+        super().__init__()
+        self._client = client
+        self._worker: ApiWorker | None = None
+        self._build_ui()
+
+    def _build_ui(self) -> None:
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 12, 16, 12)
+        layout.setSpacing(12)
+
+        lookup_row = QHBoxLayout()
+        lookup_row.setSpacing(8)
+        label = QLabel("Email ID:")
+        label.setStyleSheet("font-size: 13px; font-weight: 600;")
+        self._id_field = QLineEdit()
+        self._id_field.setPlaceholderText("Enter email ID (integer)")
+        self._id_field.setFixedWidth(160)
+        self._id_field.returnPressed.connect(self._on_inspect)
+        self._inspect_btn = QPushButton("Inspect")
+        self._inspect_btn.setObjectName("primary-btn")
+        self._inspect_btn.setFixedHeight(32)
+        self._inspect_btn.setFixedWidth(90)
+        self._inspect_btn.clicked.connect(self._on_inspect)
+        self._status = QLabel("")
+        self._status.setStyleSheet("color: #718096; font-size: 12px;")
+        lookup_row.addWidget(label)
+        lookup_row.addWidget(self._id_field)
+        lookup_row.addWidget(self._inspect_btn)
+        lookup_row.addWidget(self._status)
+        lookup_row.addStretch()
+        layout.addLayout(lookup_row)
+
+        hint = QLabel(
+            "Tip: copy an email ID from the Low Confidence table above, "
+            "or hover over a conversation to find its id."
+        )
+        hint.setStyleSheet("color: #a0aec0; font-size: 11px;")
+        hint.setWordWrap(True)
+        layout.addWidget(hint)
+
+        self._output = QTextEdit()
+        self._output.setReadOnly(True)
+        self._output.setPlaceholderText("Signal data will appear here after inspection.")
+        self._output.setStyleSheet("font-family: 'Consolas', monospace; font-size: 12px;")
+        layout.addWidget(self._output)
+
+    def inspect_email(self, email_id: str) -> None:
+        """Pre-fill ID and run inspection (called from Low Confidence table click)."""
+        self._id_field.setText(str(email_id))
+        self._on_inspect()
+
+    def _on_inspect(self) -> None:
+        email_id = self._id_field.text().strip()
+        if not email_id.isdigit():
+            self._status.setText("Enter a valid numeric email ID.")
+            return
+        self._status.setText("Fetching signals…")
+        self._inspect_btn.setEnabled(False)
+        self._output.setPlainText("")
+        self._worker = ApiWorker(self._client.get_email_signals, email_id)
+        self._worker.success.connect(self._on_signals_loaded)
+        self._worker.failure.connect(self._on_error)
+        self._worker.start()
+
+    def _on_signals_loaded(self, data: dict) -> None:
+        self._inspect_btn.setEnabled(True)
+        self._status.setText("")
+        lines: list[str] = []
+        email_id = data.get("email_id", "?")
+        lines.append(f"=== Signal Report: email_id={email_id} ===\n")
+
+        signals = data.get("signals") or {}
+        if signals:
+            lines.append("── Signals ──────────────────────────────")
+            for k, v in signals.items():
+                lines.append(f"  {k}: {v}")
+
+        description = data.get("description") or ""
+        if description:
+            lines.append(f"\n── Summary ──────────────────────────────\n  {description}")
+
+        if not lines[1:]:
+            lines.append("  (no signal data returned)")
+
+        self._output.setPlainText("\n".join(lines))
+
+    def _on_error(self, message: str) -> None:
+        self._inspect_btn.setEnabled(True)
+        self._status.setText(f"Error: {message}")
+
+
+class _DiagnosticsTab(QWidget):
+    """Deployment diagnostics tab — shows app version, services, classifier state."""
+
+    def __init__(self, client: ApiClient) -> None:
+        super().__init__()
+        self._client = client
+        self._worker: ApiWorker | None = None
+        self._build_ui()
+
+    def _build_ui(self) -> None:
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 12, 16, 12)
+        layout.setSpacing(12)
+
+        refresh_btn = QPushButton("Refresh diagnostics")
+        refresh_btn.setObjectName("secondary-btn")
+        refresh_btn.setFixedWidth(160)
+        refresh_btn.clicked.connect(self.load)
+        layout.addWidget(refresh_btn)
+
+        self._output = QTextEdit()
+        self._output.setReadOnly(True)
+        self._output.setPlaceholderText("Diagnostics will appear here.")
+        self._output.setStyleSheet("font-family: 'Consolas', monospace; font-size: 12px;")
+        layout.addWidget(self._output)
+
+    def load(self) -> None:
+        self._output.setPlainText("Loading diagnostics…")
+        self._worker = ApiWorker(self._client.get_deployment_diagnostics)
+        self._worker.success.connect(self._on_loaded)
+        self._worker.failure.connect(lambda msg: self._output.setPlainText(f"Error: {msg}"))
+        self._worker.start()
+
+    def _on_loaded(self, data: dict) -> None:
+        lines: list[str] = ["=== ReplyRight Deployment Diagnostics ===\n"]
+        for section, values in data.items():
+            if section == "warnings":
+                continue
+            lines.append(f"── {section.upper()} ──────────────────────────")
+            if isinstance(values, dict):
+                for k, v in values.items():
+                    lines.append(f"  {k}: {v}")
+            else:
+                lines.append(f"  {values}")
+            lines.append("")
+        warnings = data.get("warnings") or []
+        if warnings:
+            lines.append("── WARNINGS ──────────────────────────────")
+            for w in warnings:
+                lines.append(f"  ⚠  {w}")
+        self._output.setPlainText("\n".join(lines))
+
+
 class AdminPanel(QWidget):
-    """Admin dashboard panel — stats, corrections, low-confidence, audit log, users, training.
+    """Admin dashboard panel — stats, corrections, low-confidence, audit log, users, training,
+    signal inspector, and deployment diagnostics.
 
     Loaded lazily when the user selects the Admin queue in the sidebar.
     """
@@ -369,7 +527,14 @@ class AdminPanel(QWidget):
         self._card_feedback = _StatCard("Feedback Submitted")
         self._card_users = _StatCard("Users")
         self._card_low_conf = _StatCard("Low Confidence")
-        for card in (self._card_emails, self._card_feedback, self._card_users, self._card_low_conf):
+        self._card_needs_review = _StatCard("Needs Review")
+        for card in (
+            self._card_emails,
+            self._card_feedback,
+            self._card_users,
+            self._card_low_conf,
+            self._card_needs_review,
+        ):
             card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             card.setStyleSheet(
                 "QWidget#stat-card { background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 6px; }"
@@ -400,6 +565,12 @@ class AdminPanel(QWidget):
         self._training_tab = _TrainingTab(self._client)
         self._tabs.addTab(self._training_tab, "Training")
 
+        self._signals_tab = _SignalInspectorTab(self._client)
+        self._tabs.addTab(self._signals_tab, "Signal Inspector")
+
+        self._diagnostics_tab = _DiagnosticsTab(self._client)
+        self._tabs.addTab(self._diagnostics_tab, "Diagnostics")
+
         root.addWidget(self._tabs)
 
     # ── Public API ─────────────────────────────────────────────────────────────
@@ -413,6 +584,7 @@ class AdminPanel(QWidget):
         self._worker.start()
         self._users_tab.load()
         self._training_tab.load()
+        self._diagnostics_tab.load()
 
     # ── Slots ──────────────────────────────────────────────────────────────────
 
@@ -425,6 +597,7 @@ class AdminPanel(QWidget):
         self._card_feedback.set_value(str(overview.get("total_feedback", "—")))
         self._card_users.set_value(str(overview.get("total_users", "—")))
         self._card_low_conf.set_value(str(overview.get("low_confidence_count", "—")))
+        self._card_needs_review.set_value(str(overview.get("needs_review_count", "—")))
 
         last_sync = overview.get("last_sync")
         if last_sync:

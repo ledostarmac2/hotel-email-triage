@@ -622,13 +622,17 @@ def analyze_email(email: dict[str, Any], settings: Settings) -> dict[str, Any]:
     heuristic = heuristic_analysis(email, settings)
     if settings.anthropic_configured:
         try:
-            return _analyze_with_claude(email, settings)
+            result = _analyze_with_claude(email, settings)
+            result.setdefault("needs_review", heuristic.get("needs_review", False))
+            return result
         except Exception as exc:
             heuristic["analysis_error"] = str(exc)[:500]
             return heuristic
     if settings.openai_configured:
         try:
-            return _analyze_with_openai(email, settings)
+            result = _analyze_with_openai(email, settings)
+            result.setdefault("needs_review", heuristic.get("needs_review", False))
+            return result
         except Exception as exc:
             heuristic["analysis_error"] = str(exc)[:500]
             return heuristic
@@ -977,6 +981,16 @@ def heuristic_analysis(email: dict[str, Any], settings: Settings | None = None) 
     except Exception:
         pass
 
+    # ── Human review flag ─────────────────────────────────────────────────
+    _HIGH_RISK_CATS = {"Billing dispute", "Accessibility request"}
+    _HIGH_RISK_FLAGS = {"Legal", "Medical", "ADA/accessibility", "Chargeback"}
+    needs_review = (
+        confidence < 50
+        or bool(risks and _HIGH_RISK_FLAGS.intersection(risks))
+        or category in _HIGH_RISK_CATS
+        or (urgency_level >= 4 and confidence < 65)
+    )
+
     return {
         "ai_summary": summary,
         "category": category,
@@ -990,6 +1004,7 @@ def heuristic_analysis(email: dict[str, Any], settings: Settings | None = None) 
         "suggested_reply_draft": draft,
         "confidence_score": confidence,
         "confidence_reason": confidence_reason,
+        "needs_review": needs_review,
         "model": "local-rules",
         "analysis_engine": "heuristic",
         "analysis_error": "",

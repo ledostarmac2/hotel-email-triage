@@ -97,7 +97,7 @@ def test_shared_inbox_workflow_with_mocked_import_feedback_and_reply(app_client:
     assert admin_response.status_code == 200
     admin = admin_response.json()
     assert "misclassification_drilldowns" in admin
-    assert any(row["action"] == "triage.feedback" for row in admin["audit_logs"])
+    assert any(row["action"].startswith("triage.feedback") for row in admin["audit_logs"])
 
 
 def test_export_inbox_returns_clear_503_on_non_windows(app_client: TestClient, monkeypatch) -> None:

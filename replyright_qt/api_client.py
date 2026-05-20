@@ -68,6 +68,16 @@ class ApiClient:
         q: str = "",
     ) -> list[dict]:
         params: dict[str, str] = {}
+        # Map sidebar queues to server-side filter params
+        if queue == "urgent":
+            params["priority"] = "Immediate"
+        elif queue == "vip":
+            params["risk"] = "VIP"
+        elif queue == "missing":
+            params["risk"] = "Missing information"
+        elif queue == "review":
+            params["needs_review"] = "true"
+        # Explicit filter overrides queue defaults
         if category:
             params["category"] = category
         if status:
@@ -122,6 +132,18 @@ class ApiClient:
 
     def get_admin_stats(self) -> dict:
         resp = self._session.get(self._url("/api/admin/stats"), timeout=15)
+        return self._raise_for(resp)
+
+    def get_email_signals(self, email_id: str) -> dict:
+        resp = self._session.get(
+            self._url("/api/admin/intelligence/signals"),
+            params={"email_id": email_id},
+            timeout=10,
+        )
+        return self._raise_for(resp)
+
+    def get_deployment_diagnostics(self) -> dict:
+        resp = self._session.get(self._url("/api/admin/deployment/diagnostics"), timeout=10)
         return self._raise_for(resp)
 
     def get_startup_state(self) -> dict:

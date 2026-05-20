@@ -59,6 +59,7 @@ from .database import (
     save_analysis,
     save_triage_feedback,
     set_rule_candidate_status,
+    update_feedback_quality_state,
     update_status,
     upsert_email,
 )
@@ -273,6 +274,13 @@ class StatusUpdate(BaseModel):
     status: str
 
 
+_FEEDBACK_REASON_CODES = {
+    "wrong_category", "wrong_urgency", "wrong_owner", "wrong_contact_type",
+    "missing_risk_flag", "false_risk_flag", "poor_summary", "poor_reply_draft",
+    "confidence_too_low", "context_mismatch", "other",
+}
+
+
 class TriageFeedbackRequest(BaseModel):
     feedback_text: str = Field(min_length=2, max_length=4000)
     corrected_urgency: int | None = Field(default=None, ge=1, le=5)
@@ -283,6 +291,7 @@ class TriageFeedbackRequest(BaseModel):
     corrected_status: str | None = None
     summary_quality_rating: int | None = Field(default=None, ge=1, le=5)
     reply_quality_rating: int | None = Field(default=None, ge=1, le=5)
+    correction_reason: str | None = Field(default=None, max_length=80)
 
 
 class RuleCandidateStatusRequest(BaseModel):
@@ -1501,6 +1510,7 @@ def api_list_emails(
     status: str | None = None,
     risk: str | None = None,
     q: str | None = None,
+    needs_review: bool | None = None,
     limit: int = Query(default=100, ge=1, le=500),
 ) -> dict[str, object]:
     settings = get_settings()
@@ -1510,6 +1520,7 @@ def api_list_emails(
         status=status or None,
         risk=risk or None,
         query=q or None,
+        needs_review=needs_review,
         limit=limit,
         db_path=settings.database_path,
     )
@@ -1592,6 +1603,9 @@ def api_triage_feedback(email_id: int, payload: TriageFeedbackRequest, request: 
             corrections[key] = value
 
     _validate_feedback_corrections(corrections)
+    reason = payload.correction_reason
+    if reason and reason not in _FEEDBACK_REASON_CODES:
+        reason = "other"
     feedback_id = save_triage_feedback(
         email_id=email_id,
         conversation_id=str(email.get("conversation_id") or ""),
@@ -1604,6 +1618,7 @@ def api_triage_feedback(email_id: int, payload: TriageFeedbackRequest, request: 
         corrected_status=corrections.get("corrected_status"),
         summary_quality_rating=payload.summary_quality_rating,
         reply_quality_rating=payload.reply_quality_rating,
+        correction_reason=reason,
         db_path=settings.database_path,
     )
     upload_feedback_event(
@@ -1617,13 +1632,15 @@ def api_triage_feedback(email_id: int, payload: TriageFeedbackRequest, request: 
     if corrections.get("corrected_status"):
         update_status(email_id, str(corrections["corrected_status"]), db_path=settings.database_path)
     record_audit_event(
-        action="triage.feedback",
+        action="triage.feedback.submitted",
         actor_user_id=None,
         actor_email=str(request.state.user["email"]),
         entity_type="email",
         entity_id=email_id,
         metadata={
+            "feedback_id": feedback_id,
             "correction_keys": sorted(k for k, v in corrections.items() if v not in (None, "")),
+            "correction_reason": reason,
             "summary_quality_rating": payload.summary_quality_rating,
             "reply_quality_rating": payload.reply_quality_rating,
         },
@@ -1640,6 +1657,31 @@ def api_triage_feedback(email_id: int, payload: TriageFeedbackRequest, request: 
     decorated["conversation_email_count"] = len(raw_messages)
     decorated["feedback_count"] = len(list_feedback_for_conversation(conversation_id, db_path=settings.database_path))
     return {"email": decorated, "feedback_id": feedback_id, "corrections": corrections}
+
+
+class FeedbackQualityRequest(BaseModel):
+    quality_state: str = Field(description="One of: raw, reviewed, training_ready, excluded")
+
+
+@app.patch("/api/feedback/{feedback_id}/quality")
+def api_update_feedback_quality(feedback_id: int, payload: FeedbackQualityRequest, request: Request) -> dict[str, object]:
+    """Advance a feedback row's quality state for training pipeline control."""
+    if request.state.user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only.")
+    settings = get_settings()
+    try:
+        update_feedback_quality_state(feedback_id, payload.quality_state, db_path=settings.database_path)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    record_audit_event(
+        action="feedback.quality_state",
+        actor_email=str(request.state.user["email"]),
+        entity_type="triage_feedback",
+        entity_id=feedback_id,
+        metadata={"quality_state": payload.quality_state},
+        db_path=settings.database_path,
+    )
+    return {"ok": True, "feedback_id": feedback_id, "quality_state": payload.quality_state}
 
 
 @app.patch("/api/emails/{email_id}/status")
