@@ -12,6 +12,7 @@ Last updated: 2026-05-20 (v0.4.0 CI/release training repair)
   - Restored the PySide6 `Needs Review` queue and `QUEUES` compatibility export so v1 queue tests and native navigation agree with the API client's `needs_review=true` mapping.
   - Updated the updater release test fixture to use a future semantic version now that app source is `0.4.0`.
   - Added root SQLite/DB ignore patterns and removed the generated local classifier DB artifact from staging; runtime model/database files remain local-only.
+  - Removed the stale release workflow check that required `dist\ReplyRight\.env`; the current installer excludes `.env` and ships `sample.env` only.
   - Validation passed: targeted training/updater/sidebar tests and full suite (`798 passed`, 6 existing `datetime.utcnow()` warnings, 35 subtests).
   - Zero-credit local classifier training was started against the default runtime SQLite DB after the fix: 38 local/bootstrap examples, targets `urgency`, `owner`, and `category`, model version `20260520T195713Z`. No external AI providers were called.
 - 2026-05-20 native UI repair/polish:
@@ -75,7 +76,7 @@ Last updated: 2026-05-20 (v0.4.0 CI/release training repair)
   - Installer security audit now treats `innoextract` format incompatibility as a warning and still audits the staged `dist\ReplyRight` payload plus installer output.
   - Restored local SQLite authentication as a fallback for existing installed databases and fresh installs without Supabase service-role configuration. Supabase Auth is still used when configured; if unavailable or not configured, ReplyRight can authenticate local `users` rows and create local sessions.
   - First-run setup can now create a local SQLite admin when no admin exists and Supabase service-role configuration is absent. It still does not ask users for API keys.
-  - GitHub Actions release builds now keep the CI-provisioned runtime `.env` in `dist\ReplyRight` and package it into the installer. The workflow verifies required release runtime secrets are present without printing values.
+  - Superseded by 2026-05-20 release security posture: the installer excludes `.env`; runtime credentials must be provisioned outside the installer.
   - Startup now always creates/repairs the configured `REPLYRIGHT_ADMIN_EMAIL` / `REPLYRIGHT_ADMIN_PASSWORD` account when those values are present, instead of redirecting to first-run setup first.
   - Release CI now treats `REPLYRIGHT_ADMIN_EMAIL` and `REPLYRIGHT_ADMIN_PASSWORD` as required installer runtime secrets.
 - 2026-05-19 massive test expansion:

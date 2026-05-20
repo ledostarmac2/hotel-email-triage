@@ -9,15 +9,18 @@ Summary:
 - Restored the native PySide6 `Needs Review` queue and `QUEUES` compatibility export, and allowed `MainWindow` to load the review queue through the existing API client mapping.
 - Updated the updater test fixture to use a future release version so it remains valid now that source version is `0.4.0`.
 - Added SQLite/DB ignore patterns and removed the generated `outlook_dashboard/hotel_triage.db` artifact from staging.
+- Removed the stale release workflow gate that required `dist\ReplyRight\.env`; the installer excludes `.env` and runtime credentials remain deployment/local config.
 - Started zero-credit local classifier training against the default runtime SQLite DB after tests passed.
 
 Files changed:
 
 - `.gitignore`
+- `.github/workflows/build.yml`
 - `outlook_dashboard/completed_training_pipeline.py`
 - `replyright_qt/widgets/sidebar_nav.py`
 - `replyright_qt/windows/main_window.py`
 - `tests/test_updater.py`
+- `docs/DECISIONS.md`
 - `docs/CURRENT_STATE.md`
 - `docs/HANDOFF.md`
 
@@ -28,6 +31,7 @@ Verification:
 - `python -m pytest tests/test_v1_features.py::TestSidebarNeedsReviewQueue tests/test_v1_features.py::TestApiClientQueueMapping -q --timeout=60` - passed.
 - `python -m py_compile replyright_qt\widgets\sidebar_nav.py replyright_qt\windows\main_window.py` - passed.
 - `python -m pytest tests/ -x --timeout=60` - 798 passed, 6 existing `datetime.utcnow()` warnings, 35 subtests passed.
+- GitHub tag run #57 after first fix: `lint`, `build-exe`, and `docker-build` passed; `release` failed at stale `Verify release installer runtime config`, prompting the workflow patch above.
 - Local classifier training result: trained `urgency`, `owner`, and `category` from 38 local/bootstrap examples; model version `20260520T195713Z`; no external AI used.
 
 Remaining work:

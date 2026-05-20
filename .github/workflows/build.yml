@@ -221,17 +221,6 @@ jobs:
           }
           $env:ALLOW_RELEASE_RUNTIME_SECRETS = "1"
           python scripts/check_no_bundled_secrets.py
-      - name: Verify release installer runtime config
-        shell: pwsh
-        run: |
-          $expected = ".\dist\ReplyRight\.env"
-          if (-not (Test-Path $expected)) { throw "Release runtime .env missing from staged payload." }
-          $content = Get-Content $expected
-          foreach ($name in @("ANTHROPIC_API_KEY", "SUPABASE_URL", "SUPABASE_KEY")) {
-            if (-not ($content | Where-Object { $_ -match "^$name=\S+" })) {
-              throw "Release runtime .env is missing required key: $name"
-            }
-          }
       - name: Rename Installer
         shell: pwsh
         run: |

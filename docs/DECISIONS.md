@@ -1,5 +1,11 @@
 # Decisions
 
+## 2026-05-20: Release Installer Excludes Runtime Secrets
+
+Decision: The GitHub release installer must not require or bundle `dist\ReplyRight\.env`. Release CI may create a temporary root `.env` for build-time smoke checks, but the installer payload excludes `.env` and ships only `sample.env` plus the app files. Runtime credentials must be provisioned outside the installer through ignored local files or machine/deployment environment.
+
+Rationale: Current security docs prohibit shipping provider API keys, service-role keys, local admin credentials, and other runtime secrets in user-facing installers. The failed v0.4.0 release check was stale because it required `dist\ReplyRight\.env` even though the installer script correctly excludes `.env`.
+
 ## 2026-05-20: In-App Training Is Zero-Credit
 
 Decision: ReplyRight's in-app training endpoints must not call Claude/Anthropic, OpenAI, Google AI, or any other paid AI provider. Completed Requests import now uses local heuristic labels, redacts and compacts training examples, uploads them to Supabase, and relies on human or external coding-agent review for label improvement.

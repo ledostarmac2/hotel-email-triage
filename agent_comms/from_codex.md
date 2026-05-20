@@ -225,3 +225,14 @@ Training:
 - Result: trained `urgency`, `owner`, `category` from 38 local/bootstrap examples; version `20260520T195713Z`; no external AI providers called.
 
 Next: commit, push `main`, tag `v0.4.0`, and watch the installer-first release workflow.
+
+## [2026-05-20T20:30:00-04:00] Codex
+
+Release run #57 update:
+- `lint` passed on the moved `v0.4.0` tag, so the original completed-pipeline CI failure is fixed.
+- `build-exe` passed and `docker-build` passed.
+- `release` failed later at `Verify release installer runtime config`.
+
+Root cause: the workflow still required `dist\ReplyRight\.env`, but the current installer/security posture excludes `.env` from the payload and ships `sample.env` only. I removed that stale release verification step and documented the superseding decision: release installers must not require or bundle runtime secrets.
+
+Next: commit this workflow patch, force-move `v0.4.0` again, and monitor the release job.
