@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 
 from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QComboBox,
     QHBoxLayout,
     QLabel,
@@ -173,6 +174,7 @@ class ConversationListWidget(QWidget):
         self._list.setUniformItemSizes(False)
         self._list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._list.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self._list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self._list.currentRowChanged.connect(self._on_row_changed)
 
         self._empty_label = QLabel("No conversations match this view.")
@@ -208,6 +210,7 @@ class ConversationListWidget(QWidget):
             self._list.addItem(item)
             self._list.setItemWidget(item, row_widget)
         self._list.setCurrentRow(0)
+        self._sync_row_selection(0)
 
     def set_loading(self, loading: bool) -> None:
         self._list.setEnabled(not loading)
@@ -219,8 +222,19 @@ class ConversationListWidget(QWidget):
             self._empty_label.setText("No conversations match this view.")
 
     def _on_row_changed(self, row: int) -> None:
+        self._sync_row_selection(row)
         if 0 <= row < len(self._email_ids):
             self.conversation_selected.emit(self._email_ids[row])
+
+    def _sync_row_selection(self, selected_row: int) -> None:
+        for idx in range(self._list.count()):
+            item = self._list.item(idx)
+            widget = self._list.itemWidget(item)
+            if not widget:
+                continue
+            widget.setProperty("selected", "true" if idx == selected_row else "false")
+            widget.style().unpolish(widget)
+            widget.style().polish(widget)
 
     def clear(self) -> None:
         self._list.clear()

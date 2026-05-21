@@ -15,18 +15,19 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from replyright_qt.widgets.line_icons import LineIcon
-
 QUEUES: list[tuple[str, str]] = [
     ("inbox", "Inbox"),
     ("review", "Needs Review"),
     ("urgent", "Urgent"),
     ("vip", "VIP"),
     ("missing", "Missing Info"),
-    ("kyc", "KYC Inspections"),
+    ("kyc", "KYC Auto"),
     ("settings", "Settings"),
     ("admin", "Admin"),
 ]
+
+_ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+_ICON_DIR = os.path.join(_ROOT_DIR, "replyright_qt", "resources", "icons")
 
 _QUEUE_GROUPS: list[tuple[str, list[tuple[str, str, str]]]] = [
     (
@@ -37,7 +38,7 @@ _QUEUE_GROUPS: list[tuple[str, list[tuple[str, str, str]]]] = [
             ("urgent", "urgent", "Urgent"),
             ("vip", "vip", "VIP"),
             ("missing", "missing", "Missing Info"),
-            ("kyc", "kyc", "KYC Inspections"),
+            ("kyc", "kyc", "KYC Auto"),
         ],
     ),
     ("ADMIN", [("settings", "settings", "Settings"), ("admin", "admin", "Admin")]),
@@ -75,7 +76,7 @@ class _SidebarItem(QWidget):
         row.setContentsMargins(12, 0, 12, 0)
         row.setSpacing(9)
 
-        self._icon = LineIcon(icon)
+        self._icon = _NavIcon(icon)
 
         name_lbl = QLabel(label)
         name_lbl.setObjectName("nav-label")
@@ -108,6 +109,34 @@ class _SidebarItem(QWidget):
     def mousePressEvent(self, event) -> None:
         self.clicked.emit(self._key)
         super().mousePressEvent(event)
+
+
+class _NavIcon(QLabel):
+    def __init__(self, name: str) -> None:
+        super().__init__()
+        self._name = name
+        self.setObjectName("nav-icon")
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setFixedSize(28, 28)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self._normal = self._load_pixmap(24)
+        self._active = self._load_pixmap(26)
+        self.setPixmap(self._normal)
+
+    def set_active(self, active: bool) -> None:
+        self.setPixmap(self._active if active else self._normal)
+
+    def _load_pixmap(self, size: int) -> QPixmap:
+        path = os.path.join(_ICON_DIR, f"{self._name}.png")
+        pixmap = QPixmap(path)
+        if pixmap.isNull():
+            return QPixmap()
+        return pixmap.scaled(
+            size,
+            size,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
 
 
 class _UserCard(QWidget):

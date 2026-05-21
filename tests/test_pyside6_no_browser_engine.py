@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from PySide6.QtGui import QImage
+
 
 def _scaffold_text(root: str) -> str:
     paths = list(Path(root).rglob("*.py"))
@@ -45,6 +47,28 @@ def test_replyright_core_has_no_webview_import() -> None:
     text = _scaffold_text("replyright_core")
     assert "webview" not in text
     assert "QWebEngineView" not in text
+
+
+def test_sidebar_uses_project_icon_assets() -> None:
+    expected = {
+        "inbox",
+        "review",
+        "urgent",
+        "vip",
+        "missing",
+        "kyc",
+        "settings",
+        "admin",
+    }
+    icon_dir = Path("replyright_qt/resources/icons")
+
+    for name in expected:
+        icon_path = icon_dir / f"{name}.png"
+        assert icon_path.exists(), f"Missing sidebar icon asset: {icon_path}"
+        image = QImage(str(icon_path))
+        assert not image.isNull(), f"Sidebar icon is not a valid image: {icon_path}"
+        assert image.width() >= 64
+        assert image.height() >= 64
 
 
 

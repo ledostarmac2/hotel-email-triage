@@ -1,5 +1,69 @@
 # Handoff Log
 
+## 2026-05-20 - native sidebar icon polish and DO-178C handoff
+
+Summary:
+
+- Coordinated with Claude through `agent_comms/from_codex.md` and polled `agent_comms/from_claude.md` during the pass; no newer Claude changes conflicted.
+- Replaced the temporary drawn sidebar icon usage with polished themed PNG assets under `replyright_qt/resources/icons/`.
+- Kept the generated AI icon concept as design input only; production assets are deterministic PNGs so the PyInstaller bundle stays stable.
+- Updated conversation list row selection so the selected state is applied to the row widget and QSS paints a subtler full-row surface instead of stacked-looking text highlights.
+- Added a DO-178C starter compliance evidence folder and pytest suite for traceability metadata, read-only Outlook safety, zero-credit training, and native-shell contract checks. Brian clarified Claude owns that compliance/test-suite lane; Codex is staying focused on UI.
+
+Files changed:
+
+- `agent_comms/from_codex.md`
+- `replyright_qt/resources/icons/*.png`
+- `replyright_qt/widgets/sidebar_nav.py`
+- `replyright_qt/widgets/conversation_list.py`
+- `replyright_qt/styles/theme.py`
+- `tests/test_pyside6_no_browser_engine.py`
+- `tests/test_do178c_compliance.py`
+- `docs/compliance/DO178C_TEST_PLAN.md`
+- `docs/compliance/do178c_traceability.json`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+
+Verification:
+
+- `python -m py_compile replyright_qt\widgets\sidebar_nav.py replyright_qt\widgets\conversation_list.py replyright_qt\styles\theme.py` - passed.
+- `python -m pytest tests/test_pyside6_no_browser_engine.py tests/test_do178c_compliance.py tests/test_v1_features.py::TestSidebarNeedsReviewQueue -q --timeout=60` - 17 passed.
+- Offscreen Qt smoke for `SidebarNav` and `ConversationListWidget` - passed; icon pixmap loaded and selected row property was applied.
+- First build attempt failed because the previous packaged `ReplyRight.exe` was still running and locking `dist\ReplyRight`; stopped that process.
+- `.\build_exe.ps1` - passed after stopping the locked packaged app.
+- `.\dist\ReplyRight\ReplyRight.exe --health-smoke` - passed.
+
+Remaining work:
+
+- Manual visual pass on the real display is still recommended because the screenshot issue is aesthetic.
+
+## 2026-05-20 - KYC popup restored to base panel
+
+Summary:
+
+- Brian clarified the provided KYC screenshot was the broken version, not the desired reference.
+- Stopped launching the newer `KycReminderWindow` legacy/local clone from the sidebar.
+- Restored the user-facing KYC popup to the base integrated `KycWindow`, which hosts `KycPanel` and uses the existing KYC API/backend lifecycle.
+- Added object names to `KycPanel` sections/labels so the existing ReplyRight dark KYC QSS applies to the base panel without changing backend behavior.
+
+Files changed:
+
+- `replyright_qt/windows/main_window.py`
+- `replyright_qt/widgets/kyc_panel.py`
+- `replyright_qt/styles/theme.py`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+- `agent_comms/from_codex.md`
+
+Verification:
+
+- `python -m py_compile replyright_qt\windows\main_window.py replyright_qt\windows\kyc_window.py replyright_qt\widgets\kyc_panel.py replyright_qt\styles\theme.py` - passed.
+- `python -m pytest tests/test_pyside6_no_browser_engine.py tests/test_kyc_backend.py tests/test_kyc_service_full.py -q --timeout=60` - passed.
+
+Remaining work:
+
+- Rebuild the EXE and manually click the sidebar KYC item to confirm the popup now shows the base integrated panel instead of the broken legacy clone.
+
 ## 2026-05-20 - v0.4.0 CI/release training repair
 
 Summary:

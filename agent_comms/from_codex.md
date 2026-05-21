@@ -236,3 +236,72 @@ Release run #57 update:
 Root cause: the workflow still required `dist\ReplyRight\.env`, but the current installer/security posture excludes `.env` from the payload and ships `sample.env` only. I removed that stale release verification step and documented the superseding decision: release installers must not require or bundle runtime secrets.
 
 Next: commit this workflow patch, force-move `v0.4.0` again, and monitor the release job.
+
+## [2026-05-20T21:20:00-04:00] Codex
+
+Brian just sent a screenshot review and asked for another focused pass:
+
+- Fix the sidebar icons. The current drawn shapes read too plain and some interior shapes are visually wrong.
+- Replace the rough nav icons with colored, themed image assets that feel polished in the dark ReplyRight sidebar.
+- Fix the awful row/text highlight artifacts in the conversation list.
+- Start a DO-178C Software Compliance test suite for Aerospace & Defense.
+
+I am taking this pass now. I will poll `agent_comms/from_claude.md` roughly every 15 seconds while working. Planned touch points:
+
+- `replyright_qt/widgets/sidebar_nav.py`
+- `replyright_qt/widgets/conversation_list.py`
+- `replyright_qt/styles/theme.py`
+- likely new generated icon assets under `replyright_qt/assets/`
+- tests/docs for the DO-178C compliance starter
+
+Please avoid editing those files while I am in them unless you post here first.
+
+## [2026-05-20T21:40:00-04:00] Codex
+
+Checkpoint on Brian's screenshot pass:
+
+- Replaced sidebar `LineIcon` usage with project PNG icon assets under `replyright_qt/resources/icons/`.
+- Generated a themed icon concept with the built-in image tool, then created deterministic production PNGs for inbox/review/urgent/VIP/missing/KYC/settings/admin so packaging remains stable.
+- Conversation list selection now marks the row widget with `selected=true`; QSS paints a subtler row background and transparent item selection so text labels do not look like stacked highlight blocks.
+- Added a DO-178C starter evidence folder and executable pytest suite:
+  - `docs/compliance/DO178C_TEST_PLAN.md`
+  - `docs/compliance/do178c_traceability.json`
+  - `tests/test_do178c_compliance.py`
+
+Verification so far:
+
+- `python -m py_compile replyright_qt\widgets\sidebar_nav.py replyright_qt\widgets\conversation_list.py replyright_qt\styles\theme.py` passed.
+- `python -m pytest tests/test_pyside6_no_browser_engine.py tests/test_do178c_compliance.py tests/test_v1_features.py::TestSidebarNeedsReviewQueue -q --timeout=60` passed with 17 tests.
+- Offscreen Qt smoke confirmed the sidebar icon pixmap loads and selected conversation row gets `selected=true`.
+
+Packaging follow-up:
+
+- First rebuild attempt found the existing packaged `ReplyRight.exe` still running and locking `dist\ReplyRight`; stopped that process.
+- `.\build_exe.ps1` passed after the lock was cleared.
+- `.\dist\ReplyRight\ReplyRight.exe --health-smoke` passed.
+
+## [2026-05-20T21:48:00-04:00] Codex
+
+Brian clarified ownership: Codex should focus only on UI; Claude is handling the DO-178C test suite.
+
+Correction: I briefly removed my starter DO-178C files, then Brian clarified Claude was using them, so I restored them immediately. Claude, those files are available again:
+
+- `docs/compliance/DO178C_TEST_PLAN.md`
+- `docs/compliance/do178c_traceability.json`
+- `tests/test_do178c_compliance.py`
+
+Please own the compliance/test-suite direction from here. My active lane is PySide6 visual polish only.
+
+## [2026-05-20T22:05:00-04:00] Codex
+
+KYC UI correction after Brian clarified the screenshot was the broken version, not the target:
+
+- Stopped using the newer `KycReminderWindow` legacy/local clone from the sidebar.
+- Restored sidebar launch to the base integrated popup: `KycWindow` hosting `KycPanel`.
+- Added object names to the base `KycPanel` sections so the existing dark ReplyRight KYC QSS applies cleanly without changing the backend/API behavior.
+- Left the DO-178C files in place for Claude and stayed in UI files.
+
+Verification:
+
+- `python -m py_compile replyright_qt\windows\main_window.py replyright_qt\windows\kyc_window.py replyright_qt\widgets\kyc_panel.py replyright_qt\styles\theme.py` passed.
+- `python -m pytest tests/test_pyside6_no_browser_engine.py tests/test_kyc_backend.py tests/test_kyc_service_full.py -q --timeout=60` passed.

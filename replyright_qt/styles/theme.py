@@ -45,9 +45,9 @@ DARK = {
 def get_stylesheet(mode: str = "light") -> str:
     c = DARK if mode == "dark" else LIGHT
     muted = "#9aa7bd" if mode == "light" else "#a7b2c5"
-    selected_bg = "#eaf1ff" if mode == "light" else "#1e3a5f"
-    selected_border = "#2563eb" if mode == "light" else "#60a5fa"
-    hover_bg = "#f3f6fb" if mode == "light" else "#182235"
+    selected_bg = "#edf4ff" if mode == "light" else "#12233d"
+    selected_border = "#2563eb" if mode == "light" else "#3b82f6"
+    hover_bg = "#f7f9fd" if mode == "light" else "#101c31"
     input_bg = "#ffffff" if mode == "light" else "#0f172a"
     login_card = "#ffffff" if mode == "light" else "#0f172a"
     login_root = "#0b1220" if mode == "light" else "#030712"
@@ -236,9 +236,9 @@ QListWidget::item {{
 }}
 
 QListWidget::item:selected {{
-    background-color: {selected_bg};
+    background-color: transparent;
     color: {c["content_text"]};
-    border: 1px solid {selected_border};
+    border: none;
 }}
 
 QListWidget::item:hover:!selected {{
@@ -247,6 +247,15 @@ QListWidget::item:hover:!selected {{
 
 QWidget#conversation-row {{
     background-color: transparent;
+}}
+
+QWidget#conversation-row:hover {{
+    background-color: {hover_bg};
+}}
+
+QWidget#conversation-row[selected="true"] {{
+    background-color: {selected_bg};
+    border-left: 2px solid {selected_border};
 }}
 
 QWidget#conversation-row QLabel {{
@@ -547,6 +556,7 @@ QLabel#waldorf-sub {{ color: {c["sidebar_muted"]}; font-size: 8px; letter-spacin
 
 /* ── Conversation list rows ── */
 QWidget#conversation-row QLabel {{ background-color: transparent; }}
+QWidget#conversation-row[selected="true"] {{ background-color: {selected_bg}; border-left: 2px solid {selected_border}; }}
 QLabel#row-sender {{ font-weight: 700; font-size: 13px; color: {c["content_text"]}; background: transparent; }}
 QLabel#row-subject {{ font-size: 12px; font-weight: 600; color: {c["content_text"]}; background: transparent; }}
 QLabel#row-meta, QLabel#row-preview {{ color: {muted}; font-size: 11px; background: transparent; }}
@@ -560,7 +570,7 @@ QComboBox#sort-combo {{ font-size: 12px; border-radius: 5px; padding: 2px 6px; }
 /* ── Filter bar ── */
 QLabel#sync-status-lbl {{ color: {muted}; font-size: 10px; background: transparent; padding-right: 4px; }}
 
-/* KYC reminder popup */
+/* KYC Auto popup */
 QWidget#kyc-window {{
     background-color: #07101f;
 }}

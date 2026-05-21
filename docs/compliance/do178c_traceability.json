@@ -1,0 +1,81 @@
+{
+  "standard": "DO-178C",
+  "scope": "ReplyRight desktop safety and assurance starter evidence for future Aerospace & Defense workflows.",
+  "certification_status": "not_certified",
+  "software_level": "planning_only",
+  "assumptions": [
+    "ReplyRight is currently a hotel operations desktop application and is not deployed in an airborne safety-critical function.",
+    "This artifact starts a compliance-oriented evidence pattern only; it is not a certification claim and is not a substitute for a certification plan, DER review, PSAC, SAS, SCI, or SOI audit.",
+    "External AI output must remain advisory and human-reviewed for any future regulated workflow."
+  ],
+  "objectives": [
+    {
+      "id": "DO178C-PLAN-001",
+      "title": "Compliance scope is explicit",
+      "requirement": "The repository must state that DO-178C work is a starter evidence suite and not a certification claim.",
+      "verification": "Automated metadata validation",
+      "artifacts": [
+        "docs/compliance/do178c_traceability.json"
+      ],
+      "tests": [
+        "tests/test_do178c_compliance.py::test_traceability_metadata_is_explicit"
+      ],
+      "status": "starter"
+    },
+    {
+      "id": "DO178C-REQ-001",
+      "title": "Traceability entries are complete",
+      "requirement": "Every compliance objective must map to requirements, verification method, artifacts, and tests.",
+      "verification": "Automated traceability schema check",
+      "artifacts": [
+        "docs/compliance/do178c_traceability.json"
+      ],
+      "tests": [
+        "tests/test_do178c_compliance.py::test_every_objective_has_traceability_fields"
+      ],
+      "status": "starter"
+    },
+    {
+      "id": "DO178C-SAF-001",
+      "title": "Outlook integration remains read-only",
+      "requirement": "The desktop Outlook integration must not send, delete, move, archive, mark read, categorize, flag, reply, or forward messages.",
+      "verification": "Static source guard",
+      "artifacts": [
+        "outlook_dashboard/outlook_desktop.py"
+      ],
+      "tests": [
+        "tests/test_do178c_compliance.py::test_outlook_desktop_source_has_no_mutating_com_calls"
+      ],
+      "status": "active"
+    },
+    {
+      "id": "DO178C-AI-001",
+      "title": "Training path avoids paid external AI",
+      "requirement": "In-app training must not call Claude or other paid AI APIs while exporting or compacting training examples.",
+      "verification": "Static source guard",
+      "artifacts": [
+        "outlook_dashboard/training_pipeline.py",
+        "outlook_dashboard/completed_training_pipeline.py"
+      ],
+      "tests": [
+        "tests/test_do178c_compliance.py::test_training_pipeline_has_zero_credit_contract"
+      ],
+      "status": "active"
+    },
+    {
+      "id": "DO178C-UI-001",
+      "title": "Native shell avoids browser engines",
+      "requirement": "The active desktop shell must remain PySide6 native without QWebEngine, Electron, Tauri, or pywebview.",
+      "verification": "Static source guard",
+      "artifacts": [
+        "replyright_qt",
+        "run_desktop.py"
+      ],
+      "tests": [
+        "tests/test_pyside6_no_browser_engine.py",
+        "tests/test_do178c_compliance.py::test_native_ui_contract_is_tracked"
+      ],
+      "status": "active"
+    }
+  ]
+}

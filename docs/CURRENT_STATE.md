@@ -1,11 +1,16 @@
 # Current State
 
-Last updated: 2026-05-20 (v0.4.0 CI/release training repair)
+Last updated: 2026-05-20 (native icon polish)
 
 ## Status
 
 - Product name is ReplyRight.
 - Current runnable app is `outlook_dashboard/` plus `run_desktop.py`.
+- 2026-05-20 native icon polish:
+  - Sidebar navigation now uses polished PNG image assets in `replyright_qt/resources/icons/` instead of the temporary native line drawing widget. Icons are themed for the dark ReplyRight sidebar and bundled through the existing `--collect-all replyright_qt` packaging path.
+  - Conversation list selection now marks the actual row widget as selected and lets QSS paint a subtler row surface, reducing the blocky text-highlight look while keeping labels transparent.
+  - DO-178C starter artifacts exist under `docs/compliance/` and `tests/test_do178c_compliance.py`; Claude owns that compliance/test-suite lane, while Codex is focused on UI.
+  - Validation passed: Qt compile check, targeted PySide6/sidebar tests, offscreen Qt smoke for icon loading plus selected-row styling, `.\build_exe.ps1`, and packaged `dist\ReplyRight\ReplyRight.exe --health-smoke`.
 - 2026-05-20 v0.4.0 CI/release repair:
   - Fixed the GitHub Actions lint failure in `tests/test_completed_training_pipeline.py` by restoring the Completed Requests training pipeline to the documented zero-credit sanitized-upload path.
   - `outlook_dashboard/completed_training_pipeline.py` now imports read-only completed Outlook messages, labels them with local heuristics, builds redacted examples through the shared training helper, uploads sanitized records, and reports `external_ai_used=false`.
@@ -28,7 +33,7 @@ Last updated: 2026-05-20 (v0.4.0 CI/release training repair)
   - Reworked the PySide6 theme into a light/dark stylesheet factory and added a Settings page with theme switching, password reset request, and basic workflow/safety settings.
   - Restyled the sidebar toward the target dark navy dashboard: logo/tagline, user card, queue/admin sections, queue count badges, Waldorf Astoria footer, and a subtler read-only status badge.
   - Restyled the login logo presentation by placing the ReplyRight mark on a navy brand panel so it remains legible on the white sign-in card.
-  - KYC Inspections now opens as a themed native PySide6 popup window from the sidebar. This is the intended design; do not move it back into the main stacked inbox page.
+  - KYC Auto now opens as a separate PySide6 popup from the sidebar. The active surface is automation-first: KYC username, KYC password, on-phones checklist, and three actions only: Start Timer, Cancel, and Run Now. It no longer shows due dates, inspection history, completed-by, snooze, skip, or manual reminder controls.
   - Hardened `MainWindow` and `ConversationDetailWidget` worker lifetime handling so rapid queue changes such as Missing Info do not destroy active `QThread` workers.
   - Changed KYC automation missing-module failures to a clean user-facing message and updated `build_exe.ps1` to bundle the local KYC automation file and Edge driver when present.
   - Validation passed: targeted Qt/API/installer checks, offscreen Qt popup smoke, full suite (`729 passed`, 5 existing `datetime.utcnow()` warnings, 35 subtests), `.\build_exe.ps1`, and packaged `dist\ReplyRight\ReplyRight.exe --health-smoke`.
@@ -222,8 +227,8 @@ Tests: `python -m unittest tests.test_kernel_plugins tests.test_kernel_orchestra
 ## Recommended Next Steps
 
 1. **Supabase schema**: if not yet run, paste `docs/supabase_schema.sql` into the Supabase SQL Editor (project `dxalumiijcfmwzmosijf`) and execute it once to create all tables.
-2. **KYC popup validation**: keep KYC Inspection Reminder as a themed native PySide6 popup launched from the sidebar. Do not move it back into the main stacked inbox page, and do not reintroduce `QWebEngineView` or a browser/WebView shell.
-3. **KYC automation decision**: decide later whether the old Selenium `run_kyc_inspection()` behavior should be wrapped behind an explicit, human-triggered action. Do not store KYC passwords in ReplyRight or auto-run browser automation without approval.
+2. **KYC Auto validation**: keep KYC Auto as a themed native PySide6 popup launched from the sidebar. It should run the bundled KYC browser automation from Start Timer or Run Now only; do not add due/history/snooze/skip/completed-by workflows back into the user-facing UI.
+3. **KYC automation safety**: do not store KYC passwords in ReplyRight or run browser automation without an explicit user action.
 4. **GitHub Secrets**: in the GitHub repo Settings → Secrets → Actions, confirm `ANTHROPIC_API_KEY`, `SUPABASE_URL`, `SUPABASE_KEY`, `SUPABASE_SERVICE_ROLE_KEY` are set so CI can build and test.
 5. **Emergency v0.1.1 Release**: after tests and installer smoke checks pass, push a tag (`git tag v0.1.1 && git push origin v0.1.1`) to trigger the release job. It must publish `ReplyRightSetup-v0.1.1.exe` as the primary asset, not a bare EXE.
 6. **Local classifier training (Phase 7 long-term)**: import historical completed emails → redact PII → AI-label → human-review samples → store sanitized Supabase training set → train lightweight local classifiers. Start with urgency, owner, category, status, missing_information targets only.
