@@ -6,6 +6,12 @@ Last updated: 2026-05-25 (v1 safety + UI hardening — steps 4-8)
 
 - Product name is ReplyRight.
 - Current runnable app is `outlook_dashboard/` plus `run_desktop.py`.
+- 2026-05-25 Docker CI restoration and training-workflow clarification:
+  - Restored root `Dockerfile` and `docker-compose.yml` after the v0.5.0 cleanup removed them while `.github/workflows/build.yml` still runs the `docker-build` job with `docker build -t replyright-ci .`.
+  - The Docker image runs the FastAPI server path (`outlook_dashboard.main:app`) on port 8000 and health-checks `/api/health`; it is for CI/server smoke, not the Windows desktop UI.
+  - Added asset contract coverage so the Dockerfile/compose files cannot disappear while the CI workflow still expects them.
+  - Clarified the training split in `AGENTS.md`, `docs/TRAINING_WORKFLOW.md`, `docs/V1_RELEASE_PLAN.md`, and `docs/ARCHITECTURE.md`: in-app training endpoints remain zero-credit and never call Claude/OpenAI/Google, while Codex/Claude may perform an explicit outside-the-app agent-assisted labeling/review pass only when Brian directly asks an agent to "train the model."
+  - Validation passed: `python -m pytest tests/test_asset_contract.py tests/test_pipeline_docs_contract.py -q --timeout=60`. Local Docker runtime is not installed on this PC, so the actual image build must be verified by GitHub Actions or on a machine with Docker.
 - 2026-05-25 KYC Selenium packaging repair:
   - KYC Auto failed at runtime with `No module named 'selenium'` because the KYC automation script is loaded dynamically from bundled data, so PyInstaller did not see its Selenium imports.
   - Added Selenium to runtime dependencies and PyInstaller vendor/collection rules; added explicit Selenium imports in `outlook_dashboard/kyc/automation.py` so the frozen app bundles the modules needed by the dynamic automation script.

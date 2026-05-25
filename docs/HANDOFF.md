@@ -1,5 +1,36 @@
 # Handoff Log
 
+## 2026-05-25 - Docker CI restoration and agent-assisted training contract
+
+Summary:
+
+- Restored Docker support after the v0.5.0 cleanup removed `Dockerfile` while `.github/workflows/build.yml` still ran `docker build -t replyright-ci .`.
+- Added a root `Dockerfile` for the FastAPI server smoke path and a local `docker-compose.yml` that exposes ReplyRight on port 8000.
+- Added asset contract tests so the Dockerfile and compose file stay present while CI expects them.
+- Reconciled Brian's intended training workflow in docs: Refresh Inbox and in-app training endpoints remain zero-credit, but when Brian explicitly tells Codex/Claude to "train the model," the agent can perform an outside-the-app labeling/review pass on redacted/sanitized completed-request examples, write only sanitized labels/examples, retrain the classifier, and purge raw imported bodies.
+
+Files changed:
+
+- `Dockerfile`
+- `docker-compose.yml`
+- `AGENTS.md`
+- `docs/ARCHITECTURE.md`
+- `docs/DEPLOYMENT.md`
+- `docs/TRAINING_WORKFLOW.md`
+- `docs/V1_RELEASE_PLAN.md`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+- `tests/test_asset_contract.py`
+
+Verification:
+
+- `python -m pytest tests/test_asset_contract.py tests/test_pipeline_docs_contract.py -q --timeout=60` - 22 passed.
+- `docker --version` - failed locally because Docker is not installed on this PC.
+
+Remaining work:
+
+- Verify the Docker image through GitHub Actions or a machine with Docker installed.
+
 ## 2026-05-25 - KYC automation bundle path audit
 
 Summary:

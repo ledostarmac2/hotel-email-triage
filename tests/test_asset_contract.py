@@ -70,6 +70,22 @@ def test_installer_sample_env_exists() -> None:
 
 # ── STATIC_DIR derivation guard ──────────────────────────────────────────────
 
+def test_dockerfile_exists_for_ci_workflow() -> None:
+    dockerfile = Path("Dockerfile")
+    assert dockerfile.exists(), "GitHub Actions docker-build job expects a root Dockerfile"
+    text = dockerfile.read_text(encoding="utf-8")
+    assert "outlook_dashboard.main:app" in text
+    assert "/api/health" in text
+
+
+def test_docker_compose_exists_for_local_server_smoke() -> None:
+    compose = Path("docker-compose.yml")
+    assert compose.exists(), "Keep docker-compose.yml for local Docker smoke checks"
+    text = compose.read_text(encoding="utf-8")
+    assert "replyright" in text
+    assert "8000:8000" in text
+
+
 def test_static_dir_is_importable_from_config() -> None:
     """main.py resolves STATIC_DIR from DATA_DIR at import time — the directory must exist."""
     static = Path("outlook_dashboard/static")

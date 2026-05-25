@@ -213,7 +213,7 @@ Training:
 
 - The in-app training pipelines are zero-credit and use existing analysis labels or local heuristics.
 - `refine=true` is retained only as a backwards-compatible API flag and must not call Claude/Anthropic.
-- Codex/Claude Code style agent-assisted grading can happen outside the running app, then reviewed labels can be written back through Supabase.
+- When Brian explicitly asks Codex or Claude to "train the model", agent-assisted labeling can happen outside the running app on redacted/sanitized completed-request content. The agent may write only sanitized labels/examples back through Supabase or the local training store, retrain the classifier, and purge raw imported bodies.
 
 ## Training Pipeline
 

@@ -83,7 +83,12 @@ After meaningful work:
 
 ## Training the Classifier
 
-When asked to train the classifier, follow `docs/TRAINING_WORKFLOW.md` exactly.  Short version:
+When Brian says **"train the model"** or **"train the classifier"**, follow `docs/TRAINING_WORKFLOW.md` exactly. The important split is:
+
+- The running app and in-app endpoints remain zero-credit and never call Claude/OpenAI/Google during Refresh Inbox or training endpoints.
+- Codex/Claude may perform an explicit agent-assisted labeling/review pass outside the running app when Brian directly asks an agent to train the model. The agent uses its model judgment on redacted/sanitized completed-request content, writes only sanitized labels/examples, retrains the local classifier, and purges raw imported bodies.
+
+Short version:
 
 1. **Import + label + upload + purge** in one call:
    ```python
@@ -100,7 +105,8 @@ When asked to train the classifier, follow `docs/TRAINING_WORKFLOW.md` exactly. 
    Or via the admin API: `POST /api/training/train`
 
 Key constraints:
-- This pipeline **never calls external AI** (no Claude, OpenAI, Google).
+- In-app training endpoints **never call external AI** (no Claude, OpenAI, Google).
+- Agent-assisted labeling is allowed only after Brian explicitly asks an agent to train the model, and it must preserve the same privacy boundary: no raw bodies, full subjects, full sender emails, message IDs, payment identifiers, or secrets in Supabase, docs, logs, or final responses.
 - Raw emails are purged automatically — `source='completed_requests'` rows are deleted from SQLite after upload.
 - Outlook messages are read-only: never send, delete, archive, or mutate them.
 - Only `body_redacted`, `sender_domain`, and `subject_tokens` are uploaded — never raw bodies or full emails.

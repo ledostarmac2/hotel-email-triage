@@ -172,6 +172,8 @@ The response intentionally contains no secrets. It reports:
 
 GitHub Actions includes Windows lint/test/build, installer build, Docker health, and tag-based release jobs.
 
+The Docker path is a CI/server smoke target, not the Windows desktop shell. It builds from the root `Dockerfile`, runs `outlook_dashboard.main:app` with Uvicorn on port 8000, and health-checks `/api/health`. Keep `Dockerfile` present while `.github/workflows/build.yml` includes the `docker-build` job.
+
 Release assets must be installer-first:
 
 ```text

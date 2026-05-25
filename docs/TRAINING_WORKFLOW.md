@@ -8,7 +8,7 @@ This is the authoritative step-by-step training workflow for any agent (Claude, 
 
 ## Overview
 
-Training has four phases, always in this order:
+The running app has four phases, always in this order:
 
 1. **Import** — pull ~1000 emails from the Outlook "Completed Request" folder into SQLite
 2. **Label** — heuristic analysis assigns urgency, owner, category, sentiment labels
@@ -17,12 +17,15 @@ Training has four phases, always in this order:
 
 After training examples are in Supabase and reviewed, the local classifier can be retrained from them.
 
+When Brian explicitly tells Codex or Claude **"train the model"**, the agent may add an external agent-assisted review pass outside the running app. That means the agent uses its own model judgment to label or correct redacted/sanitized completed-request examples, writes only sanitized labels/examples back to the training store, retrains the local classifier, and purges raw imported bodies. This is not an in-app endpoint and is not part of Refresh Inbox.
+
 ## Privacy and safety invariants (never violate)
 
 - Raw `body_text` is **never uploaded**. Only `body_redacted` is stored.
 - Full sender email is **never stored**. Only `sender_domain`.
 - Full subject is **never stored**. Only `subject_tokens`.
-- This pipeline **never calls external AI providers** (no Claude, OpenAI, Google AI).
+- In-app training endpoints **never call external AI providers** (no Claude, OpenAI, Google AI).
+- Agent-assisted labeling is allowed only when Brian explicitly asks an agent to train the model. It must use redacted/sanitized content where possible and must not store raw bodies, full subjects, full sender emails, message IDs, reservation/payment identifiers, secrets, or private mailbox content in Supabase, docs, logs, or final responses.
 - Outlook messages are read-only: do not send, delete, archive, move, or mark-read any message.
 
 ## Step 1: Import completed request emails
@@ -69,7 +72,19 @@ print(completed_pipeline_status())
 
 Or via the admin UI at `Settings → Training → Completed Requests Pipeline`.
 
-## Step 3: Retrain the local classifier
+## Step 3: Agent-assisted review when Brian asks an agent to train the model
+
+If Brian's instruction is to Codex/Claude, not just the in-app admin UI, perform a review pass before retraining:
+
+1. Work from the sanitized examples produced by `run_completed_pipeline()` or from redacted local extracts.
+2. Use agent judgment to assign or correct the classifier targets: urgency, owner, category, status, missing-information, reply-required, and escalation/review signals.
+3. Preserve the same privacy contract as the in-app pipeline: only redacted body text, sender domain, subject tokens, labels, and safe metadata may be written back.
+4. Mark the resulting examples as agent-reviewed or human-review-needed in the safest available metadata field if the storage path supports it.
+5. Do not call the app's single-email Claude suggestion path for bulk labeling.
+
+If the agent cannot safely access Outlook, Supabase, or the local database, stop and report the blocker rather than inventing labels.
+
+## Step 4: Retrain the local classifier
 
 After examples are reviewed in Supabase, retrain:
 
@@ -87,7 +102,7 @@ print(result)
 
 The classifier pulls reviewed examples from Supabase, trains on them, and saves the model to SQLite (`app_kv` table).  Minimum examples threshold: `MIN_TRAINING_EXAMPLES = 10`.
 
-## Step 4: Verify the classifier
+## Step 5: Verify the classifier
 
 ```http
 GET /api/training/status
@@ -104,7 +119,7 @@ The pipeline uses **heuristic analysis** (`outlook_dashboard/ai.py:heuristic_ana
 - Sender domain
 - Thread history (latest-message extraction strips quoted replies)
 
-It does NOT call any external AI API. Labels are deterministic given the email content.
+It does NOT call any external AI API from inside the running app. Default labels are deterministic given the email content. Agent-assisted labels are only produced by Codex/Claude when Brian explicitly asks an agent to train the model.
 
 The internal response signals used for owner detection:
 

@@ -89,13 +89,14 @@ Required:
 
 - In-app training endpoints are zero-credit by default and do not call Claude/Anthropic, OpenAI, or Google AI.
 - Completed Requests import produces sanitized training examples.
-- Human-reviewed or externally reviewed examples can train the local classifier.
+- Human-reviewed or agent-reviewed examples can train the local classifier when Brian explicitly asks Codex/Claude to train the model.
 - Classifier status clearly shows example counts, trained targets, version, metrics, and gaps.
 - Candidate model promotion/rollback is explicit or the limitation is documented.
 
 Current status:
 
 - `training_pipeline.py` and `completed_training_pipeline.py` use existing analysis/heuristics and report `external_ai_used=false`.
+- Agent-assisted labeling is an outside-the-app workflow documented in `docs/TRAINING_WORKFLOW.md`; it must not be invoked by Refresh Inbox or in-app training endpoints.
 - The local classifier trains `urgency`, `owner`, and `category`.
 - Bootstrap/local examples exist, but real human-reviewed beta examples are not yet sufficient for v1 confidence.
 - Rollback/admin model comparison remains a v1 hardening item.
