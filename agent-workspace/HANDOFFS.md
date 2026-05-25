@@ -1,5 +1,40 @@
 # Agent Handoffs
 
+## 2026-05-25 - Codex - v0.5.6 Payload-Scoped Extraction Audit
+
+Summary:
+
+- Watched `v0.5.5`: lint, docker-build, build-exe, health smoke, and installer build passed; release still failed at `Security Lint (Installer Extraction)`.
+- Added `REPLYRIGHT_PAYLOAD_AUDIT=1` mode to `scripts/check_no_bundled_secrets.py` so extraction audit scans only `dist\ReplyRight` and the extracted installer `app` payload instead of the entire installer workspace.
+- Updated the release workflow to set `REPLYRIGHT_PAYLOAD_AUDIT=1` for the installer extraction audit step.
+- Bumped release metadata to `0.5.6`.
+
+Files changed:
+
+- `.github/workflows/build.yml`
+- `scripts/check_no_bundled_secrets.py`
+- `tests/test_secret_hygiene.py`
+- `installer/replyright_setup.iss`
+- `outlook_dashboard/__init__.py`
+- `pyproject.toml`
+- `agent-workspace/PROJECT_STATE.md`
+- `agent-workspace/TASK_BOARD.md`
+- `agent-workspace/HANDOFFS.md`
+- `agent-workspace/AGENT_MESSAGES.md`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+
+Verification:
+
+- `python -m pytest tests/test_secret_hygiene.py tests/test_version_consistency.py tests/test_agent_coordination_contract.py -q --timeout=60` - passed.
+- `$env:ALLOW_RELEASE_RUNTIME_SECRETS='1'; python scripts\check_no_bundled_secrets.py` - passed.
+- `$env:REPLYRIGHT_PAYLOAD_AUDIT='1'; python scripts\check_no_bundled_secrets.py` - passed.
+- `git diff --check` - line-ending warnings only.
+
+Remaining work:
+
+- Commit, tag, push `v0.5.6`, then watch the release workflow.
+
 ## 2026-05-25 - Claude - Deterministic recommended_action + Operational Queue Filters
 
 Summary:
