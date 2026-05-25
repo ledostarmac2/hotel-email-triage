@@ -1,5 +1,21 @@
 # Handoff Log
 
+## 2026-05-25 - deterministic recommended_action + operational queues (Claude)
+
+Summary:
+
+- Added 14-value `recommended_action` field to `heuristic_analysis()` — deterministic, no external AI.
+- Added 9-queue operational filter (`_apply_queue_filter()`) and public `/api/queues` endpoint.
+- Wired queues into PySide6 sidebar nav, API client, and conversation detail pane.
+- Added 90+41 tests covering taxonomy contract, no external AI, no Outlook, PII safety.
+- Codex review bypassed by Brian due to usage limit; task remains Waiting for Codex Review.
+
+Files changed: `outlook_dashboard/ai.py`, `outlook_dashboard/taxonomy.py`, `outlook_dashboard/main.py`, `replyright_qt/widgets/conversation_detail.py`, `replyright_qt/api_client.py`, `replyright_qt/widgets/sidebar_nav.py`, `replyright_qt/windows/main_window.py`, `tests/test_recommended_action.py` (new), `tests/test_safety_regression.py` (new), plus coordination/doc files.
+
+Verification: full suite passed; compile checks OK on all modified Python files.
+
+Remaining: Codex review of `_recommended_action_for()` routing logic when usage is restored.
+
 ## 2026-05-25 - v0.5.5 pre-installer env purge
 
 Summary:

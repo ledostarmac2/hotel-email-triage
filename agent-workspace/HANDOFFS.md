@@ -1,5 +1,47 @@
 # Agent Handoffs
 
+## 2026-05-25 - Claude - Deterministic recommended_action + Operational Queue Filters
+
+Summary:
+
+- Added deterministic `recommended_action` field to `heuristic_analysis()` with 14 allowed values — computed entirely from locally-derived triage fields, no external AI calls.
+- Added `_recommended_action_for()` priority-ordered decision tree in `outlook_dashboard/ai.py`.
+- Added `RECOMMENDED_ACTIONS` and `OPERATIONAL_QUEUES` constants to `outlook_dashboard/taxonomy.py`.
+- Added `_apply_queue_filter()` server-side queue filter in `outlook_dashboard/main.py` supporting 9 operational queues.
+- Added public `/api/queues` endpoint (metadata only, no auth required, no email content).
+- Added "Recommended Action" metric display in `replyright_qt/widgets/conversation_detail.py` (row 3, col 1) with human-readable label mapping.
+- Wired all 9 operational queues into `replyright_qt/api_client.py` (`list_emails()` server param pass-through + `_filter_queue()` client-side fallback); added `get_queues()` method.
+- Added "OPERATIONAL" sidebar group in `replyright_qt/widgets/sidebar_nav.py` with 9 new queue items.
+- Added `_EMAIL_QUEUES` frozenset in `replyright_qt/windows/main_window.py`; replaced hardcoded sets in `_on_queue_changed`, `_on_filters_changed`, `_load_emails`.
+- Added 90-test suite `tests/test_recommended_action.py` and 41-test safety regression suite `tests/test_safety_regression.py`.
+- Retired `agent_comms/` channel; updated `CLAUDE.md`, `AGENT_RULES.md`, `DECISIONS.md`, `docs/PROJECT_STRUCTURE.md`.
+
+Files changed:
+
+- `outlook_dashboard/ai.py` (new `_recommended_action_for()`, updated `heuristic_analysis()`)
+- `outlook_dashboard/taxonomy.py` (`RECOMMENDED_ACTIONS`, `OPERATIONAL_QUEUES`)
+- `outlook_dashboard/main.py` (`_apply_queue_filter()`, `/api/queues`, queue filter param in `GET /api/emails`)
+- `replyright_qt/widgets/conversation_detail.py` (Recommended Action display)
+- `replyright_qt/api_client.py` (operational queue mapping, `get_queues()`, client-side fallback)
+- `replyright_qt/widgets/sidebar_nav.py` (OPERATIONAL queue group)
+- `replyright_qt/windows/main_window.py` (`_EMAIL_QUEUES` frozenset)
+- `tests/test_recommended_action.py` (new — 90 tests)
+- `tests/test_safety_regression.py` (new — 41 tests)
+- `CLAUDE.md`, `agent-workspace/AGENT_RULES.md`, `agent-workspace/DECISIONS.md`, `docs/PROJECT_STRUCTURE.md`, `agent_comms/from_claude.md`, `agent_comms/from_codex.md`
+
+Verification:
+
+- `python -m pytest tests/test_recommended_action.py` — 90 passed
+- `python -m pytest tests/test_safety_regression.py` — 41 passed, 22 subtests passed
+- Full suite — 1406 passed (pending background run confirmation)
+- Compile: `python -m py_compile` on all 7 modified Python files — OK
+
+Remaining work:
+
+- Codex review of `recommended_action` implementation when usage is restored.
+- Sidebar icon assignment for operational queue items (currently inherits icon from key name, no custom icon).
+- **Bypass notice**: Codex review was unavailable due to usage limit. Brian explicitly authorized commit+push without Codex review. This task must be revisited when Codex usage is restored.
+
 ## 2026-05-25 - Codex - v0.5.5 Installer Env Payload Purge
 
 Summary:

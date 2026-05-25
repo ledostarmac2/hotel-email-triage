@@ -1,11 +1,23 @@
 # Current State
 
-Last updated: 2026-05-25 (v1 safety + UI hardening — steps 4-8)
+Last updated: 2026-05-25 (deterministic recommended_action + operational queues)
 
 ## Status
 
 - Product name is ReplyRight.
 - Current runnable app is `outlook_dashboard/` plus `run_desktop.py`.
+- 2026-05-25 deterministic recommended_action + operational queue filters (Claude, bypass-reviewed by Brian):
+  - Added `_recommended_action_for()` to `outlook_dashboard/ai.py` — 14-value priority-ordered decision tree computed from locally-derived triage fields only. No external AI, no network calls, no Outlook writes.
+  - `heuristic_analysis()` now returns `recommended_action` in every output dict.
+  - `_apply_queue_filter()` in `outlook_dashboard/main.py` supports 9 operational queues: Immediate, Today, Waiting on Guest, Waiting on Internal Team, Billing Risk, VIP / Travel Advisor, Complaints, Low Confidence, No Action Likely.
+  - Public `/api/queues` metadata endpoint added (no auth, no email content).
+  - `RECOMMENDED_ACTIONS` and `OPERATIONAL_QUEUES` constants added to `outlook_dashboard/taxonomy.py`.
+  - "Recommended Action" metric display added to `replyright_qt/widgets/conversation_detail.py`.
+  - `replyright_qt/api_client.py` maps 9 operational queue keys to server `queue` param; adds `get_queues()` method; `_filter_queue()` has client-side fallback for all new queues.
+  - `replyright_qt/widgets/sidebar_nav.py` adds OPERATIONAL queue group with 9 sidebar items.
+  - `replyright_qt/windows/main_window.py` uses `_EMAIL_QUEUES` frozenset (14 queues) consistently across `_on_queue_changed`, `_on_filters_changed`, `_load_emails`.
+  - Tests: 90 passed in `test_recommended_action.py`; 41 passed in `test_safety_regression.py`.
+  - Safety boundaries: no Outlook send/move/archive/delete/categorize; no auto-replies; PII redaction, secrets handling, human review gates, local-first fallback all unmodified.
 - 2026-05-25 Docker CI restoration and training-workflow clarification:
   - Restored root `Dockerfile` and `docker-compose.yml` after the v0.5.0 cleanup removed them while `.github/workflows/build.yml` still runs the `docker-build` job with `docker build -t replyright-ci .`.
   - The Docker image runs the FastAPI server path (`outlook_dashboard.main:app`) on port 8000 and health-checks `/api/health`; it is for CI/server smoke, not the Windows desktop UI.

@@ -991,6 +991,17 @@ def heuristic_analysis(email: dict[str, Any], settings: Settings | None = None) 
         or (urgency_level >= 4 and confidence < 65)
     )
 
+    recommended_action = _recommended_action_for(
+        text=text,
+        category=category,
+        owner=owner,
+        urgency=urgency_level,
+        risks=risks,
+        missing=missing,
+        contact_type=contact_type,
+        confidence=confidence,
+    )
+
     return {
         "ai_summary": summary,
         "category": category,
@@ -1005,6 +1016,7 @@ def heuristic_analysis(email: dict[str, Any], settings: Settings | None = None) 
         "confidence_score": confidence,
         "confidence_reason": confidence_reason,
         "needs_review": needs_review,
+        "recommended_action": recommended_action,
         "model": "local-rules",
         "analysis_engine": "heuristic",
         "analysis_error": "",
@@ -1913,6 +1925,173 @@ def _next_steps_for(category: str, risks: list[str], missing: list[str]) -> list
     if "Leadership review required" in risks:
         steps.append("Route to the appropriate department leader before final response.")
     return steps
+
+
+_NO_ACTION_TERMS = (
+    "completed it",
+    "completed the form",
+    "filled out",
+    "sent it back",
+    "submitted it",
+    "all set",
+    "all done",
+    "nothing further",
+    "no reply needed",
+    "disregard",
+    "just wanted to say thank you",
+    "many thanks for your",
+    "thank you for your help",
+    "thank you for the wonderful",
+    "looking forward to our stay",
+    "looking forward to my stay",
+    "cannot wait to arrive",
+    "can't wait to arrive",
+)
+
+_INTERNAL_HANDLING_TERMS = (
+    "i'll take care",
+    "i will take care",
+    "i'm handling",
+    "i am handling",
+    "taking care of this",
+    "i'll follow up",
+    "i will follow up",
+    "already reached out",
+    "already contacted",
+    "already in touch",
+    "noted and will",
+    "we are looking into",
+    "we're looking into",
+    "team is aware",
+    "team is on it",
+    "i am working on",
+    "i'm working on",
+)
+
+_WAITING_FOR_GUEST_TERMS = (
+    "awaiting your response",
+    "awaiting guest",
+    "waiting for guest",
+    "waiting for the guest",
+    "please send us",
+    "please provide",
+    "kindly provide",
+    "we need your",
+    "still need",
+    "still waiting for your",
+    "please confirm your",
+    "pending guest",
+)
+
+_BILLING_CATEGORY_PREFIXES = (
+    "Billing",
+)
+
+
+def _recommended_action_for(
+    text: str,
+    category: str,
+    owner: str,
+    urgency: int,
+    risks: list[str],
+    missing: list[str],
+    contact_type: str,
+    confidence: int,
+) -> str:
+    """Return a deterministic single recommended action for this email.
+
+    Priority order:
+      no_action_likely > wait_for_internal_team > wait_for_guest >
+      verify_payment_authorization > escalate_manager >
+      request_missing_information > review_folio >
+      loop_{dept} / check_reservation > reply_guest
+
+    Uses only fields already computed by heuristic_analysis — no network, no AI.
+    """
+    # ── 1. Verify payment authorization (highest-priority billing action) ────────
+    # CCA/auth check fires before no_action so that completion emails ("sent it back",
+    # "filled out") still get verify_payment_authorization rather than no_action_likely.
+    if _is_cca_context(text) or category in ("Billing authorization", "Billing — card update"):
+        return "verify_payment_authorization"
+
+    # ── 2. No action likely ────────────────────────────────────────────────────
+    if any(t in text for t in _NO_ACTION_TERMS):
+        return "no_action_likely"
+    if category in ("Internal report", "Internal notification") and urgency <= 2:
+        return "no_action_likely"
+
+    # ── 3. Wait for internal team ──────────────────────────────────────────────
+    if contact_type == "Internal" and any(t in text for t in _INTERNAL_HANDLING_TERMS):
+        return "wait_for_internal_team"
+
+    # ── 4. Wait for guest ─────────────────────────────────────────────────────
+    if any(t in text for t in _WAITING_FOR_GUEST_TERMS):
+        return "wait_for_guest"
+    if category == "Duplicate follow-up" and contact_type == "Internal":
+        return "wait_for_guest"
+
+    # ── 5. Escalate to manager ─────────────────────────────────────────────────
+    _ESCALATE_FLAGS = frozenset({"Legal", "Medical", "Discrimination", "Chargeback", "Reputation risk", "Leadership review required"})
+    if _ESCALATE_FLAGS.intersection(risks):
+        return "escalate_manager"
+    if urgency >= 5 and category in ("Complaint", "Accessibility request"):
+        return "escalate_manager"
+    if urgency >= 5 and "ADA / accessibility" in risks:
+        return "escalate_manager"
+    if category == "Complaint" and urgency >= 4:
+        return "escalate_manager"
+
+    # ── 6. Review folio (billing categories — before missing_info check) ───────
+    # Billing emails may have missing info (e.g. folio not attached) but the primary
+    # action is always to review the folio/account, not to request it from the guest.
+    if any(category.startswith(p) for p in _BILLING_CATEGORY_PREFIXES):
+        return "review_folio"
+
+    # ── 7. Request missing information ────────────────────────────────────────
+    if missing and contact_type not in ("Internal", "Automated"):
+        return "request_missing_information"
+
+    # ── 8. Same-day / urgent arrival → front office ────────────────────────────
+    if category == "Urgent same-day arrival":
+        return "loop_front_office"
+
+    # ── 9. Accessibility → front office ───────────────────────────────────────
+    if category == "Accessibility request":
+        return "loop_front_office"
+
+    # ── 10. Complaint without escalation ─────────────────────────────────────
+    if category == "Complaint":
+        return "reply_guest"
+
+    # ── 11. Loop appropriate department based on owner ────────────────────────
+    if owner == "Engineering":
+        return "loop_engineering"
+    if owner == "Housekeeping":
+        return "loop_housekeeping"
+    if owner == "Concierge":
+        return "loop_concierge"
+    if owner in ("Front Desk", "Front Office"):
+        return "loop_front_office"
+    if owner in ("Sales", "Group Reservations"):
+        return "loop_reservations"
+
+    # ── 12. Reservations lane — check vs. loop ────────────────────────────────
+    _CHECK_RESERVATION_CATS = frozenset({
+        "Rate inquiry",
+        "Cancellation / modification",
+        "VIP pre-arrival",
+        "Consortia / FHR / Virtuoso",
+        "Hilton Honors / loyalty",
+        "Rooming list / group",
+        "OTA pending messages",
+    })
+    if category in _CHECK_RESERVATION_CATS:
+        return "check_reservation"
+    if contact_type == "Internal":
+        return "loop_reservations"
+
+    # ── 13. Default — reply to guest ─────────────────────────────────────────
+    return "reply_guest"
 
 
 def _summary_for(subject: str, category: str, priority: str, contact_type: str, missing: list[str]) -> str:

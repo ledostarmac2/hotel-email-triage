@@ -887,3 +887,62 @@ No display available in this terminal environment. Cannot confirm visually. Reco
 - "! Needs Human Review" banner in detail pane
 - No Send button
 - Admin diagnostics page (no secrets, no raw bodies)
+
+## [2026-05-25T20:25:00-04:00] Claude
+
+Support lane evidence as of ~20:25 per Codex 16:13 and 16:20 assignments. No imports, uploads, approvals, or retrains run.
+
+### 1. v0.5.1 Release CI (tag run 26417684444, sha be32e9f)
+
+| Job | Status | Conclusion |
+|---|---|---|
+| lint | completed | **success** |
+| docker-build | completed | **success** |
+| build-exe | in_progress | pending |
+| release | not started | waiting on build-exe |
+
+lint and docker-build passed. build-exe still running at time of check — release job not yet triggered. Will poll again if needed.
+
+### 2. Classifier evidence
+
+Command: `get_classifier_status()` (read-only, no retrain)
+
+- `version_id`: `20260525T200024Z` ✓
+- `needs_training`: `false` ✓
+- `warnings`: `[]` ✓
+- `total_examples_at_train_time`: 616 (578 Supabase + 38 local)
+- `targets_trained`: urgency, owner, category
+- `cv_accuracy`: urgency 56.7%, owner 73.5%, category 52.9%
+- `rollback_available`: true
+
+Classifier is healthy and matches expected state.
+
+### 3. Urgency-5 noise audit (read-only Supabase SELECT)
+
+Total urgency-5 human-reviewed rows in Supabase: **66**
+
+By category:
+
+| Category | Count | Recommendation |
+|---|---|---|
+| General inquiry | 17 | **bulk downgrade candidate** — routine inquiries flagged urgency-5 likely via keyword match |
+| Rate inquiry | 5 | **bulk downgrade candidate** — rate questions are never imminent/emergency |
+| VIP pre-arrival | 13 | leave as-is — VIP attention is legitimately high priority |
+| Billing dispute | 13 | leave as-is — billing disputes can escalate |
+| Urgent same-day arrival | 8 | leave as-is — explicitly urgent by category |
+| Rooming list / group | 7 | needs Brian review — could be same-day group emergency or routine |
+| Consortia / FHR / Virtuoso | 1 | leave as-is — high-value accounts warrant high priority |
+| Cancellation / modification | 1 | needs Brian review — timing-dependent |
+| Internal request | 1 | needs Brian review — content-dependent |
+
+Summary: 35 leave-as-is, 22 bulk downgrade candidates (general + rate), 9 need Brian review.
+
+No Supabase writes made. Awaiting Codex approval before any patch.
+
+### 4. Training docs check
+
+Checked all active docs (excluding docs/archive/) for:
+- Any doc saying Docker is deleted: **none found** — CURRENT_STATE.md, HANDOFF.md, DEPLOYMENT.md all correctly say Docker is restored and present for CI smoke.
+- Any doc saying agent-assisted training is forbidden after Brian explicitly asks: **none found** — TRAINING_WORKFLOW.md, ARCHITECTURE.md, TRAINING_PIPELINE.md all correctly state agent-assisted labeling is allowed only when Brian explicitly asks an agent to train the model; in-app endpoints remain zero-credit.
+
+No doc mismatches. No patches needed.

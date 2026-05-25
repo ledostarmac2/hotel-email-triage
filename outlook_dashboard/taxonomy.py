@@ -72,3 +72,32 @@ CONTACT_TYPES = [
     "Corporate",
     "Direct guest",
 ]
+
+RECOMMENDED_ACTIONS = [
+    "reply_guest",
+    "loop_reservations",
+    "loop_front_office",
+    "loop_concierge",
+    "loop_housekeeping",
+    "loop_engineering",
+    "escalate_manager",
+    "verify_payment_authorization",
+    "review_folio",
+    "check_reservation",
+    "request_missing_information",
+    "wait_for_guest",
+    "wait_for_internal_team",
+    "no_action_likely",
+]
+
+OPERATIONAL_QUEUES = [
+    "Immediate",
+    "Today",
+    "Waiting on Guest",
+    "Waiting on Internal Team",
+    "Billing Risk",
+    "VIP / Travel Advisor",
+    "Complaints",
+    "Low Confidence",
+    "No Action Likely",
+]

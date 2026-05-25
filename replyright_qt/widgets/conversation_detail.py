@@ -34,6 +34,23 @@ _ENGINE_DISPLAY = {
     "unknown": "Unknown",
 }
 
+_RECOMMENDED_ACTION_DISPLAY = {
+    "reply_guest": "Reply to Guest",
+    "loop_reservations": "Loop Reservations",
+    "loop_front_office": "Loop Front Office",
+    "loop_concierge": "Loop Concierge",
+    "loop_housekeeping": "Loop Housekeeping",
+    "loop_engineering": "Loop Engineering",
+    "escalate_manager": "Escalate to Manager",
+    "verify_payment_authorization": "Verify Payment Auth",
+    "review_folio": "Review Folio",
+    "check_reservation": "Check Reservation",
+    "request_missing_information": "Request Info",
+    "wait_for_guest": "Waiting on Guest",
+    "wait_for_internal_team": "Waiting on Team",
+    "no_action_likely": "No Action Likely",
+}
+
 
 def _strip_html(text: str) -> str:
     text = re.sub(r"<style[^>]*>.*?</style>", " ", text, flags=re.DOTALL | re.IGNORECASE)
@@ -308,6 +325,9 @@ class ConversationDetailWidget(QWidget):
         engine = str(email.get("analysis_engine") or "unknown")
         engine_display = _ENGINE_DISPLAY.get(engine.lower(), engine.replace("-", " ").title())
         self._add_metric(grid, 3, 0, "Classification Source", engine_display)
+        action_key = str(email.get("recommended_action") or "")
+        action_display = _RECOMMENDED_ACTION_DISPLAY.get(action_key, action_key.replace("_", " ").title() or "—")
+        self._add_metric(grid, 3, 1, "Recommended Action", action_display, "metric-action")
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 1)
         self._content_layout.addLayout(grid)

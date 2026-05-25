@@ -79,6 +79,25 @@ class ApiClient:
             params["risk"] = "Missing information"
         elif queue == "review":
             params["needs_review"] = "true"
+        # Operational queues — passed directly to server-side queue filter
+        elif queue == "immediate":
+            params["queue"] = "Immediate"
+        elif queue == "today":
+            params["queue"] = "Today"
+        elif queue == "waiting_guest":
+            params["queue"] = "waiting on guest"
+        elif queue == "waiting_internal":
+            params["queue"] = "waiting on internal team"
+        elif queue == "billing_risk":
+            params["queue"] = "billing risk"
+        elif queue == "vip_travel":
+            params["queue"] = "vip / travel advisor"
+        elif queue == "complaints":
+            params["queue"] = "complaints"
+        elif queue == "low_confidence":
+            params["queue"] = "low confidence"
+        elif queue == "no_action":
+            params["queue"] = "no action likely"
         # Explicit filter overrides queue defaults
         if category:
             params["category"] = category
@@ -141,6 +160,33 @@ class ApiClient:
             ]
         if queue == "missing":
             return [email for email in emails if self._as_list(email.get("missing_information"))]
+        # Operational queues — server already filtered; client-side is a safety fallback
+        if queue == "immediate":
+            return [e for e in emails if self._urgency(e) >= 5]
+        if queue == "today":
+            return [e for e in emails if self._urgency(e) >= 4]
+        if queue == "waiting_guest":
+            return [e for e in emails if e.get("recommended_action") == "wait_for_guest"]
+        if queue == "waiting_internal":
+            return [e for e in emails if e.get("recommended_action") == "wait_for_internal_team"]
+        if queue == "billing_risk":
+            return [
+                e for e in emails
+                if str(e.get("category") or "").startswith("Billing")
+                or any(f in self._as_list(e.get("risk_flags")) for f in ("Billing", "Chargeback"))
+            ]
+        if queue == "vip_travel":
+            return [
+                e for e in emails
+                if e.get("contact_type") in ("Travel agent", "Travel agency")
+                or "VIP" in self._as_list(e.get("risk_flags"))
+            ]
+        if queue == "complaints":
+            return [e for e in emails if e.get("category") == "Complaint"]
+        if queue == "low_confidence":
+            return [e for e in emails if (e.get("confidence_score") or 100) <= 50]
+        if queue == "no_action":
+            return [e for e in emails if e.get("recommended_action") == "no_action_likely"]
         return emails
 
     @staticmethod
@@ -173,6 +219,10 @@ class ApiClient:
         return [value]
 
     # ── Taxonomy & config ──────────────────────────────────────────────────────
+
+    def get_queues(self) -> dict:
+        resp = self._session.get(self._url("/api/queues"), timeout=5)
+        return self._raise_for(resp)
 
     def get_taxonomy(self) -> dict:
         resp = self._session.get(self._url("/api/taxonomy"), timeout=5)

@@ -21,6 +21,12 @@ from replyright_qt.widgets.settings_panel import SettingsPanel
 from replyright_qt.widgets.sidebar_nav import SidebarNav
 from replyright_qt.windows.kyc_reminder_window import KycReminderWindow
 
+_EMAIL_QUEUES: frozenset[str] = frozenset({
+    "inbox", "review", "urgent", "vip", "missing",
+    "immediate", "today", "waiting_guest", "waiting_internal",
+    "billing_risk", "vip_travel", "complaints", "low_confidence", "no_action",
+})
+
 
 class MainWindow(QMainWindow):
     """Primary ReplyRight native application window."""
@@ -117,7 +123,7 @@ class MainWindow(QMainWindow):
             self._stack.setCurrentIndex(1)
             self._admin_panel.load()
         elif queue == "kyc":
-            self._current_queue = previous_queue if previous_queue in {"inbox", "review", "urgent", "vip", "missing"} else "inbox"
+            self._current_queue = previous_queue if previous_queue in _EMAIL_QUEUES else "inbox"
             self._sidebar.restore_queue(self._current_queue)
             self._open_kyc_window()
         elif queue == "settings":
@@ -129,7 +135,7 @@ class MainWindow(QMainWindow):
 
     def _on_filters_changed(self, filters: dict) -> None:
         self._current_filters = filters
-        if self._current_queue in {"inbox", "review", "urgent", "vip", "missing"}:
+        if self._current_queue in _EMAIL_QUEUES:
             self._load_emails()
 
     def _on_sync(self) -> None:
@@ -152,7 +158,7 @@ class MainWindow(QMainWindow):
         self._load_emails()
 
     def _load_emails(self) -> None:
-        if self._current_queue not in {"inbox", "review", "urgent", "vip", "missing"}:
+        if self._current_queue not in _EMAIL_QUEUES:
             return
         self._conv_list.set_loading(True)
         filters = self._current_filters

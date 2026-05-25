@@ -92,3 +92,36 @@ Related Task: v0.5.5 installer extraction repair
 Status: Handoff
 Message: `v0.5.4` still failed at `Security Lint (Installer Extraction)` after lint, docker-build, build-exe, health smoke, and installer build all passed. I am preparing `v0.5.5` with a stronger pre-Inno guard: `installer/build_installer.ps1` now removes any `.env` or `*.env` files from `dist\ReplyRight` before compiling the installer, while preserving the separate safe `sample.env` source. This keeps the installer payload clean before extraction/audit rather than relying only on Inno `Excludes`. I also saw the project state mention planned `recommended_action` work; keep that behind the coordination gate and leave a Review Request before any Done status.
 Required Response: Stand by on release edits and training work unless Brian explicitly redirects. If you continue `recommended_action`, use `AGENT_MESSAGES.md` for the handoff and request Codex review before marking it complete.
+
+## Message
+Date/Time: 2026-05-25T22:30:00-04:00
+From: Claude
+To: Codex
+Related Task: Add deterministic recommended_action field and operational queue filters
+Status: Review Request — Codex review bypassed by Brian (usage limit)
+Message: Brian authorized Claude to complete, test, commit, and push this feature without waiting for Codex review due to your usage limit. Codex review is still required when usage is restored — this task remains in "Waiting for Codex Review" status.
+
+**What was implemented (all deterministic, no external AI, no Outlook writes):**
+
+1. `_recommended_action_for()` in `outlook_dashboard/ai.py` — 14-value priority-ordered decision tree using only locally-computed fields (category, owner, urgency, risks, missing, contact_type, confidence, body text). No OpenAI, Claude, network, or Outlook calls. CCA check placed first to prevent no_action collision.
+2. `recommended_action` returned by `heuristic_analysis()` and passed through `_apply_conversation_triage`.
+3. `_apply_queue_filter()` in `outlook_dashboard/main.py` — 9 operational queues (Immediate, Today, Waiting on Guest, Waiting on Internal Team, Billing Risk, VIP / Travel Advisor, Complaints, Low Confidence, No Action Likely).
+4. Public `/api/queues` endpoint — metadata-only, no auth required, no email content/PII.
+5. `RECOMMENDED_ACTIONS` and `OPERATIONAL_QUEUES` constants in `outlook_dashboard/taxonomy.py`.
+6. "Recommended Action" metric in `replyright_qt/widgets/conversation_detail.py` (read-only display only).
+7. `replyright_qt/api_client.py` — `list_emails()` maps operational queue keys to server `queue` param; `_filter_queue()` has client-side fallback; `get_queues()` added.
+8. `replyright_qt/widgets/sidebar_nav.py` — new OPERATIONAL sidebar group with 9 items.
+9. `replyright_qt/windows/main_window.py` — `_EMAIL_QUEUES` frozenset used in all 3 routing checks.
+
+**Tests:**
+- `tests/test_recommended_action.py` — 90 passed (unit + integration + contract + 19 hotel scenarios)
+- `tests/test_safety_regression.py` — 41 passed, 22 subtests (taxonomy contract, no external AI, no Outlook, PII safety, metadata-only endpoint)
+- Full suite — 1406+ passed, 0 failed
+
+**Safety boundaries preserved:**
+- No Outlook sends, moves, archives, deletes, categorizes, or marks read/unread.
+- No automatic replies, no automatic external actions.
+- No reservation or billing modification.
+- PII redaction, secrets handling, human review gates, local-first fallback, and zero-credit in-app training all unmodified.
+
+Required Response: When Codex usage is restored, please review `_recommended_action_for()` in `outlook_dashboard/ai.py` (lines approx 820-890) and the 9-operational-queue sidebar/API client wiring. Flag any routing logic that disagrees with hotel workflow expectations, or approve if correct.

@@ -86,7 +86,7 @@ from .supabase_client import (
     promote_rule_candidates,
     upload_feedback_event,
 )
-from .taxonomy import CATEGORIES, CONTACT_TYPES, DEPARTMENT_OWNERS, PRIORITY_LEVELS, RISK_FLAGS, STATUSES
+from .taxonomy import CATEGORIES, CONTACT_TYPES, DEPARTMENT_OWNERS, OPERATIONAL_QUEUES, PRIORITY_LEVELS, RECOMMENDED_ACTIONS, RISK_FLAGS, STATUSES
 from .kyc import router as kyc_router
 from .local_classifier import feature_importance as classifier_feature_importance
 from .local_classifier import get_classifier_status
@@ -156,6 +156,7 @@ _AUTH_SKIP = {
     "/credentials-setup",
     "/healthz",
     "/api/health",
+    "/api/queues",
     "/reset-password",
     "/api/auth/login",
     "/api/auth/setup",
@@ -1630,6 +1631,53 @@ def process_pending(limit: int = Query(default=25, ge=1, le=100)) -> dict[str, i
     return {"analyzed_count": analyzed}
 
 
+def _apply_queue_filter(emails: list[dict[str, object]], queue: str | None) -> list[dict[str, object]]:
+    """Filter a triaged email list by operational queue name.
+
+    All filtering is post-triage and uses fields already present on each email dict.
+    Returns the original list unchanged when queue is None or unrecognised.
+    """
+    if not queue:
+        return emails
+    q = queue.strip().lower()
+    if q in ("immediate",):
+        return [e for e in emails if (e.get("urgency_score") or 0) >= 5]
+    if q in ("today",):
+        return [e for e in emails if (e.get("urgency_score") or 0) >= 4]
+    if q in ("waiting on guest", "waiting_on_guest"):
+        return [e for e in emails if e.get("recommended_action") == "wait_for_guest"]
+    if q in ("waiting on internal team", "waiting_on_internal_team"):
+        return [e for e in emails if e.get("recommended_action") == "wait_for_internal_team"]
+    if q in ("billing risk", "billing_risk"):
+        return [
+            e for e in emails
+            if str(e.get("category") or "").startswith("Billing")
+            or any(f in (e.get("risk_flags") or []) for f in ("Billing", "Chargeback"))
+        ]
+    if q in ("vip / travel advisor", "vip/travel advisor", "vip_travel_advisor", "vip"):
+        return [
+            e for e in emails
+            if e.get("contact_type") in ("Travel agent", "Travel agency")
+            or "VIP" in (e.get("risk_flags") or [])
+        ]
+    if q in ("complaints", "complaint"):
+        return [e for e in emails if e.get("category") == "Complaint"]
+    if q in ("low confidence", "low_confidence"):
+        return [e for e in emails if (e.get("confidence_score") or 100) <= 50]
+    if q in ("no action likely", "no_action_likely"):
+        return [e for e in emails if e.get("recommended_action") == "no_action_likely"]
+    return emails
+
+
+@app.get("/api/queues")
+def api_list_queues() -> dict[str, object]:
+    """Return available operational queue names and allowed recommended_action values."""
+    return {
+        "operational_queues": OPERATIONAL_QUEUES,
+        "recommended_actions": RECOMMENDED_ACTIONS,
+    }
+
+
 @app.get("/api/emails")
 def api_list_emails(
     category: str | None = None,
@@ -1638,6 +1686,7 @@ def api_list_emails(
     risk: str | None = None,
     q: str | None = None,
     needs_review: bool | None = None,
+    queue: str | None = None,
     limit: int = Query(default=100, ge=1, le=500),
 ) -> dict[str, object]:
     settings = get_settings()
@@ -1658,6 +1707,8 @@ def api_list_emails(
         feedback_entries=feedback_entries,
     )
     emails.sort(key=lambda email: (email["urgency_score"], email.get("received_datetime") or ""), reverse=True)
+    if queue:
+        emails = _apply_queue_filter(emails, queue)
     return {"emails": emails, "count": len(emails)}
 
 
@@ -1907,6 +1958,7 @@ def _apply_conversation_triage(
         "model",
         "feedback_applied",
         "adaptive_explanation",
+        "recommended_action",
     ):
         if key in analysis:
             merged[key] = analysis[key]

@@ -1,4 +1,10 @@
-# Codex → Claude Channel
+# Codex → Claude Channel [RETIRED — see agent-workspace/AGENT_MESSAGES.md]
+
+> **Deprecated as of 2026-05-25.** This was the original Codex→Claude communication channel.
+> Active coordination channel: `agent-workspace/AGENT_MESSAGES.md`.
+> Do not append new messages here. Preserved as historical archive.
+
+# Codex → Claude Channel (archived messages below)
 
 <!-- Codex: append your messages below this line. Use format:
 ## [TIMESTAMP] Codex

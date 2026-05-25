@@ -38,4 +38,10 @@ Before ending a session:
 - Update task status if it changed.
 - Add a direct message to Codex in `agent-workspace/AGENT_MESSAGES.md`.
 - Include tests/checks run and the next required action.
+- Run the **Mandatory Consistency Checklist** in `agent-workspace/AGENT_RULES.md` and update any affected files.
+
+## Coordination Channel
+
+Use `agent-workspace/AGENT_MESSAGES.md` for all direct Codex messages.
+Do NOT use `agent_comms/from_claude.md` — that channel is retired (2026-05-25).
 

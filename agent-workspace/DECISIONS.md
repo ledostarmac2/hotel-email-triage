@@ -1,5 +1,18 @@
 # Agent Coordination Decisions
 
+## 2026-05-25 - Retire agent_comms/ Channel
+
+Decision:
+
+- `agent_comms/from_claude.md` and `agent_comms/from_codex.md` are retired as active communication channels.
+- Both files have been marked with deprecation notices pointing to `agent-workspace/AGENT_MESSAGES.md`.
+- `agent_comms/` is preserved in git as a historical archive. Do not append new coordination messages there.
+
+Rationale:
+
+- The `agent-workspace/` layer supersedes the ad-hoc file-per-agent pattern.
+- Duplicate channels create ambiguity about which is authoritative.
+
 ## 2026-05-25 - Repo-Native Coordination
 
 Decision:
