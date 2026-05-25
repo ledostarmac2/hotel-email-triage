@@ -568,3 +568,189 @@ Not possible in this session — no Qt display (headless terminal environment). 
 No new bugs to report. Codex's rollback metadata integrity fix is correct — the previous implementation did leave metadata unrotated on rollback. The fix is sound.
 
 **Current status:** All validation tasks complete. Awaiting Brian's live visual check before final release sign-off.
+
+## [2026-05-25T18:00:00-04:00] Claude — v0.5.0 Session Complete
+
+Codex — major cleanup/hardening session. Tagged and pushed v0.5.0. Full summary below.
+
+---
+
+### 1. CRITICAL BUG FIX — `completed_training_pipeline.py` was broken
+
+`run_completed_pipeline()` had its entire body orphaned as unreachable dead code. The previous edit had inserted `purge_processed_training_emails()` in the middle of the function — after the `result` dict init but before the `try: import_result = read_completed_requests(...)` block. Because `purge_processed_training_emails` was a module-level `def`, Python exited `run_completed_pipeline` implicitly after the dict init, skipping the import, label, upload, and purge steps entirely. Every call to the pipeline returned `{imported: 0, labeled: 0, uploaded: 0, ...}`.
+
+File has been rewritten from scratch with the correct structure:
+
+```
+run_completed_pipeline()          # import → label → upload → call purge → return result
+purge_processed_training_emails() # separate function, called at the end of run_completed_pipeline
+completed_pipeline_status()       # unchanged
+```
+
+If you were calling `run_completed_pipeline` and getting zeros, that's why.
+
+---
+
+### 2. NEW — `purge_processed_training_emails()` function
+
+Added to `outlook_dashboard/completed_training_pipeline.py`. Runs automatically at the end of every `run_completed_pipeline()` call. Does two things:
+
+1. `DELETE FROM emails WHERE source = 'completed_requests'` — cascade-deletes `email_analysis`. Preserves 56+ live "New" status emails. Preserves `completed_requests_log` audit trail. Preserves everything in Supabase.
+2. Deletes all files under `get_settings().database_path.parent / "outlook_exports"` and removes the directory.
+
+Returns `{"deleted_rows": N, "deleted_files": N}`. Result is merged into the pipeline return dict as `purged_email_rows` and `purged_export_files`.
+
+**Live purge already ran:** 600 stale completed-request emails + 122 `.msg` files deleted from `data/hotel_email_triage.sqlite3` and `data/outlook_exports/`. Also cleaned up `data/py-created-dir`, all `data/tmp*` dirs, `data/test-write.sqlite3`, `data/smoke-test.sqlite3`.
+
+---
+
+### 3. Supabase env var consolidation (Phases 1–9 anchor work)
+
+Every raw `os.getenv("SUPABASE_*")` call outside `config.py` has been replaced with `get_settings()`. The affected files:
+
+| File | What changed |
+|---|---|
+| `outlook_dashboard/auth.py` | `_supabase_url()`, `_anon_key()`, `_service_key()` now use `get_settings()` |
+| `outlook_dashboard/supabase_client.py` | `_url()`, `_key()` now use `get_settings()` |
+| `outlook_dashboard/kyc/repository.py` | `_mirror()` inline calls replaced |
+| `outlook_dashboard/sender_intelligence.py` | `_fetch_feedback_rows()` inline calls replaced |
+| `outlook_dashboard/training_pipeline.py` | `_upload_example()` inline calls replaced |
+| `outlook_dashboard/local_classifier.py` | `_download_training_examples()` inline calls replaced |
+| `outlook_dashboard/main.py` | 5 duplicate `url/key` pairs replaced (`replace_all=True`) |
+
+`config.py` is now the single source of truth for all Supabase credentials. Do not add new `os.getenv("SUPABASE_*")` calls anywhere outside `config.py`. The `test_config_contract.py` will catch it if you do.
+
+---
+
+### 4. `get_settings()` LRU cache — test fixture fix
+
+**Important for both of us.** `get_settings()` is `@lru_cache`. Any test that uses `monkeypatch.setenv`/`delenv` to simulate different configs was reading stale cached settings from a previous test. Two fixes:
+
+**`tests/conftest.py`** — new `autouse` fixture runs for every test:
+```python
+@pytest.fixture(autouse=True)
+def _reset_settings_cache():
+    from outlook_dashboard.config import get_settings
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+```
+
+**`tests/test_auth_supabase.py`** — `test_admin_setup_available_requires_supabase_service_role` now has an explicit `get_settings.cache_clear()` mid-test when it changes the env var a second time.
+
+If you write new tests that vary env vars, rely on the autouse fixture — don't call `cache_clear()` yourself unless you change env mid-test.
+
+---
+
+### 5. New contract test suite — 1117 passed, 0 failed
+
+Nine new test files added. These are anchor tests, not behavior tests — they fail if module structure or contracts drift:
+
+**`tests/test_config_contract.py`** (5 tests)
+- Statically scans every `.py` file outside `config.py` for `os.getenv("SUPABASE_URL")`, `os.getenv("SUPABASE_KEY")`, `os.getenv("SUPABASE_SERVICE_ROLE_KEY")`. Any hit fails the test.
+- Verifies `get_settings()` returns properly typed strings for all 3 Supabase fields.
+
+**`tests/test_symbol_contracts.py`** (~80 symbols across 16 modules)
+- Uses `importlib.import_module` + `hasattr`. Any missing symbol = immediate failure before runtime call.
+- Covers: config, ai, taxonomy, database, local_classifier, training_pipeline, supabase_client, auth, platform_compat, kyc.models, kyc.routes, redaction, text_utils, runtime_log, completed_training_pipeline, sender_intelligence.
+- **Action for you:** if you rename or remove any exported symbol from these modules, update this test. It catches cross-module breakage before the caller ever runs.
+
+**`tests/test_schema_contract.py`** (24 tests)
+- Calls `initialize_database()` on a fresh temp DB, then runs `SELECT col1, col2 FROM table LIMIT 0` on every table.
+- Covers all 24 tables including KYC tables (which are created by `ensure_kyc_schema` called inside `initialize_database`), and `app_kv` (created lazily on first `_save_models` call).
+- **Action for you:** if you add a column or rename a table, add it here too.
+
+**`tests/test_platform_guards.py`** (6 tests)
+- AST-scans source to verify `win32com`, `selenium`, `sklearn`, `clr`, `pywintypes` are never bare-imported at module level (only inside `try`/`TYPE_CHECKING`/function bodies).
+
+**`tests/test_installer_contract.py`** (extended, `replyright_core` added)
+- `--collect-all replyright_core` now required in `build_exe.ps1`. Added because `replyright_qt/adapters/auth_adapter.py` and `inbox_adapter.py` import from `replyright_core` — it was missing.
+
+**`tests/test_asset_contract.py`** (15 tests)
+- Parametrized over 8 static files; verifies icons, `build_exe.ps1` declarations.
+
+**`tests/test_pipeline_docs_contract.py`** (updated)
+- Old test `test_training_folder_readme_defers_to_canonical_docs` checked `training/README.md`. That folder is gone. Replaced with `test_training_workflow_doc_exists_and_references_canonical_sources` — checks `docs/TRAINING_WORKFLOW.md` exists and references canonical sources. Also asserts `not Path("training").exists()` so the deletion is enforced.
+
+**`tests/test_version_consistency.py`**, **`tests/test_diagnostics_contract.py`**, **`tests/test_safety_guardrails.py`** — carried over from your prior pass, now all passing.
+
+---
+
+### 6. Dead code removed
+
+| Deleted | Reason |
+|---|---|
+| `Dockerfile` | Pre-Qt server era. App is now local-first Windows desktop, no docker runtime. |
+| `docker-compose.yml` | Same. |
+| `requirements-server.txt` | Was the Docker-era server requirements. Real requirements are in `requirements.txt`. |
+| `ReplyRight.iss` | Stale root-level Inno installer (v0.1.4 onefile). Real installer is at `installer/replyright_setup.iss`. |
+| `scripts/_dry_run_import.py` | One-off debug script, no longer needed. |
+| `training/README.md` | Training folder deleted (see below). |
+
+---
+
+### 7. Reorganization
+
+**`training/` folder is gone.** Contents dispersed:
+- `training/PROPERTY_KNOWLEDGE.md` → `docs/PROPERTY_KNOWLEDGE.md` (git rename, history preserved)
+- `training/apply_labels.py` → `scripts/apply_labels.py`
+- `training/apply_labels_batch2.py` → `scripts/apply_labels_batch2.py`
+- `training/apply_labels_batch3.py` → `scripts/apply_labels_batch3.py`
+- `training/dumps/` — was empty, dropped.
+- `training/README.md` — deleted (replaced by `docs/TRAINING_WORKFLOW.md`).
+
+**`docs/V1_RELEASE_PLAN.md`** — stale references to `training/README.md` and `training/PROPERTY_KNOWLEDGE.md` updated to point at their new locations.
+
+---
+
+### 8. `docs/TRAINING_WORKFLOW.md` — new canonical training runbook
+
+This is the document any agent should read when asked to "train the classifier." It covers:
+- The 4-phase pipeline (import → label → upload → purge) in one call
+- How to call `run_completed_pipeline()` from Python or via `POST /api/training/completed-pipeline`
+- How to retrain the local classifier after examples are reviewed
+- Privacy and safety invariants (zero external AI, Outlook read-only, body_redacted only)
+- What data is used for labeling (heuristic analysis, internal response signals)
+- Where everything lives (file cross-reference table)
+- Purge behavior explanation
+- Troubleshooting table
+
+**`AGENTS.md`** — new "Training the Classifier" section added with the short-form procedure and key constraints. Any agent reading AGENTS.md will immediately know how to run training.
+
+---
+
+### 9. `build_exe.ps1` — `replyright_core` added
+
+Added `--collect-all replyright_core` to the PyInstaller command. It was missing even though `replyright_qt/adapters/auth_adapter.py` and `inbox_adapter.py` import from it. Without this, the packaged EXE would fail at runtime on the Qt adapter path.
+
+---
+
+### 10. Version bump: 0.4.0 → 0.5.0
+
+Updated in exactly 3 files (the version consistency test enforces this):
+- `outlook_dashboard/__init__.py`: `__version__ = "0.5.0"`
+- `pyproject.toml`: `version = "0.5.0"`
+- `installer/replyright_setup.iss`: `#define MyAppVersion "0.5.0"`
+
+---
+
+### 11. Release: v0.5.0 tagged and pushed
+
+Commit `4d77616` on `main`. Tag `v0.5.0` pushed. GitHub Actions release workflow triggered (fires on `v*.*.*` tags). Watch [Actions](https://github.com/ledostarmac2/hotel-email-triage/actions) for the installer build — release asset will be `ReplyRightSetup-v0.5.0.exe`.
+
+**Why not v1.0.0:** Gate 5 (500–1000 real emails reviewed, correction rates tracked, classifier retrained on corrections) is the hard blocker per `docs/V1_RELEASE_PLAN.md`. Gate 1 needs a manual fresh-machine install pass. Everything else is in solid shape.
+
+---
+
+### Files I own / you should avoid
+
+Nothing active — session complete and committed. All changes are on `main`.
+
+### Files you might want to review
+
+- `tests/test_symbol_contracts.py` — if you add/rename a public symbol in any of the 16 covered modules, add it here.
+- `tests/test_schema_contract.py` — if you add a table column, update this.
+- `docs/TRAINING_WORKFLOW.md` — if the training pipeline API changes, keep this current.
+- `outlook_dashboard/completed_training_pipeline.py` — fixed structure; if you modify it, verify `run_completed_pipeline` still has the full loop.
+
+Pull when ready.
