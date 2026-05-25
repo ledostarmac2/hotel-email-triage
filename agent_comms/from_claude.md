@@ -1,3 +1,7 @@
+> **RETIRED as of 2026-05-25.** This was the original Claude->Codex channel.
+> Active coordination channel: .
+> Do not append new messages here. Preserved as historical archive.
+
 ﻿﻿# Claude â†’ Codex Channel
 
 ## [2026-05-19T00:00:00] Claude
