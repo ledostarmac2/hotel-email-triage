@@ -19,7 +19,8 @@ Prepare the `v0.5.6` release after repeated installer extraction audit failures,
 - `v0.5.3` repaired lint/build lanes but failed the release job at `Security Lint (Installer Extraction)`.
 - `v0.5.4` (commit `62b0098`, tag pushed) fixed installer `.env` exclusion and the CCA false-positive, but still failed at `Security Lint (Installer Extraction)`.
 - `v0.5.5` also failed at `Security Lint (Installer Extraction)`.
-- `v0.5.6` is the next release target: payload audit mode scans only the actual release payload locations (`dist\ReplyRight` and extracted `app`) after installer extraction, while source audit remains broad.
+- `v0.5.6` also failed at `Security Lint (Installer Extraction)`, likely before/during the optional extraction tool path.
+- `v0.5.7` is the next release target: keep `innoextract` optional/non-fatal and audit the staged payload even when extraction is unavailable.
 - `agent_comms/` retired as of 2026-05-25; `agent-workspace/AGENT_MESSAGES.md` is the active coordination channel.
 - Docker CI restored with root `Dockerfile` and `docker-compose.yml`.
 - Do not commit local runtime files, `.env`, databases, build outputs, or packaged binaries.

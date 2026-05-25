@@ -97,6 +97,15 @@ def test_github_actions_use_node24_native_first_party_actions() -> None:
     assert "actions/upload-artifact@v4" not in workflow
 
 
+def test_release_extraction_audit_keeps_innoextract_optional() -> None:
+    workflow = Path(".github/workflows/build.yml").read_text(encoding="utf-8")
+    assert '$ErrorActionPreference = "Continue"' in workflow
+    assert "$chocoExit = $LASTEXITCODE" in workflow
+    assert 'Get-Command "innoextract" -ErrorAction SilentlyContinue' in workflow
+    assert 'Write-Warning "innoextract is unavailable' in workflow
+    assert '$env:REPLYRIGHT_PAYLOAD_AUDIT = "1"' in workflow
+
+
 def test_static_dir_is_importable_from_config() -> None:
     """main.py resolves STATIC_DIR from DATA_DIR at import time — the directory must exist."""
     static = Path("outlook_dashboard/static")

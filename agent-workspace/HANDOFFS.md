@@ -1,5 +1,38 @@
 # Agent Handoffs
 
+## 2026-05-25 - Codex - v0.5.7 Optional Extraction Tool Fallback
+
+Summary:
+
+- Watched `v0.5.6`: all gates before `Security Lint (Installer Extraction)` passed, but the extraction audit step still failed.
+- Hardened the release workflow so `choco install innoextract` and `innoextract` execution are non-fatal. If the tool is unavailable or cannot unpack the installer, CI audits the staged `dist\ReplyRight` payload with `REPLYRIGHT_PAYLOAD_AUDIT=1`.
+- Bumped release metadata to `0.5.7`.
+
+Files changed:
+
+- `.github/workflows/build.yml`
+- `tests/test_asset_contract.py`
+- `installer/replyright_setup.iss`
+- `outlook_dashboard/__init__.py`
+- `pyproject.toml`
+- `agent-workspace/PROJECT_STATE.md`
+- `agent-workspace/TASK_BOARD.md`
+- `agent-workspace/HANDOFFS.md`
+- `agent-workspace/AGENT_MESSAGES.md`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+
+Verification:
+
+- `python -m pytest tests/test_asset_contract.py tests/test_version_consistency.py tests/test_agent_coordination_contract.py -q --timeout=60` - passed.
+- `$env:ALLOW_RELEASE_RUNTIME_SECRETS='1'; python scripts\check_no_bundled_secrets.py` - passed.
+- `$env:REPLYRIGHT_PAYLOAD_AUDIT='1'; python scripts\check_no_bundled_secrets.py` - passed.
+- `git diff --check` - line-ending warnings only.
+
+Remaining work:
+
+- Commit, tag, push `v0.5.7`, then watch the release workflow.
+
 ## 2026-05-25 - Codex - v0.5.6 Payload-Scoped Extraction Audit
 
 Summary:

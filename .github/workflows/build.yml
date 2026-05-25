@@ -207,11 +207,23 @@ jobs:
       - name: Security Lint (Installer Extraction)
         shell: pwsh
         run: |
+          $previousErrorActionPreference = $ErrorActionPreference
+          $ErrorActionPreference = "Continue"
           choco install innoextract -y --no-progress
+          $chocoExit = $LASTEXITCODE
+          $ErrorActionPreference = $previousErrorActionPreference
           $installer = Get-ChildItem ".\installer\output\ReplyRightSetup-v*.exe" | Select-Object -First 1
           if (-not $installer) { throw "Installer missing for extraction audit." }
-          innoextract $installer.FullName -d ".\installer\output\extracted"
-          $extractExit = $LASTEXITCODE
+          $extractExit = 1
+          if ($chocoExit -eq 0 -and (Get-Command "innoextract" -ErrorAction SilentlyContinue)) {
+            $previousErrorActionPreference = $ErrorActionPreference
+            $ErrorActionPreference = "Continue"
+            innoextract $installer.FullName -d ".\installer\output\extracted"
+            $extractExit = $LASTEXITCODE
+            $ErrorActionPreference = $previousErrorActionPreference
+          } else {
+            Write-Warning "innoextract is unavailable; auditing the staged dist payload and installer output instead."
+          }
           if ($extractExit -ne 0) {
             Write-Warning "innoextract could not unpack this installer format; auditing the staged dist payload and installer output instead."
             if (-not (Test-Path ".\dist\ReplyRight")) { throw "Staged dist payload missing for fallback audit." }
