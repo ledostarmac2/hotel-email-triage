@@ -35,6 +35,15 @@ def test_build_exe_script_does_not_copy_env() -> None:
     assert "dist\\ReplyRight\\.env" not in script
 
 
+def test_installer_build_purges_runtime_env_from_payload() -> None:
+    script = Path("installer/build_installer.ps1").read_text(encoding="utf-8")
+    assert "Get-ChildItem -LiteralPath $appDir -Recurse -Force -File" in script
+    assert '$_.Name -eq ".env"' in script
+    assert '$_.Name -like "*.env"' in script
+    assert '$_.Name -ne "sample.env"' in script
+    assert "Remove-Item -LiteralPath $envFile.FullName -Force" in script
+
+
 def test_inno_installer_bundles_onedir_app_and_excludes_runtime_secrets() -> None:
     iss = Path("installer/replyright_setup.iss").read_text(encoding="utf-8")
     assert "OutputBaseFilename=ReplyRightSetup-v{#MyAppVersion}" in iss

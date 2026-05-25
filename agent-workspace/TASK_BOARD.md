@@ -29,7 +29,7 @@ If the user explicitly bypasses Codex review, document that bypass in `agent-wor
 
 | Task | Owner | Status | Next Required Action |
 |---|---|---|---|
-| Prepare `v0.5.4` release after `v0.5.3` installer extraction failure | Codex | Assigned to Codex | Patch installer `.env` exclusion, CCA false-positive, tests, docs, then tag/push `v0.5.4`. |
+| Prepare `v0.5.5` release after installer extraction failures | Codex | Assigned to Codex | Purge runtime env files before installer build, keep CCA fix/tests, tag/push `v0.5.5`, and watch release. |
 | Adopt mandatory coordination protocol | Claude | Approved by Codex | Protocol acknowledged in `AGENT_MESSAGES.md` at 2026-05-25T20:45:00-04:00. Done pending Codex confirmation. |
 | Review/own local triage behavior test file if applicable | Claude | Approved by Codex | Codex reviewed, ran the tests, approved the test file, and took ownership of the CCA false-positive fix. |
 
@@ -39,3 +39,4 @@ If the user explicitly bypasses Codex review, document that bypass in `agent-wor
 |---|---|---|---|
 | Review remaining unreviewed training examples before another retrain | Claude/Codex | Not Started | Use aggregate/sanitized review only; do not bulk-approve without controlled review. |
 | Watch follow-up main CI for coordination commit | Codex | Not Started | Confirm the coordination contract test passes in GitHub Actions. |
+| Add deterministic `recommended_action` field and operational queue filters | Claude | Assigned to Claude | Follow the coordination protocol, then leave Codex a Review Request before marking complete. |

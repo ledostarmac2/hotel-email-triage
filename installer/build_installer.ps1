@@ -63,6 +63,14 @@ if (-not (Test-Path -LiteralPath $appExe)) {
     throw "dist\ReplyRight\ReplyRight.exe was not found. Run .\build_exe.ps1 first."
 }
 
+$appDir = Join-Path $repoRoot "dist\ReplyRight"
+$runtimeEnvFiles = Get-ChildItem -LiteralPath $appDir -Recurse -Force -File -ErrorAction SilentlyContinue |
+    Where-Object { ($_.Name -eq ".env" -or $_.Name -like "*.env") -and $_.Name -ne "sample.env" }
+foreach ($envFile in $runtimeEnvFiles) {
+    Write-Host "Removing runtime env file from installer payload: $($envFile.FullName)"
+    Remove-Item -LiteralPath $envFile.FullName -Force
+}
+
 # Read version from __init__.py so the installer name stays in sync with the code.
 $initContent = Get-Content (Join-Path $repoRoot "outlook_dashboard\__init__.py") -Raw -ErrorAction SilentlyContinue
 $appVersion = if ($initContent -match '"(\d+\.\d+\.\d+[^"]*)"') { $Matches[1] } else { "0.1.1" }

@@ -12,14 +12,15 @@ Last updated: 2026-05-25
 
 ## Current Active Task
 
-Proceed with the v0.5.3 release/watch lane and enforce the new Claude/Codex coordination protocol on all follow-up work.
+Prepare the `v0.5.5` release after repeated installer extraction audit failures, while preserving Claude's planned `recommended_action` work as a follow-up task requiring Codex review.
 
 ## Current Release Context
 
 - `v0.5.3` repaired lint/build lanes but failed the release job at `Security Lint (Installer Extraction)`.
-- `v0.5.4` is the next release target: installer `.env` exclusion plus the CCA false-positive fix surfaced by Claude's triage tests.
-- `f2b50db` pushed the mandatory `agent-workspace/` coordination layer to `main`.
-- Docker CI was restored with a root `Dockerfile` and `docker-compose.yml`.
+- `v0.5.4` (commit `62b0098`, tag pushed) fixed installer `.env` exclusion and the CCA false-positive, but still failed at `Security Lint (Installer Extraction)`.
+- `v0.5.5` is the next release target: purge `.env`/`*.env` files from `dist\ReplyRight` before Inno Setup compiles the installer, preserving only the separately sourced safe `sample.env`.
+- `agent_comms/` retired as of 2026-05-25; `agent-workspace/AGENT_MESSAGES.md` is the active coordination channel.
+- Docker CI restored with root `Dockerfile` and `docker-compose.yml`.
 - Do not commit local runtime files, `.env`, databases, build outputs, or packaged binaries.
 
 ## Safety Boundary

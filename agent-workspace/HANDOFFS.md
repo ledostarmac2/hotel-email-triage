@@ -1,5 +1,37 @@
 # Agent Handoffs
 
+## 2026-05-25 - Codex - v0.5.5 Installer Env Payload Purge
+
+Summary:
+
+- Watched `v0.5.4`: lint, docker-build, build-exe, health smoke, and installer build passed; release still failed at `Security Lint (Installer Extraction)`.
+- Added a pre-Inno purge in `installer/build_installer.ps1` to remove any `.env` or `*.env` files from `dist\ReplyRight` before compiling the installer, excluding only `sample.env`.
+- Bumped release metadata to `0.5.5`.
+
+Files changed:
+
+- `installer/build_installer.ps1`
+- `installer/replyright_setup.iss`
+- `tests/test_installer_contract.py`
+- `outlook_dashboard/__init__.py`
+- `pyproject.toml`
+- `agent-workspace/PROJECT_STATE.md`
+- `agent-workspace/TASK_BOARD.md`
+- `agent-workspace/HANDOFFS.md`
+- `agent-workspace/AGENT_MESSAGES.md`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+
+Verification:
+
+- `python -m pytest tests/test_installer_contract.py tests/test_version_consistency.py tests/test_secret_hygiene.py tests/test_agent_coordination_contract.py -q --timeout=60` - passed.
+- `$env:ALLOW_RELEASE_RUNTIME_SECRETS='1'; python scripts\check_no_bundled_secrets.py` - passed.
+- `git diff --check` - line-ending warnings only.
+
+Remaining work:
+
+- Commit, tag, push `v0.5.5`, then watch the release workflow.
+
 ## 2026-05-25 - Codex - Claude Test Review And v0.5.4 Release Fix
 
 Summary:

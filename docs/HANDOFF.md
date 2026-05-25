@@ -1,5 +1,37 @@
 # Handoff Log
 
+## 2026-05-25 - v0.5.5 pre-installer env purge
+
+Summary:
+
+- Watched `v0.5.4`: prerequisite jobs and installer build passed, but release still failed at `Security Lint (Installer Extraction)`.
+- Added a pre-Inno purge in `installer/build_installer.ps1` so any `.env` or `*.env` files under `dist\ReplyRight` are removed before installer compilation; `sample.env` is preserved as the safe template source.
+- Bumped release metadata to `0.5.5`.
+
+Files changed:
+
+- `installer/build_installer.ps1`
+- `installer/replyright_setup.iss`
+- `tests/test_installer_contract.py`
+- `outlook_dashboard/__init__.py`
+- `pyproject.toml`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+- `agent-workspace/PROJECT_STATE.md`
+- `agent-workspace/TASK_BOARD.md`
+- `agent-workspace/HANDOFFS.md`
+- `agent-workspace/AGENT_MESSAGES.md`
+
+Verification:
+
+- `python -m pytest tests/test_installer_contract.py tests/test_version_consistency.py tests/test_secret_hygiene.py tests/test_agent_coordination_contract.py -q --timeout=60` - passed.
+- `$env:ALLOW_RELEASE_RUNTIME_SECRETS='1'; python scripts\check_no_bundled_secrets.py` - passed.
+- `git diff --check` - line-ending warnings only.
+
+Remaining work:
+
+- Watch the `v0.5.5` release workflow to completion.
+
 ## 2026-05-25 - v0.5.4 installer extraction and CCA false-positive repair
 
 Summary:
