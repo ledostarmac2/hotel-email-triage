@@ -8,6 +8,7 @@ Summary:
 - Added a root `Dockerfile` for the FastAPI server smoke path and a local `docker-compose.yml` that exposes ReplyRight on port 8000.
 - Added asset contract tests so the Dockerfile and compose file stay present while CI expects them.
 - Reconciled Brian's intended training workflow in docs: Refresh Inbox and in-app training endpoints remain zero-credit, but when Brian explicitly tells Codex/Claude to "train the model," the agent can perform an outside-the-app labeling/review pass on redacted/sanitized completed-request examples, write only sanitized labels/examples, retrain the classifier, and purge raw imported bodies.
+- Prepared the follow-up `0.5.1` release target so the Docker fix can ship cleanly after the failed `0.5.0` Docker job.
 
 Files changed:
 
@@ -20,6 +21,9 @@ Files changed:
 - `docs/V1_RELEASE_PLAN.md`
 - `docs/CURRENT_STATE.md`
 - `docs/HANDOFF.md`
+- `outlook_dashboard/__init__.py`
+- `pyproject.toml`
+- `installer/replyright_setup.iss`
 - `tests/test_asset_contract.py`
 
 Verification:

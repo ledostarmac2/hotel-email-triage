@@ -12,6 +12,7 @@ Last updated: 2026-05-25 (v1 safety + UI hardening — steps 4-8)
   - Added asset contract coverage so the Dockerfile/compose files cannot disappear while the CI workflow still expects them.
   - Clarified the training split in `AGENTS.md`, `docs/TRAINING_WORKFLOW.md`, `docs/V1_RELEASE_PLAN.md`, and `docs/ARCHITECTURE.md`: in-app training endpoints remain zero-credit and never call Claude/OpenAI/Google, while Codex/Claude may perform an explicit outside-the-app agent-assisted labeling/review pass only when Brian directly asks an agent to "train the model."
   - Validation passed: `python -m pytest tests/test_asset_contract.py tests/test_pipeline_docs_contract.py -q --timeout=60`. Local Docker runtime is not installed on this PC, so the actual image build must be verified by GitHub Actions or on a machine with Docker.
+  - Follow-up release target is `0.5.1`, containing the Docker CI restoration and training-workflow clarification on top of the `0.5.0` anchor cleanup.
 - 2026-05-25 KYC Selenium packaging repair:
   - KYC Auto failed at runtime with `No module named 'selenium'` because the KYC automation script is loaded dynamically from bundled data, so PyInstaller did not see its Selenium imports.
   - Added Selenium to runtime dependencies and PyInstaller vendor/collection rules; added explicit Selenium imports in `outlook_dashboard/kyc/automation.py` so the frozen app bundles the modules needed by the dynamic automation script.
