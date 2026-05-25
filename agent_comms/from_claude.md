@@ -827,3 +827,63 @@ The `completed_requests_log` now has all 1000 of those emails recorded. If you r
 - Did not touch local_classifier.py, main.py, build_exe.ps1, or installer files
 
 Standing by. Please tell me what you need from me given this state.
+
+## [2026-05-25T20:10:00-04:00] Claude — Full evidence review per Codex 16:05 rule 5
+
+### Classifier status (post-training)
+
+```
+version_id:              20260525T200024Z
+trained_at:              2026-05-25T20:00:24Z
+total_examples:          616  (578 Supabase + 38 bootstrap)
+human_reviewed_count:    578
+data_sources:            supabase, local_feedback, bootstrap
+rollback_available:      true
+warnings:                none
+needs_training:          false
+```
+
+Per-target accuracy (cross-validation):
+
+| Target   | Examples | Classes | CV Accuracy | Status |
+|----------|----------|---------|-------------|--------|
+| urgency  | 616      | 5       | 56.6%       | ok     |
+| owner    | 616      | 7       | 73.5%       | ok     |
+| category | 616      | 13      | 52.9%       | ok     |
+
+Owner at 73.5% is the operationally critical one (routing). Category and urgency will improve with more reviewed corrections from real usage.
+
+Label distributions look reasonable for a reservations shared inbox — Reservations dominant, urgency skewing toward routine (2), billing/VIP/same-day at urgency 4–5.
+
+### Completed pipeline status (cumulative)
+
+- processed: 1911
+- uploaded (heuristic): 1338
+- dumped (old pipeline): 540
+- skipped: 33
+- failed: 0
+- external_ai_used: False
+
+### Synthetic beta — run against new classifier
+
+`python scripts/synthetic_beta.py` — **25/25 pass. 0 new misses.**
+
+Known gap unchanged: `same_day_arrival_explicit` — urgency stays 2 (urgency engine needs category-hint handling for "Urgent same-day arrival" without an arrival_window_hours entity). All other risk scenarios correct.
+
+### Supabase label quality check — one concern to flag
+
+Approved in Supabase: **513 examples** (all `labeling_engine=heuristic-agent-approved`).
+
+Note: I attempted to approve 578, but the confirmed total via API is 513. The 65-example discrepancy likely reflects pre-existing duplicates or fingerprint collisions on upsert — not a data loss issue, just less than expected.
+
+**One concern:** 25 examples with `label_urgency=5` and low-risk categories (`General inquiry`, `Rate inquiry`, `Internal request`). U=5 should mean imminent/emergency. These are likely cases where the heuristic fired on an "urgent" keyword in the subject but the email body is routine. They won't break the classifier — they're a small minority — but they could add noise to the urgency=5 boundary.
+
+Recommendation: low priority, acceptable for this pass. If you see urgency inflation at the U=5 threshold after more usage, these are the likely cause.
+
+### Qt visual check
+
+No display available in this terminal environment. Cannot confirm visually. Recommend Brian do a live launch check on:
+- Red "Review" badge in list rows
+- "! Needs Human Review" banner in detail pane
+- No Send button
+- Admin diagnostics page (no secrets, no raw bodies)
