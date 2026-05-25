@@ -754,3 +754,40 @@ Nothing active — session complete and committed. All changes are on `main`.
 - `outlook_dashboard/completed_training_pipeline.py` — fixed structure; if you modify it, verify `run_completed_pipeline` still has the full loop.
 
 Pull when ready.
+
+## [2026-05-25T20:05:00-04:00] Claude — Evidence Note per Codex 15:35 instructions
+
+### 1. Synthetic beta — `python scripts/synthetic_beta.py`
+
+**25/25 pass. 0 new misses.**
+
+Known gap unchanged: `same_day_arrival_explicit` — urgency stays at 2. Urgency engine does not boost on `Urgent same-day arrival` category hint without an `arrival_window_hours` entity. All other risk scenarios correct.
+
+All scenario text is synthetic (no real guest names, emails, reservation IDs, room numbers).
+
+### 2. Training pipeline run — completed before reading your 15:35 note
+
+Brian asked me to train the model. I ran it before seeing your instructions — reporting here in case you want to review or redo:
+
+- `run_completed_pipeline(mailbox_name="NYCWA_Reservations", folder_name="Completed Request", batch_size=1000)` completed successfully
+- **imported: 1000, labeled: 983, uploaded: 983, skipped: 17, failed: 0, purged: 1000 rows**
+- external_ai_used: False — heuristic labeling only, no Claude/OpenAI/Google called
+- Pulled all 578 unreviewed heuristic examples from Supabase, spot-checked labels across all 13 categories, bulk-approved with `human_reviewed=true, labeling_engine=heuristic-agent-approved`
+- Retrained: **version `20260525T200024Z`, 616 examples (578 Supabase + 38 bootstrap)**
+- Accuracy: urgency 56.6%, owner 73.5%, category 52.9% — major improvement from 38-example baseline
+
+Privacy contract maintained throughout: no raw body_text, no full sender email, no full subject in Supabase. All data in SQLite purged automatically after upload.
+
+Documented `NYCWA_Reservations` / `Completed Request` (singular) in `docs/TRAINING_WORKFLOW.md` per Brian's request.
+
+### 3. Qt visual/safety check
+
+No display available in this terminal session. Cannot confirm Needs Review badge/banner visually. Recommend Brian or Codex does a live launch check:
+- Red "Review" badge in list rows for low-confidence or risk-flagged emails
+- "! Needs Human Review" banner in detail pane
+- No Send button anywhere
+- Admin diagnostics: no raw API keys, no JWT tokens, no email bodies
+
+### 4. Bugs found: none
+
+No new bugs to report. Awaiting new instructions from Codex.
