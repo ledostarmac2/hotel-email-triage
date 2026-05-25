@@ -1,5 +1,37 @@
 # Handoff Log
 
+## 2026-05-25 - Agent workspace coordination protocol
+
+Summary:
+
+- Created the repo-native `agent-workspace/` coordination layer for Claude/Codex collaboration.
+- Added `agent-workspace/AGENT_MESSAGES.md` as the mandatory direct message channel, including the requested message template.
+- Updated `AGENTS.md` so Codex must read coordination files, answer unresolved Claude messages first, review Claude handoffs, update task/handoff files, and leave a direct message before ending a session.
+- Added `CLAUDE.md` so Claude must read coordination files, answer unresolved Codex messages first, work only the Active Task, leave review requests for Codex, and avoid marking work `Done` without Codex review or explicit user bypass.
+- Added task status gates and a lightweight pytest contract check for required coordination files/language.
+
+Files changed:
+
+- `agent-workspace/PROJECT_STATE.md`
+- `agent-workspace/TASK_BOARD.md`
+- `agent-workspace/HANDOFFS.md`
+- `agent-workspace/DECISIONS.md`
+- `agent-workspace/AGENT_RULES.md`
+- `agent-workspace/AGENT_MESSAGES.md`
+- `AGENTS.md`
+- `CLAUDE.md`
+- `README.md`
+- `tests/test_agent_coordination_contract.py`
+
+Verification:
+
+- `python -m pytest tests/test_agent_coordination_contract.py -q --timeout=60` - 4 passed.
+- Codex self-review found no real-time chat, external dependency, app-code rewrite, unrelated code edit, unclear Done gate, or missing required coordination file.
+
+Remaining work:
+
+- Claude must acknowledge and follow the new protocol before its next implementation task.
+
 ## 2026-05-25 - v0.5.3 release lint and Actions warning repair
 
 Summary:

@@ -7,22 +7,54 @@ This repository is the ReplyRight hotel reservations email triage app. Keep the 
 Before making changes, read these files in order:
 
 1. `AGENTS.md`
-2. `docs/ARCHITECTURE.md`
-3. `docs/CURRENT_STATE.md`
-4. `docs/HANDOFF.md`
+2. `agent-workspace/PROJECT_STATE.md`
+3. `agent-workspace/TASK_BOARD.md`
+4. `agent-workspace/HANDOFFS.md`
+5. `agent-workspace/DECISIONS.md`
+6. `agent-workspace/AGENT_RULES.md`
+7. `agent-workspace/AGENT_MESSAGES.md`
+8. `docs/ARCHITECTURE.md`
+9. `docs/CURRENT_STATE.md`
+10. `docs/HANDOFF.md`
 
 Use `docs/CURRENT_STATE.md` as the latest truth. Treat older root-level planning docs as historical unless the current docs say otherwise.
 
 For broad architecture, adaptive learning, Supabase, staged AI pipeline, shared feedback, training, classifier, or admin dashboard work, also read:
 
-5. `docs/ROADMAP.md`
-6. `docs/FUTURE_ROADMAP_SUPABASE_ADAPTIVE_LEARNING.md`
-7. `docs/TRAINING_PIPELINE.md`
-8. `docs/CLASSIFIER.md`
-9. `docs/SECURITY_AND_PRIVACY.md`
-10. `docs/DEPLOYMENT.md`
-11. `docs/OPERATIONS_GUIDE.md`
-12. `docs/V1_RELEASE_PLAN.md`
+11. `docs/ROADMAP.md`
+12. `docs/FUTURE_ROADMAP_SUPABASE_ADAPTIVE_LEARNING.md`
+13. `docs/TRAINING_PIPELINE.md`
+14. `docs/CLASSIFIER.md`
+15. `docs/SECURITY_AND_PRIVACY.md`
+16. `docs/DEPLOYMENT.md`
+17. `docs/OPERATIONS_GUIDE.md`
+18. `docs/V1_RELEASE_PLAN.md`
+
+## Mandatory Agent Coordination
+
+Codex must use the repo-native coordination layer in `agent-workspace/` before and after every task.
+
+Before starting work, Codex must:
+
+- Read `agent-workspace/PROJECT_STATE.md`, `agent-workspace/TASK_BOARD.md`, `agent-workspace/HANDOFFS.md`, `agent-workspace/DECISIONS.md`, `agent-workspace/AGENT_RULES.md`, and `agent-workspace/AGENT_MESSAGES.md`.
+- Check the latest Claude message before starting any task.
+- Respond to unresolved Claude questions, blockers, handoffs, or review requests before starting unrelated work.
+- Review Claude's latest handoff before doing new work.
+- Confirm the Active Task in `agent-workspace/TASK_BOARD.md`.
+
+While reviewing Claude work, Codex must:
+
+- Leave an `Approved` or `Needs Changes` message for Claude in `agent-workspace/AGENT_MESSAGES.md`.
+- Keep task status aligned with `agent-workspace/TASK_BOARD.md`.
+
+Before ending a session, Codex must:
+
+- Update `agent-workspace/HANDOFFS.md` after meaningful work.
+- Update `agent-workspace/TASK_BOARD.md` if task status changes.
+- Leave a direct message for Claude in `agent-workspace/AGENT_MESSAGES.md`.
+- Include tests/checks run and the next required action.
+
+Treat the session as incomplete if it does not write to `agent-workspace/AGENT_MESSAGES.md`.
 
 ## Source Of Truth
 

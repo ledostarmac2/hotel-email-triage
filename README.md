@@ -146,6 +146,8 @@ See `docs/TESTING.md` for the full guide.
 ## Key Docs
 
 - `AGENTS.md` - instructions for future agents.
+- `CLAUDE.md` - Claude-specific coordination and review-gate rules.
+- `agent-workspace/` - shared Claude/Codex coordination files.
 - `docs/CURRENT_STATE.md` - latest project truth.
 - `docs/ARCHITECTURE.md` - current runtime architecture.
 - `docs/PROJECT_STRUCTURE.md` - repository layout and cleanup policy.
@@ -153,6 +155,12 @@ See `docs/TESTING.md` for the full guide.
 - `docs/SECURITY_AND_PRIVACY.md` - safety and privacy rules.
 - `docs/DEPLOYMENT.md` - packaging and release workflow.
 - `docs/OPERATIONS_GUIDE.md` - hotel-operator workflow guide.
+
+## Agent Coordination
+
+Claude and Codex coordinate through `agent-workspace/`. Both agents must read `PROJECT_STATE.md`, `TASK_BOARD.md`, `HANDOFFS.md`, `DECISIONS.md`, `AGENT_RULES.md`, and `AGENT_MESSAGES.md` before work, then write a direct message in `AGENT_MESSAGES.md` before ending a session.
+
+Tasks should not be marked `Done` unless the required Claude handoff and Codex review messages are present.
 
 ## Notes Before Live Use
 
