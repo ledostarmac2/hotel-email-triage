@@ -13,6 +13,13 @@ Last updated: 2026-05-25 (v1 safety + UI hardening — steps 4-8)
   - Clarified the training split in `AGENTS.md`, `docs/TRAINING_WORKFLOW.md`, `docs/V1_RELEASE_PLAN.md`, and `docs/ARCHITECTURE.md`: in-app training endpoints remain zero-credit and never call Claude/OpenAI/Google, while Codex/Claude may perform an explicit outside-the-app agent-assisted labeling/review pass only when Brian directly asks an agent to "train the model."
   - Validation passed: `python -m pytest tests/test_asset_contract.py tests/test_pipeline_docs_contract.py -q --timeout=60`. Local Docker runtime is not installed on this PC, so the actual image build must be verified by GitHub Actions or on a machine with Docker.
   - Follow-up release target is `0.5.1`, containing the Docker CI restoration and training-workflow clarification on top of the `0.5.0` anchor cleanup.
+- 2026-05-25 local classifier training pass:
+  - Claude completed the primary Completed Request training run before Codex began its own cycle: imported 1000, labeled 983, uploaded 983, skipped 17, failed 0, purged 1000 local completed-request rows; no in-app external AI providers were called.
+  - Claude performed an agent-assisted review/approval pass on sanitized examples and retrained the local classifier to version `20260525T200024Z`.
+  - Codex verified the active local classifier status: trained on 616 examples at train time (578 Supabase + 38 local/bootstrap), targets `urgency`, `owner`, and `category`, no warnings, `needs_training=false`; CV accuracy is urgency 56.65%, owner 73.54%, category 52.92%.
+  - Codex started a duplicate import before seeing Claude's completed-training note, then stopped the lingering Python process after the shell timeout. Current cumulative local Completed Request log status is processed 2356, uploaded/labeled 1774, dumped 540, skipped 42, failed 0.
+  - Supabase count check after the duplicate import showed 1141 total training examples, 485 reviewed/agent-approved, and 657 unreviewed. Do not bulk-approve the remaining unreviewed queue without a controlled review pass.
+  - Synthetic beta after training passed 25/25 with the same known same-day-arrival category-hint gap.
 - 2026-05-25 KYC Selenium packaging repair:
   - KYC Auto failed at runtime with `No module named 'selenium'` because the KYC automation script is loaded dynamically from bundled data, so PyInstaller did not see its Selenium imports.
   - Added Selenium to runtime dependencies and PyInstaller vendor/collection rules; added explicit Selenium imports in `outlook_dashboard/kyc/automation.py` so the frozen app bundles the modules needed by the dynamic automation script.

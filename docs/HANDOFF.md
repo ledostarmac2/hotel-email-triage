@@ -1,5 +1,37 @@
 # Handoff Log
 
+## 2026-05-25 - v0.5.1 tag and local classifier training coordination
+
+Summary:
+
+- Bumped ReplyRight version metadata to `0.5.1`, committed, tagged `v0.5.1`, and pushed the tag for a release run that includes the Docker CI restoration.
+- Directed Claude to stop competing training/release edits and provide evidence/review only while Codex owns the release/training lane.
+- Claude had already completed the primary Completed Request training run before receiving the stop/coordinate note: imported 1000, labeled 983, uploaded 983, skipped 17, failed 0, purged 1000 local completed-request rows; no in-app external AI providers were called.
+- Verified the active local classifier model: version `20260525T200024Z`, trained on 616 examples at train time (578 Supabase + 38 local/bootstrap), targets `urgency`, `owner`, and `category`, no warnings, `needs_training=false`.
+- Stopped Codex's duplicate Completed Request import process after it exceeded the shell timeout so it would not continue uploading/purging while the trained model was already active.
+- Checked Supabase aggregate counts only: 1141 total training examples, 485 reviewed/agent-approved, 657 unreviewed. The unreviewed queue should not be bulk-approved without a controlled review pass.
+
+Files changed:
+
+- `outlook_dashboard/__init__.py`
+- `pyproject.toml`
+- `installer/replyright_setup.iss`
+- `agent_comms/from_codex.md`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+
+Verification:
+
+- `python -m pytest tests/test_version_consistency.py tests/test_asset_contract.py tests/test_pipeline_docs_contract.py -q --timeout=60` - 28 passed.
+- `python -m pytest tests/test_version_consistency.py tests/test_asset_contract.py tests/test_pipeline_docs_contract.py tests/test_diagnostics_contract.py -q --timeout=60` - 57 passed.
+- `python scripts\synthetic_beta.py` - 25/25 passed, same known same-day-arrival category-hint gap.
+- GitHub Actions `docker-build` for `v0.5.1` and the matching main run passed.
+
+Remaining work:
+
+- Wait for the `v0.5.1` tag release workflow to finish lint/build-exe/release jobs.
+- Review the remaining unreviewed Supabase training queue deliberately before another classifier retrain.
+
 ## 2026-05-25 - Docker CI restoration and agent-assisted training contract
 
 Summary:
