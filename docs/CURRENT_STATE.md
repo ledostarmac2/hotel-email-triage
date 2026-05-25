@@ -17,8 +17,8 @@ Last updated: 2026-05-25 (v1 safety + UI hardening — steps 4-8)
   - Claude completed the primary Completed Request training run before Codex began its own cycle: imported 1000, labeled 983, uploaded 983, skipped 17, failed 0, purged 1000 local completed-request rows; no in-app external AI providers were called.
   - Claude performed an agent-assisted review/approval pass on sanitized examples and retrained the local classifier to version `20260525T200024Z`.
   - Codex verified the active local classifier status: trained on 616 examples at train time (578 Supabase + 38 local/bootstrap), targets `urgency`, `owner`, and `category`, no warnings, `needs_training=false`; CV accuracy is urgency 56.65%, owner 73.54%, category 52.92%.
-  - Codex started a duplicate import before seeing Claude's completed-training note, then stopped the lingering Python process after the shell timeout. Current cumulative local Completed Request log status is processed 2356, uploaded/labeled 1774, dumped 540, skipped 42, failed 0.
-  - Supabase count check after the duplicate import showed 1141 total training examples, 485 reviewed/agent-approved, and 657 unreviewed. Do not bulk-approve the remaining unreviewed queue without a controlled review pass.
+  - Codex started a duplicate import before seeing Claude's completed-training note, then stopped the lingering Python process after the shell timeout. Codex later found and stopped an additional duplicate "pipeline batch 2" process. Current cumulative local Completed Request log status is processed 2833, uploaded/labeled 2248, dumped 540, skipped 45, failed 0.
+  - Supabase count check after stopping duplicate processes showed 1344 total training examples, 476 reviewed/agent-approved, and 868 unreviewed. Do not bulk-approve the remaining unreviewed queue without a controlled review pass.
   - Synthetic beta after training passed 25/25 with the same known same-day-arrival category-hint gap.
 - 2026-05-25 KYC Selenium packaging repair:
   - KYC Auto failed at runtime with `No module named 'selenium'` because the KYC automation script is loaded dynamically from bundled data, so PyInstaller did not see its Selenium imports.

@@ -9,7 +9,8 @@ Summary:
 - Claude had already completed the primary Completed Request training run before receiving the stop/coordinate note: imported 1000, labeled 983, uploaded 983, skipped 17, failed 0, purged 1000 local completed-request rows; no in-app external AI providers were called.
 - Verified the active local classifier model: version `20260525T200024Z`, trained on 616 examples at train time (578 Supabase + 38 local/bootstrap), targets `urgency`, `owner`, and `category`, no warnings, `needs_training=false`.
 - Stopped Codex's duplicate Completed Request import process after it exceeded the shell timeout so it would not continue uploading/purging while the trained model was already active.
-- Checked Supabase aggregate counts only: 1141 total training examples, 485 reviewed/agent-approved, 657 unreviewed. The unreviewed queue should not be bulk-approved without a controlled review pass.
+- Found and stopped an additional duplicate "pipeline batch 2" Completed Request process. Current cumulative local Completed Request log status is processed 2833, uploaded/labeled 2248, dumped 540, skipped 45, failed 0.
+- Checked Supabase aggregate counts only after stopping duplicate processes: 1344 total training examples, 476 reviewed/agent-approved, 868 unreviewed. The unreviewed queue should not be bulk-approved without a controlled review pass.
 
 Files changed:
 
