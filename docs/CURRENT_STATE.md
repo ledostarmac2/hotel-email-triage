@@ -13,7 +13,8 @@ Last updated: 2026-05-25 (v1 safety + UI hardening — steps 4-8)
   - Clarified the training split in `AGENTS.md`, `docs/TRAINING_WORKFLOW.md`, `docs/V1_RELEASE_PLAN.md`, and `docs/ARCHITECTURE.md`: in-app training endpoints remain zero-credit and never call Claude/OpenAI/Google, while Codex/Claude may perform an explicit outside-the-app agent-assisted labeling/review pass only when Brian directly asks an agent to "train the model."
   - Validation passed: `python -m pytest tests/test_asset_contract.py tests/test_pipeline_docs_contract.py -q --timeout=60`. Local Docker runtime is not installed on this PC, so the actual image build must be verified by GitHub Actions or on a machine with Docker.
   - Follow-up release target is `0.5.1`, containing the Docker CI restoration and training-workflow clarification on top of the `0.5.0` anchor cleanup.
-  - Follow-up release target `0.5.2` hardens the installer extraction security audit: generated `innoextract` metadata is skipped, but any bundled `.env` under `dist` or installer extraction still fails the audit.
+  - Follow-up release target `0.5.2` hardened the installer extraction security audit: generated `innoextract` metadata is skipped, but any bundled `.env` under `dist` or installer extraction still fails the audit.
+  - Follow-up release target `0.5.3` fixes the full-suite lint failure from key-shaped test fixture strings and updates first-party GitHub Actions to Node 24-native major versions.
 - 2026-05-25 local classifier training pass:
   - Claude completed the primary Completed Request training run before Codex began its own cycle: imported 1000, labeled 983, uploaded 983, skipped 17, failed 0, purged 1000 local completed-request rows; no in-app external AI providers were called.
   - Claude performed an agent-assisted review/approval pass on sanitized examples and retrained the local classifier to version `20260525T200024Z`.
@@ -126,7 +127,7 @@ Last updated: 2026-05-25 (v1 safety + UI hardening — steps 4-8)
   - Native PySide6 auth/inbox/KYC shell files are present and the desktop launcher now opens Qt after FastAPI health succeeds. `--native` is retained as a compatibility no-op because Qt is the current shell.
   - Removed the user-facing credentials setup page from the desktop app. `/credentials-setup` now redirects to login, and `/api/auth/credentials-setup` is no longer an unauthenticated API-key writing endpoint.
   - End users must not be asked for Supabase, OpenAI, Google, Anthropic, or other API keys in the program. Runtime credentials must be supplied by deployment-time files, machine environment, or GitHub Actions release secrets.
-  - GitHub Actions now opts JavaScript actions into Node 24 with `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true`.
+  - GitHub Actions uses Node 24-native first-party action versions instead of forcing Node 20-targeted actions forward.
   - Fixed the release workflow rename step so tag builds no longer fail when Inno Setup already emitted the expected `ReplyRightSetup-v0.1.1.exe` filename.
   - Installer security audit now treats `innoextract` format incompatibility as a warning and still audits the staged `dist\ReplyRight` payload plus installer output.
   - Restored local SQLite authentication as a fallback for existing installed databases and fresh installs without Supabase service-role configuration. Supabase Auth is still used when configured; if unavailable or not configured, ReplyRight can authenticate local `users` rows and create local sessions.

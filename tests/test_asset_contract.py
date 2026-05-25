@@ -86,6 +86,17 @@ def test_docker_compose_exists_for_local_server_smoke() -> None:
     assert "8000:8000" in text
 
 
+def test_github_actions_use_node24_native_first_party_actions() -> None:
+    workflow = Path(".github/workflows/build.yml").read_text(encoding="utf-8")
+    assert "FORCE_JAVASCRIPT_ACTIONS_TO_NODE24" not in workflow
+    assert "actions/checkout@v6" in workflow
+    assert "actions/setup-python@v6" in workflow
+    assert "actions/upload-artifact@v7" in workflow
+    assert "actions/checkout@v4" not in workflow
+    assert "actions/setup-python@v5" not in workflow
+    assert "actions/upload-artifact@v4" not in workflow
+
+
 def test_static_dir_is_importable_from_config() -> None:
     """main.py resolves STATIC_DIR from DATA_DIR at import time — the directory must exist."""
     static = Path("outlook_dashboard/static")
