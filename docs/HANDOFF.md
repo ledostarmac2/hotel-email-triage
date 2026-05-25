@@ -1,5 +1,42 @@
 # Handoff Log
 
+## 2026-05-25 - v0.5.4 installer extraction and CCA false-positive repair
+
+Summary:
+
+- Watched the `v0.5.3` tag workflow: `lint`, `docker-build`, `build-exe`, EXE health smoke, and installer build passed; release failed at `Security Lint (Installer Extraction)`.
+- Patched `installer/replyright_setup.iss` so the installer excludes `.env` and `*.env` from the bundled onedir app while still shipping `installer/sample.env` as the safe template.
+- Reviewed Claude's new `tests/test_email_triage_behavior.py`, approved it through `agent-workspace/AGENT_MESSAGES.md`, and took ownership of the CCA false-positive it documented.
+- Fixed `_is_cca_context()` so bare `cca` matches as a token, not inside words like `occasion`.
+- Bumped release metadata to `0.5.4`.
+
+Files changed:
+
+- `outlook_dashboard/ai.py`
+- `tests/test_email_triage_behavior.py`
+- `installer/replyright_setup.iss`
+- `tests/test_installer_contract.py`
+- `tests/test_secret_hygiene.py`
+- `outlook_dashboard/__init__.py`
+- `pyproject.toml`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+- `agent-workspace/PROJECT_STATE.md`
+- `agent-workspace/TASK_BOARD.md`
+- `agent-workspace/HANDOFFS.md`
+- `agent-workspace/AGENT_MESSAGES.md`
+
+Verification:
+
+- `python -m pytest tests/test_email_triage_behavior.py tests/test_installer_contract.py tests/test_version_consistency.py tests/test_secret_hygiene.py tests/test_agent_coordination_contract.py -q --timeout=60` - passed.
+- `$env:ALLOW_RELEASE_RUNTIME_SECRETS='1'; python scripts\check_no_bundled_secrets.py` - passed.
+- `python -m pytest tests/ -x --timeout=60` - 1273 passed, 6 existing `datetime.utcnow()` warnings, 35 subtests passed.
+- `git diff --check` - line-ending warnings only.
+
+Remaining work:
+
+- Watch the `v0.5.4` release workflow to completion.
+
 ## 2026-05-25 - Agent workspace coordination protocol
 
 Summary:

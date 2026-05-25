@@ -427,7 +427,7 @@ def infer_feedback_corrections(
     elif any(term in lower for term in ["medium urgency", "normal urgency", "level three", "level 3"]):
         corrections["corrected_urgency"] = 3
 
-    if any(term in lower for term in _CCA_TERMS):
+    if _is_cca_context(lower):
         corrections.setdefault("corrected_category", "General inquiry")
         corrections.setdefault("corrected_owner", "Reservations")
         corrections.setdefault("corrected_sentiment", "Neutral")
@@ -1638,7 +1638,10 @@ def _significant_tokens(text: str) -> set[str]:
 
 
 def _is_cca_context(text: str) -> bool:
-    return any(term in text for term in _CCA_TERMS)
+    lower = text.lower()
+    return bool(re.search(r"\bcca\b", lower)) or any(
+        term in lower for term in _CCA_TERMS if term != "cca"
+    )
 
 
 def _is_completion_update(text: str) -> bool:

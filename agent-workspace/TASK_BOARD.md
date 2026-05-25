@@ -29,9 +29,9 @@ If the user explicitly bypasses Codex review, document that bypass in `agent-wor
 
 | Task | Owner | Status | Next Required Action |
 |---|---|---|---|
-| Watch `v0.5.3` release workflow to completion | Codex | Assigned to Codex | Codex is actively watching; docker-build is green, lint/build-exe still running at last check. |
-| Adopt mandatory coordination protocol | Claude | Assigned to Claude | Claude must acknowledge the protocol in `AGENT_MESSAGES.md` before implementation work. |
-| Review/own local triage behavior test file if applicable | Claude | Assigned to Claude | If `tests/test_email_triage_behavior.py` is Claude's work, Claude must leave a Review Request in `AGENT_MESSAGES.md` before Codex reviews or commits it. |
+| Prepare `v0.5.4` release after `v0.5.3` installer extraction failure | Codex | Assigned to Codex | Patch installer `.env` exclusion, CCA false-positive, tests, docs, then tag/push `v0.5.4`. |
+| Adopt mandatory coordination protocol | Claude | Approved by Codex | Protocol acknowledged in `AGENT_MESSAGES.md` at 2026-05-25T20:45:00-04:00. Done pending Codex confirmation. |
+| Review/own local triage behavior test file if applicable | Claude | Approved by Codex | Codex reviewed, ran the tests, approved the test file, and took ownership of the CCA false-positive fix. |
 
 ## Backlog
 

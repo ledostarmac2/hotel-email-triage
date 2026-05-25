@@ -119,13 +119,14 @@ def test_bundled_secrets_service_role_string_absent() -> None:
 # ── Test 3: installer artifacts ───────────────────────────────────────────────
 
 
-def test_installer_iss_includes_runtime_env_but_excludes_data() -> None:
-    """The release installer carries CI-provisioned runtime config but not local data."""
+def test_installer_iss_excludes_runtime_env_and_data() -> None:
+    """The release installer must not carry local/CI runtime config or data."""
     text = Path("installer/replyright_setup.iss").read_text(encoding="utf-8")
     excludes_lines = [l for l in text.splitlines() if "Excludes:" in l]
     assert excludes_lines, "No Excludes line found in replyright_setup.iss"
     excludes_text = " ".join(excludes_lines)
-    assert ".env" not in excludes_text
+    assert ".env" in excludes_text
+    assert "*.env" in excludes_text
     assert "data\\*" in excludes_text
     assert "*.sqlite3" in excludes_text
 

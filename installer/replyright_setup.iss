@@ -1,6 +1,6 @@
 #define MyAppName "ReplyRight"
 #ifndef MyAppVersion
-  #define MyAppVersion "0.5.3"
+  #define MyAppVersion "0.5.4"
 #endif
 #define MyAppPublisher "Waldorf Astoria New York"
 #define MyAppExeName "ReplyRight.exe"
@@ -46,7 +46,7 @@ FinishedLabel=Setup has finished installing ReplyRight. You can launch it now or
 Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription: "Additional shortcuts:"; Flags: checkedonce
 
 [Files]
-Source: "..\dist\ReplyRight\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "data\*,*.sqlite3,*.sqlite,*.db,*.log"
+Source: "..\dist\ReplyRight\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: ".env,*.env,data\*,*.sqlite3,*.sqlite,*.db,*.log"
 Source: "sample.env"; DestDir: "{app}"; DestName: "sample.env"; Flags: ignoreversion
 
 [Icons]

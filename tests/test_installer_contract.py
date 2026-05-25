@@ -41,7 +41,7 @@ def test_inno_installer_bundles_onedir_app_and_excludes_runtime_secrets() -> Non
     assert 'Source: "..\\dist\\ReplyRight\\*"' in iss
     assert "recursesubdirs" in iss
     # Runtime-only data and local secrets must stay out of the installer.
-    assert ".env" in iss
+    assert 'Excludes: ".env,*.env,data\\*' in iss
     assert "data\\*" in iss
     assert "*.sqlite3" in iss
     assert "*.log" in iss

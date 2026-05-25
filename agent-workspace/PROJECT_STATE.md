@@ -16,7 +16,8 @@ Proceed with the v0.5.3 release/watch lane and enforce the new Claude/Codex coor
 
 ## Current Release Context
 
-- `v0.5.3` was pushed to repair the `v0.5.2` lint failure and replace forced Node 24 behavior with Node 24-native first-party GitHub Actions.
+- `v0.5.3` repaired lint/build lanes but failed the release job at `Security Lint (Installer Extraction)`.
+- `v0.5.4` is the next release target: installer `.env` exclusion plus the CCA false-positive fix surfaced by Claude's triage tests.
 - `f2b50db` pushed the mandatory `agent-workspace/` coordination layer to `main`.
 - Docker CI was restored with a root `Dockerfile` and `docker-compose.yml`.
 - Do not commit local runtime files, `.env`, databases, build outputs, or packaged binaries.
