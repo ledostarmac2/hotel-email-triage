@@ -32,12 +32,14 @@ When Brian explicitly tells Codex or Claude **"train the model"**, the agent may
 
 Call `run_completed_pipeline()` from `outlook_dashboard/completed_training_pipeline.py`.
 
+**Mailbox and folder:** The source is the **`NYCWA_Reservations`** shared Outlook mailbox, subfolder **`Completed Request`** (singular, not plural). This is the only folder the pipeline should pull from. Outlook must be open and the shared mailbox must be added to the profile.
+
 **Via the admin API** (preferred when the app is running):
 
 ```http
 POST /api/training/completed-pipeline
 {
-  "mailbox_name": "<mailbox display name>",
+  "mailbox_name": "NYCWA_Reservations",
   "batch_size": 1000
 }
 ```
@@ -48,8 +50,8 @@ POST /api/training/completed-pipeline
 from outlook_dashboard.completed_training_pipeline import run_completed_pipeline
 
 result = run_completed_pipeline(
-    mailbox_name="<mailbox display name>",
-    folder_name="Completed Request",  # default
+    mailbox_name="NYCWA_Reservations",
+    folder_name="Completed Request",  # singular — do not change
     batch_size=1000,
 )
 print(result)
