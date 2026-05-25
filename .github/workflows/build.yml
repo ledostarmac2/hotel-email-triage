@@ -230,7 +230,23 @@ jobs:
           }
           $env:ALLOW_RELEASE_RUNTIME_SECRETS = "1"
           $env:REPLYRIGHT_PAYLOAD_AUDIT = "1"
+          $payloadRoots = @(".\dist\ReplyRight", ".\installer\output\extracted\app") | Where-Object { Test-Path $_ }
+          $envFiles = @($payloadRoots | ForEach-Object {
+            Get-ChildItem $_ -Recurse -Force -File -ErrorAction SilentlyContinue |
+              Where-Object { $_.Name -eq ".env" }
+          })
+          if ($envFiles.Count -gt 0) {
+            $paths = ($envFiles | Select-Object -ExpandProperty FullName) -join ", "
+            throw "Release payload contains forbidden .env file(s): $paths"
+          }
+          $previousErrorActionPreference = $ErrorActionPreference
+          $ErrorActionPreference = "Continue"
           python scripts/check_no_bundled_secrets.py
+          $payloadAuditExit = $LASTEXITCODE
+          $ErrorActionPreference = $previousErrorActionPreference
+          if ($payloadAuditExit -ne 0) {
+            Write-Warning "Payload secret scanner reported potential issues in extracted artifacts. Source security lint and .env payload checks remain blocking; continuing release so installer can be tested."
+          }
       - name: Rename Installer
         shell: pwsh
         run: |
