@@ -24,6 +24,16 @@ from PySide6.QtWidgets import (
 from outlook_dashboard.taxonomy import CATEGORIES, CONTACT_TYPES, DEPARTMENT_OWNERS, STATUSES
 from replyright_qt.api_client import ApiClient, ApiWorker
 
+_ENGINE_DISPLAY = {
+    "heuristic": "Heuristic rules",
+    "local-classifier": "Local ML classifier",
+    "openai": "OpenAI triage",
+    "openai-refresh": "OpenAI refresh",
+    "anthropic": "Claude AI (single-email)",
+    "claude": "Claude AI (single-email)",
+    "unknown": "Unknown",
+}
+
 
 def _strip_html(text: str) -> str:
     text = re.sub(r"<style[^>]*>.*?</style>", " ", text, flags=re.DOTALL | re.IGNORECASE)
@@ -194,6 +204,8 @@ class ConversationDetailWidget(QWidget):
         sender_row.addWidget(received)
         self._content_layout.addLayout(sender_row)
 
+        if email.get("needs_review"):
+            self._render_needs_review_banner(email)
         self._render_status_row(email)
         self._content_layout.addWidget(_Divider())
         self._render_analysis(email)
@@ -293,6 +305,9 @@ class ConversationDetailWidget(QWidget):
         confidence = email.get("confidence_score")
         confidence_text = f"{float(confidence):.0f}%" if isinstance(confidence, (int, float)) else "Not scored"
         self._add_metric(grid, 2, 1, "Confidence", confidence_text)
+        engine = str(email.get("analysis_engine") or "unknown")
+        engine_display = _ENGINE_DISPLAY.get(engine.lower(), engine.replace("-", " ").title())
+        self._add_metric(grid, 3, 0, "Classification Source", engine_display)
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 1)
         self._content_layout.addLayout(grid)
@@ -304,7 +319,7 @@ class ConversationDetailWidget(QWidget):
             summary_lbl.setObjectName("summary-text")
             self._content_layout.addWidget(summary_lbl)
 
-        self._render_chip_list("Risk flags", _as_list(email.get("risk_flags")))
+        self._render_risk_flags(_as_list(email.get("risk_flags")))
         self._render_chip_list("Missing information", _as_list(email.get("missing_information")))
         self._render_steps(_as_list(email.get("internal_next_steps")))
 
@@ -339,6 +354,35 @@ class ConversationDetailWidget(QWidget):
         layout.addWidget(value_widget)
         grid.addWidget(box, row, col)
 
+    def _render_needs_review_banner(self, email: dict) -> None:
+        banner = QWidget()
+        banner.setObjectName("needs-review-banner")
+        row = QHBoxLayout(banner)
+        row.setContentsMargins(12, 8, 12, 8)
+        row.setSpacing(10)
+        icon_lbl = QLabel("! Needs Human Review")
+        icon_lbl.setObjectName("needs-review-banner-text")
+        row.addWidget(icon_lbl)
+        reasons: list[str] = []
+        try:
+            conf = float(email.get("confidence_score") or 100)
+            if conf < 50:
+                reasons.append(f"confidence {conf:.0f}%")
+        except (TypeError, ValueError):
+            pass
+        risk_flags = _as_list(email.get("risk_flags"))
+        if risk_flags:
+            reasons.append(f"risk: {', '.join(str(f) for f in risk_flags[:2])}")
+        category = str(email.get("category") or "")
+        if category in {"Billing dispute", "Accessibility request"}:
+            reasons.append(f"category: {category.lower()}")
+        if reasons:
+            reason_lbl = QLabel("  |  ".join(reasons))
+            reason_lbl.setObjectName("muted-label")
+            row.addWidget(reason_lbl)
+        row.addStretch()
+        self._content_layout.addWidget(banner)
+
     def _render_chip_list(self, label: str, values: list) -> None:
         if not values:
             return
@@ -347,6 +391,21 @@ class ConversationDetailWidget(QWidget):
         for value in values[:5]:
             chip = QLabel(str(value))
             chip.setObjectName("chip")
+            chip.setWordWrap(True)
+            row.addWidget(chip)
+        row.addStretch()
+        self._content_layout.addLayout(row)
+
+    def _render_risk_flags(self, flags: list) -> None:
+        if not flags:
+            return
+        row = QHBoxLayout()
+        lbl = QLabel("Risk flags")
+        lbl.setObjectName("risk-flags-label")
+        row.addWidget(lbl)
+        for flag in flags[:5]:
+            chip = QLabel(str(flag))
+            chip.setObjectName("risk-chip")
             chip.setWordWrap(True)
             row.addWidget(chip)
         row.addStretch()

@@ -538,6 +538,16 @@ QLabel#badge-urgency-3 {{ background-color: #fef3c7; color: #92400e; border-radi
 QLabel#badge-urgency-4 {{ background-color: #ffedd5; color: #c2410c; border-radius: 5px; padding: 2px 7px; font-size: 11px; font-weight: 800; }}
 QLabel#badge-urgency-5 {{ background-color: #fee2e2; color: #b91c1c; border-radius: 5px; padding: 2px 7px; font-size: 11px; font-weight: 800; }}
 QLabel#badge-status {{ background-color: {selected_bg}; color: {c["content_text"]}; border-radius: 5px; padding: 2px 7px; font-size: 11px; }}
+QLabel#badge-needs-review {{ background-color: #dc2626; color: #ffffff; border-radius: 5px; padding: 2px 6px; font-size: 10px; font-weight: 800; }}
+
+/* ── Needs Review banner (detail panel) ── */
+QWidget#needs-review-banner {{ background-color: {"#fef2f2" if mode == "light" else "#3f1212"}; border: 1px solid {"#fecaca" if mode == "light" else "#7f1d1d"}; border-radius: 8px; }}
+QWidget#needs-review-banner QLabel {{ background-color: transparent; }}
+QLabel#needs-review-banner-text {{ color: {"#991b1b" if mode == "light" else "#fca5a5"}; font-size: 13px; font-weight: 800; background: transparent; }}
+
+/* ── Risk flag chips (high-risk, red) ── */
+QLabel#risk-chip {{ background-color: {"#fee2e2" if mode == "light" else "#3f1212"}; color: {"#991b1b" if mode == "light" else "#fca5a5"}; border: 1px solid {"#fecaca" if mode == "light" else "#7f1d1d"}; border-radius: 5px; padding: 3px 7px; font-size: 11px; font-weight: 800; }}
+QLabel#risk-flags-label {{ color: {"#991b1b" if mode == "light" else "#fca5a5"}; font-size: 12px; font-weight: 700; background: transparent; }}
 
 /* ── Sidebar custom nav items ── */
 QWidget#nav-item {{ background-color: transparent; border-radius: 8px; }}

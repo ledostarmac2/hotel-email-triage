@@ -21,8 +21,10 @@ from .completed_requests_importer import (
     mark_processed,
     read_completed_requests,
 )
+from .config import get_settings
 from .database import (
     log_training_example,
+    managed_connect,
     save_analysis,
     upsert_email,
 )
@@ -125,7 +127,56 @@ def run_completed_pipeline(
         log_training_example(email_id, fp, "uploaded", db_path=db_path)
         mark_processed(entry_id, "heuristic", tokens, domain, db_path=db_path)
 
+    purge = purge_processed_training_emails(db_path=db_path)
+    result["purged_email_rows"] = purge["deleted_rows"]
+    result["purged_export_files"] = purge["deleted_files"]
+
     return result
+
+
+def purge_processed_training_emails(db_path: Path | None = None) -> dict[str, int]:
+    """Delete raw imported training emails that have been processed.
+
+    Removes rows from the `emails` table (and cascades to `email_analysis`) where
+    source='completed_requests'.  The sanitized training examples in Supabase and
+    the completed_requests_log audit trail are left intact.
+
+    Also deletes any exported .msg files from data/outlook_exports/.
+
+    Returns {deleted_rows, deleted_files}.
+    """
+    deleted_rows = 0
+    deleted_files = 0
+
+    try:
+        with managed_connect(db_path) as db:
+            cur = db.execute(
+                "DELETE FROM emails WHERE source = 'completed_requests'"
+            )
+            deleted_rows = cur.rowcount
+        if deleted_rows:
+            _log.info("purge: deleted %d raw training emails from SQLite", deleted_rows)
+    except Exception as exc:
+        _log.warning("purge: SQLite delete failed: %s", exc)
+
+    exports_dir = get_settings().database_path.parent / "outlook_exports"
+    if exports_dir.exists():
+        for f in exports_dir.rglob("*"):
+            if f.is_file():
+                try:
+                    f.unlink()
+                    deleted_files += 1
+                except Exception as exc:
+                    _log.warning("purge: could not delete %s: %s", f, exc)
+        try:
+            import shutil
+            shutil.rmtree(exports_dir, ignore_errors=True)
+        except Exception:
+            pass
+        if deleted_files:
+            _log.info("purge: deleted %d exported .msg files", deleted_files)
+
+    return {"deleted_rows": deleted_rows, "deleted_files": deleted_files}
 
 
 def completed_pipeline_status(db_path: Path | None = None) -> dict[str, Any]:

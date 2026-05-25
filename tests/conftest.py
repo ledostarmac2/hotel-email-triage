@@ -6,6 +6,19 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+
+# ── Settings cache reset ──────────────────────────────────────────────────────
+# get_settings() is @lru_cache.  Tests that use monkeypatch.setenv/delenv to
+# simulate different configs need a fresh read each time.
+
+@pytest.fixture(autouse=True)
+def _reset_settings_cache():
+    from outlook_dashboard.config import get_settings
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
 # ── Shared database fixture ───────────────────────────────────────────────────
 
 

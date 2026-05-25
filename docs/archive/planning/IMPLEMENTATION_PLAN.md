@@ -1,3 +1,5 @@
+> Historical archive. Do not use this as current project state. Use docs/CURRENT_STATE.md, docs/HANDOFF.md, and docs/V1_RELEASE_PLAN.md instead.
+
 # Implementation Plan
 
 ## Phase 1: Reference Review and Architecture

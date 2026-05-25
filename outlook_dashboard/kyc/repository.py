@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from datetime import UTC, datetime
 from typing import Any
 
 from .. import __version__
+from ..config import get_settings
 from ..database import managed_connect, row_to_dict
 from ..runtime_log import get_logger
 from ..text_utils import utc_now_iso
@@ -378,8 +378,8 @@ class KycRepository:
         return KycEvent(**row)
 
     def _mirror(self, table: str, payload: dict[str, Any]) -> None:
-        url = os.getenv("SUPABASE_URL", "").rstrip("/")
-        key = os.getenv("SUPABASE_KEY", "")
+        url = get_settings().supabase_url.rstrip("/")
+        key = get_settings().supabase_key
         if not url or not key:
             return
         try:

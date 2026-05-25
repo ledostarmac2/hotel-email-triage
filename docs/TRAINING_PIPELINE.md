@@ -11,7 +11,7 @@ The in-app pipeline is zero-credit. It uses local heuristic or existing `email_a
 ## Runtime Components
 
 - `outlook_dashboard/training_pipeline.py` exports completed local email rows.
-- `outlook_dashboard/completed_requests_importer.py` reads Outlook "Completed Requests" through read-only COM.
+- `outlook_dashboard/completed_requests_importer.py` reads Outlook `"Completed Request"` through read-only COM.
 - `outlook_dashboard/completed_training_pipeline.py` imports completed requests, applies heuristic labels, and uploads sanitized examples.
 - `outlook_dashboard/redaction.py` removes payment-like and sensitive identifiers.
 - `outlook_dashboard/local_classifier.py` trains from human-reviewed Supabase examples.
@@ -19,7 +19,7 @@ The in-app pipeline is zero-credit. It uses local heuristic or existing `email_a
 ## Data Flow
 
 ```text
-Completed local email or Completed Requests folder
+Completed local email or Completed Request folder
   -> latest-message cleanup
   -> local heuristic/existing analysis labels
   -> redact_sensitive_text()
@@ -95,12 +95,12 @@ Invoke-WebRequest -Uri http://127.0.0.1:8000/login -Method POST -WebSession $ses
 Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/admin/training/run?batch_size=50" -Method POST -WebSession $session
 ```
 
-Completed Requests import:
+Completed Request import:
 
 ```powershell
 Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/admin/training/import-completed-requests" -Method POST -WebSession $session -ContentType "application/json" -Body (@{
   mailbox_name = "NYCWA_Reservations"
-  folder_name = "Completed Requests"
+  folder_name = "Completed Request"
   batch_size = 50
 } | ConvertTo-Json)
 ```
@@ -144,5 +144,5 @@ End-to-end packaged smoke checks:
 ## Known Gaps
 
 - Enough human-reviewed examples are required before the classifier can train.
-- Broader historical import workflows remain future work beyond Completed Requests.
+- Broader historical import workflows remain future work beyond Completed Request.
 - Agent-reviewed label import ergonomics can be improved.

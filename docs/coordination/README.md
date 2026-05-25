@@ -1,8 +1,10 @@
 # ReplyRight Agent Coordination Hub
 
-This directory is the source-of-truth for multi-agent work coordination.
-All three agents (Claude, Codex, Gemini) read from and write to this hub
-to stay synchronized without requiring a live shared session.
+> Historical coordination archive. Do not treat this directory as current project
+> state. Use `docs/CURRENT_STATE.md`, `docs/HANDOFF.md`, and
+> `docs/V1_RELEASE_PLAN.md` for active status and release planning.
+
+This directory records previous multi-agent work coordination.
 
 ## Files
 

@@ -82,3 +82,12 @@ def test_replyright_qt_windows_import_pyside6_directly() -> None:
             assert "from PySide6" in source, (
                 f"{path} uses Qt widgets but does not import PySide6 directly"
             )
+
+
+def test_main_window_auto_refreshes_inbox_once_on_startup() -> None:
+    source = Path("replyright_qt/windows/main_window.py").read_text(encoding="utf-8")
+    load_inbox_block = source.split("def load_inbox", 1)[1].split("def _on_queue_changed", 1)[0]
+    assert "_load_emails()" in load_inbox_block
+    assert "_auto_sync_started" in load_inbox_block
+    assert "QTimer.singleShot" in load_inbox_block
+    assert "self._on_sync" in load_inbox_block

@@ -20,13 +20,13 @@ CREDIT USAGE
 from __future__ import annotations
 
 import hashlib
-import os
 import re
 from pathlib import Path
 from typing import Any
 
 from . import __version__
 from .ai import latest_message_text
+from .config import get_settings
 from .database import (
     get_training_pipeline_status,
     list_unprocessed_completed_emails,
@@ -91,8 +91,8 @@ def _label_with_claude(body_redacted: str, settings: Any) -> dict | None:
 
 def _upload_example(example: dict) -> tuple[bool, str]:
     """POST example to Supabase training_examples using the service role key."""
-    url = os.getenv("SUPABASE_URL", "").rstrip("/")
-    key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+    url = get_settings().supabase_url.rstrip("/")
+    key = get_settings().supabase_service_role_key
     if not url or not key:
         return False, "Supabase not configured"
     try:

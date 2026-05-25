@@ -60,6 +60,11 @@ def test_completed_pipeline_uses_heuristics_without_external_ai(db: Path) -> Non
     example = upload.call_args.args[0]
     assert example["labeling_engine"] == "heuristic"
     assert example["sender_domain"] == "travelco.example"
+    assert "sender_email" not in example
+    assert "subject" not in example
+    assert "body_text" not in example
+    assert "body_content" not in example
+    assert "body_redacted" in example
     assert "agent@travelco.example" not in example["body_redacted"]
 
 

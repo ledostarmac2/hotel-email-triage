@@ -135,6 +135,19 @@ def main() -> None:
     if "--native" in sys.argv or os.getenv("REPLYRIGHT_NATIVE") == "1":
         _log("--native flag noted; Qt shell is the default, continuing normal startup")
 
+    if "--kyc-smoke" in sys.argv or os.getenv("REPLYRIGHT_KYC_SMOKE") == "1":
+        from outlook_dashboard.kyc.automation import _automation_source_path, _ensure_selenium_available, _module
+
+        ok, message = _ensure_selenium_available()
+        if not ok:
+            raise RuntimeError(message)
+        if _automation_source_path() is None:
+            raise RuntimeError("KYC automation bundle was not found in the packaged runtime.")
+        if _module() is None:
+            raise RuntimeError("KYC automation module could not be imported from the packaged runtime.")
+        _log("KYC Selenium dependency smoke succeeded")
+        return
+
     health_smoke_only = "--health-smoke" in sys.argv or os.getenv("REPLYRIGHT_HEALTH_SMOKE") == "1"
 
     try:

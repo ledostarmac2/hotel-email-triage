@@ -22,6 +22,7 @@ For broad architecture, adaptive learning, Supabase, staged AI pipeline, shared 
 9. `docs/SECURITY_AND_PRIVACY.md`
 10. `docs/DEPLOYMENT.md`
 11. `docs/OPERATIONS_GUIDE.md`
+12. `docs/V1_RELEASE_PLAN.md`
 
 ## Source Of Truth
 
@@ -31,7 +32,7 @@ For broad architecture, adaptive learning, Supabase, staged AI pipeline, shared 
 - The `app/` directory is an inactive Next.js scaffold that has been untracked from git. Do not migrate logic there unless Brian explicitly asks.
 - `replyright_kernel/` is experimental and additive. It is not the active desktop app path.
 - `replyright_core/` is a scaffold for shared models/services. `replyright_qt/` is the active PySide6 native UI shell, wired through `run_desktop.py` → FastAPI backend + `ApiClient`.
-- The active UI is the FastAPI-served static dashboard under `outlook_dashboard/static/`.
+- The active desktop UI is the native PySide6 shell in `replyright_qt/`; the legacy FastAPI-served static dashboard under `outlook_dashboard/static/` remains available as supporting/admin web UI code.
 
 ## Handoff Protocol
 
@@ -76,9 +77,33 @@ After meaningful work:
 ## AI Usage Rules
 
 - Refresh Inbox should prefer the configured low-cost OpenAI model for bulk classification, then Google AI if OpenAI is unavailable, then local deterministic fallback.
-- Claude/Anthropic is reserved for explicit single-email Analyze/AI Suggestion actions and optional admin-explicit training refinement. Do not call Claude during bulk inbox refresh.
+- Claude/Anthropic is reserved for explicit single-email Analyze/AI Suggestion actions. Do not call Claude during bulk inbox refresh or in-app training endpoints.
 - External AI should enhance layered intelligence; do not collapse the app into one giant prompt.
 - AI-generated replies are suggestions only and require human review before any real guest or colleague communication.
+
+## Training the Classifier
+
+When asked to train the classifier, follow `docs/TRAINING_WORKFLOW.md` exactly.  Short version:
+
+1. **Import + label + upload + purge** in one call:
+   ```python
+   from outlook_dashboard.completed_training_pipeline import run_completed_pipeline
+   result = run_completed_pipeline(mailbox_name="<mailbox>", batch_size=1000)
+   ```
+   Or via the admin API: `POST /api/training/completed-pipeline`
+
+2. **Retrain** after examples are reviewed in Supabase:
+   ```python
+   from outlook_dashboard.local_classifier import train
+   train()
+   ```
+   Or via the admin API: `POST /api/training/train`
+
+Key constraints:
+- This pipeline **never calls external AI** (no Claude, OpenAI, Google).
+- Raw emails are purged automatically — `source='completed_requests'` rows are deleted from SQLite after upload.
+- Outlook messages are read-only: never send, delete, archive, or mutate them.
+- Only `body_redacted`, `sender_domain`, and `subject_tokens` are uploaded — never raw bodies or full emails.
 
 ## Working Rules
 

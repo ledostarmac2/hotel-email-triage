@@ -1,3 +1,5 @@
+> Historical archive. Do not use this as current project state. Use docs/CURRENT_STATE.md, docs/HANDOFF.md, and docs/V1_RELEASE_PLAN.md instead.
+
 # PySide6 Migration Plan
 
 Last updated: 2026-05-19
@@ -12,7 +14,7 @@ The current v0.1.1 bridge keeps pywebview temporarily for emergency repair conti
 but pywebview is not the long-term product shell.
 
 **Non-negotiable rules:**
-- Do not use `QWebEngineView` as the primary UI surface — ever.
+- Do not use `QWebEngineView` as the primary UI surface â€” ever.
 - Do not use pywebview in the new native app shell.
 - Do not use Electron.
 - Do not use Tauri.
@@ -28,28 +30,28 @@ dependency from the desktop shell entirely.
 ## Scaffold (current state)
 
 ```text
-replyright_core/                     — Framework-neutral service layer
+replyright_core/                     â€” Framework-neutral service layer
   models/
-    email_models.py                  — Conversation, EmailMessage, TriageResult dataclasses
-    user_models.py                   — User, Session dataclasses
+    email_models.py                  â€” Conversation, EmailMessage, TriageResult dataclasses
+    user_models.py                   â€” User, Session dataclasses
   services/
-    auth_service.py                  — AuthServiceProtocol
-    inbox_service.py                 — InboxServiceProtocol
+    auth_service.py                  â€” AuthServiceProtocol
+    inbox_service.py                 â€” InboxServiceProtocol
   adapters/
-    sqlite_adapter.py                — SqliteAdapterProtocol
-  app_state.py                       — AppState dataclass
+    sqlite_adapter.py                â€” SqliteAdapterProtocol
+  app_state.py                       â€” AppState dataclass
 
-replyright_qt/                       — PySide6 native shell scaffold
-  main_qt.py                         — Native helper; direct execution raises until native slice ready
-  adapters/                          — Supabase auth and SQLite inbox adapter scaffolds
-  workers.py                         — QThread worker scaffolds for native auth/inbox loading
+replyright_qt/                       â€” PySide6 native shell scaffold
+  main_qt.py                         â€” Native helper; direct execution raises until native slice ready
+  adapters/                          â€” Supabase auth and SQLite inbox adapter scaffolds
+  workers.py                         â€” QThread worker scaffolds for native auth/inbox loading
   windows/
-    login_window.py                  — LoginWindow skeleton
-    main_window.py                   — MainWindow skeleton
+    login_window.py                  â€” LoginWindow skeleton
+    main_window.py                   â€” MainWindow skeleton
   widgets/
-    conversation_list.py             — ConversationListWidget skeleton
+    conversation_list.py             â€” ConversationListWidget skeleton
   viewmodels/
-    inbox_viewmodel.py               — InboxViewModel (framework-neutral)
+    inbox_viewmodel.py               â€” InboxViewModel (framework-neutral)
   resources/
 ```
 
@@ -113,9 +115,9 @@ These are called through `replyright_core/services/` Protocols in the native app
 | Signal inspector / audit | `DiagnosticsWidget` (future) | Not yet |
 
 ### Screens to migrate first (slice 1)
-1. Login — auth required for everything else
-2. Inbox list — core daily workflow
-3. Conversation detail — core daily workflow
+1. Login â€” auth required for everything else
+2. Inbox list â€” core daily workflow
+3. Conversation detail â€” core daily workflow
 
 ### Screens to defer (slice 2+)
 - Admin screens (complex, low daily frequency)
@@ -129,7 +131,7 @@ These are called through `replyright_core/services/` Protocols in the native app
 ```text
 replyright_core/        Framework-neutral models, service interfaces, adapters
 replyright_qt/          PySide6 application code only
-  main_qt.py            CLI entry point — no pywebview, no FastAPI
+  main_qt.py            CLI entry point â€” no pywebview, no FastAPI
   windows/              Top-level QMainWindow/QDialog subclasses
   widgets/              Reusable QWidget subclasses
   viewmodels/           Framework-neutral presentation state (testable without Qt)
@@ -150,10 +152,10 @@ replyright_qt/          PySide6 application code only
 
 ## Testing plan
 
-- `tests/test_pyside6_scaffold.py` — no browser-engine imports in scaffold
-- `tests/test_pyside6_no_browser_engine.py` — comprehensive no-engine checks
-- `tests/test_migration_docs_reference_no_qwebengine.py` — docs assertions
-- All viewmodel tests use no PySide6 — just pure Python dataclass state
+- `tests/test_pyside6_scaffold.py` â€” no browser-engine imports in scaffold
+- `tests/test_pyside6_no_browser_engine.py` â€” comprehensive no-engine checks
+- `tests/test_migration_docs_reference_no_qwebengine.py` â€” docs assertions
+- All viewmodel tests use no PySide6 â€” just pure Python dataclass state
 - Qt window tests use `pytest-qt` (future) when PySide6 is in requirements
 - Existing 471+ tests must continue to pass throughout migration
 
@@ -187,7 +189,7 @@ replyright_qt/          PySide6 application code only
 1. `replyright_qt/main_qt.py` starts without FastAPI or pywebview
 2. Does not import `QWebEngineView`
 3. Does not import pywebview
-4. Login window appears — native Qt widgets, no browser
+4. Login window appears â€” native Qt widgets, no browser
 5. Successful Supabase auth shows the inbox list
 6. Conversation list loads from local SQLite through `InboxServiceProtocol`
 7. Read-only Outlook posture preserved (no reply sending from Qt app)

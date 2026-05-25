@@ -114,6 +114,12 @@ class ConversationRow(QWidget):
             time_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
             right_col.addWidget(time_lbl)
 
+        if email.get("needs_review"):
+            review_badge = QLabel("Review")
+            review_badge.setObjectName("badge-needs-review")
+            review_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            right_col.addWidget(review_badge, alignment=Qt.AlignmentFlag.AlignRight)
+
         if priority:
             badge = QLabel(f"U{priority}")
             badge.setObjectName(f"badge-urgency-{min(max(priority, 1), 5)}")

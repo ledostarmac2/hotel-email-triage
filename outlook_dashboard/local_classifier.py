@@ -16,12 +16,12 @@ Enhancements over the original:
 """
 from __future__ import annotations
 
-import os
 import pickle
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .config import get_settings
 from .runtime_log import get_logger
 from .taxonomy import CATEGORIES, DEPARTMENT_OWNERS
 
@@ -31,6 +31,7 @@ MIN_TRAINING_EXAMPLES = 20
 _MODELS_KEY = "local_classifier_models"
 _MODELS_KEY_PREV = "local_classifier_models_prev"
 _META_KEY = "local_classifier_meta"
+_META_KEY_PREV = "local_classifier_meta_prev"
 
 # Per-target default confidence thresholds.
 # Rare categories like "Accessibility request" need a lower threshold or they
@@ -74,6 +75,13 @@ def _save_models(models: dict, meta: dict, db_path: Path | None = None) -> None:
                 "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
                 (_MODELS_KEY_PREV, existing[0], now),
             )
+        existing_meta = db.execute("SELECT value FROM app_kv WHERE key = ?", (_META_KEY,)).fetchone()
+        if existing_meta:
+            db.execute(
+                "INSERT INTO app_kv (key, value, updated_at) VALUES (?, ?, ?) "
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
+                (_META_KEY_PREV, existing_meta[0], now),
+            )
         for key, value in [(_MODELS_KEY, blob), (_META_KEY, meta_blob)]:
             db.execute(
                 "INSERT INTO app_kv (key, value, updated_at) VALUES (?, ?, ?) "
@@ -99,8 +107,8 @@ def _load_models(db_path: Path | None = None) -> tuple[dict | None, dict]:
 # ── Supabase download ─────────────────────────────────────────────────────────
 
 def _download_training_examples(limit: int = 5000) -> list[dict]:
-    url = os.getenv("SUPABASE_URL", "").rstrip("/")
-    key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+    url = get_settings().supabase_url.rstrip("/")
+    key = get_settings().supabase_service_role_key
     if not url or not key:
         return []
     try:
@@ -327,6 +335,8 @@ def train(db_path: Path | None = None) -> dict:
         "version_id": version_id,
         "trained_at": datetime.now(tz=timezone.utc).isoformat(),
         "total_examples_downloaded": n,
+        "examples_supabase": len(supabase_examples),
+        "examples_local": len(local_examples),
         "targets": target_meta,
     }
 
@@ -373,6 +383,181 @@ def get_model_meta(db_path: Path | None = None) -> dict:
     """Return metadata about the currently loaded model bundle."""
     _, meta = _get_models(db_path)
     return meta
+
+
+def get_classifier_status(db_path: Path | None = None) -> dict:
+    """Return a rich admin-facing status snapshot for the local classifier.
+
+    Includes training state, per-target accuracy, label distribution, example
+    counts, stale/no-model warnings, and rollback availability.
+    """
+    models, meta = _get_models(db_path)
+    has_model = bool(models and meta.get("version_id"))
+
+    def _table_exists(db: Any, table_name: str) -> bool:
+        row = db.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+            (table_name,),
+        ).fetchone()
+        return row is not None
+
+    def _count_rows(db: Any, table_name: str, where_clause: str = "") -> int:
+        if not _table_exists(db, table_name):
+            return 0
+        query = f"SELECT COUNT(*) FROM {table_name}"  # noqa: S608 - trusted internal table names
+        if where_clause:
+            query += f" WHERE {where_clause}"
+        row = db.execute(query).fetchone()
+        return int(row[0]) if row else 0
+
+    has_prev = False
+    local_count = 0
+    bootstrap_count = 0
+    feedback_count = 0
+    try:
+        from .database import managed_connect
+        with managed_connect(db_path) as db:
+            prev_model = db.execute(
+                "SELECT value FROM app_kv WHERE key = ?", (_MODELS_KEY_PREV,)
+            ).fetchone()
+            prev_meta = db.execute(
+                "SELECT value FROM app_kv WHERE key = ?", (_META_KEY_PREV,)
+            ).fetchone()
+            has_prev = bool(prev_model and prev_model[0] and prev_meta and prev_meta[0])
+            bootstrap_count = _count_rows(
+                db,
+                "training_bootstrap",
+                "label_urgency IS NOT NULL",
+            )
+            feedback_count = _count_rows(
+                db,
+                "triage_feedback",
+                "corrected_urgency IS NOT NULL",
+            )
+            local_count = bootstrap_count + feedback_count
+    except Exception as exc:
+        _log.debug("local_classifier: failed to collect status counts: %s", exc)
+
+    targets_meta = meta.get("targets") or {}
+    target_summaries: dict[str, dict] = {}
+    for target, tmeta in targets_meta.items():
+        cv = tmeta.get("cv_accuracy", -1.0)
+        target_summaries[target] = {
+            "examples": tmeta.get("examples", 0),
+            "classes": tmeta.get("classes", 0),
+            "cv_accuracy": cv,
+            "cv_status": (
+                "ok" if cv >= 0.5
+                else "low" if cv >= 0
+                else "insufficient_data"
+            ),
+            "label_distribution": tmeta.get("label_distribution") or {},
+        }
+
+    warnings: list[str] = []
+    if not has_model:
+        warnings.append("No trained model available — classifier predictions are disabled")
+    else:
+        trained_at = meta.get("trained_at", "")
+        if trained_at:
+            from datetime import datetime, timezone
+            try:
+                age_days = (
+                    datetime.now(tz=timezone.utc)
+                    - datetime.fromisoformat(trained_at)
+                ).days
+                if age_days > 30:
+                    warnings.append(f"Model is {age_days} days old — consider retraining")
+            except Exception:
+                pass
+        for target, tsummary in target_summaries.items():
+            if tsummary["cv_status"] == "low":
+                warnings.append(
+                    f"Target '{target}' CV accuracy {tsummary['cv_accuracy']:.0%} is low — "
+                    "add more reviewed training examples to improve"
+                )
+            elif tsummary["cv_status"] == "insufficient_data":
+                warnings.append(
+                    f"Target '{target}' had insufficient data for cross-validation"
+                )
+
+    sources: list[str] = []
+    examples_supabase = int(meta.get("examples_supabase", 0) or 0)
+    examples_local = int(meta.get("examples_local", local_count) or 0)
+    total_at_train = int(meta.get("total_examples_downloaded", 0) or 0)
+    available_examples = max(local_count + examples_supabase, total_at_train)
+    if examples_supabase > 0:
+        sources.append("supabase")
+    if feedback_count > 0 or examples_local > 0:
+        sources.append("local_feedback")
+    if bootstrap_count > 0:
+        sources.append("bootstrap")
+    if not sources and has_model:
+        sources.append("bootstrap")
+
+    return {
+        "has_model": has_model,
+        "version_id": meta.get("version_id", ""),
+        "trained_at": meta.get("trained_at", ""),
+        "total_examples_at_train_time": total_at_train,
+        "examples_supabase": examples_supabase,
+        "examples_local": examples_local,
+        "available_training_examples": available_examples,
+        "human_reviewed_count": examples_supabase,
+        "local_examples_count": local_count,
+        "targets_trained": sorted(targets_meta.keys()),
+        "targets": target_summaries,
+        "data_sources": sources,
+        "rollback_available": has_prev,
+        "warnings": warnings,
+        "needs_training": (
+            not has_model
+            or (available_examples > (total_at_train * 1.5) if total_at_train else False)
+        ),
+    }
+
+
+def rollback_model(db_path: Path | None = None) -> dict:
+    """Restore the previous model bundle from SQLite (if available).
+
+    Returns {"rolled_back": bool, "version_id": str, "reason": str}.
+    """
+    try:
+        from .database import managed_connect
+        from .text_utils import utc_now_iso
+        with managed_connect(db_path) as db:
+            prev_row = db.execute(
+                "SELECT value FROM app_kv WHERE key = ?", (_MODELS_KEY_PREV,)
+            ).fetchone()
+            prev_meta_row = db.execute(
+                "SELECT value FROM app_kv WHERE key = ?", (_META_KEY_PREV,)
+            ).fetchone()
+            if not prev_row or not prev_row[0]:
+                return {"rolled_back": False, "version_id": "", "reason": "No previous model available"}
+            if not prev_meta_row or not prev_meta_row[0]:
+                return {
+                    "rolled_back": False,
+                    "version_id": "",
+                    "reason": "Previous model metadata is missing",
+                }
+            # Restore previous model and metadata together.
+            now = utc_now_iso()
+            for key, value in ((_MODELS_KEY, prev_row[0]), (_META_KEY, prev_meta_row[0])):
+                db.execute(
+                    "INSERT INTO app_kv (key, value, updated_at) VALUES (?, ?, ?) "
+                    "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
+                    (key, value, now),
+                )
+        # Clear the in-memory cache so the restored model is loaded next predict()
+        invalidate_cache()
+        models, meta = _get_models(db_path)
+        return {
+            "rolled_back": True,
+            "version_id": meta.get("version_id", "unknown"),
+            "reason": "Restored previous model bundle",
+        }
+    except Exception as exc:
+        return {"rolled_back": False, "version_id": "", "reason": str(exc)[:200]}
 
 
 def feature_importance(db_path: Path | None = None) -> dict[str, dict[str, list[str]]]:

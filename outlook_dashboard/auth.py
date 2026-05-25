@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import secrets
 import urllib.error
 import urllib.request
@@ -11,6 +10,7 @@ import hmac
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from .config import get_settings
 from .text_utils import utc_now_iso
 
 _SESSION_SEP = "|||"
@@ -21,15 +21,15 @@ _log = logging.getLogger(__name__)
 
 
 def _supabase_url() -> str:
-    return os.getenv("SUPABASE_URL", "").strip().rstrip("/")
+    return get_settings().supabase_url.strip().rstrip("/")
 
 
 def _anon_key() -> str:
-    return os.getenv("SUPABASE_KEY", "").strip()
+    return get_settings().supabase_key.strip()
 
 
 def _service_key() -> str:
-    return os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    return get_settings().supabase_service_role_key.strip()
 
 
 def _supabase_auth_configured() -> bool:

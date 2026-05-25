@@ -10,6 +10,24 @@ def test_pyinstaller_build_uses_onedir_bundle() -> None:
     assert "dist\\ReplyRight\\ReplyRight.exe" in script
 
 
+def test_pyinstaller_build_bundles_kyc_selenium_dependency() -> None:
+    script = Path("build_exe.ps1").read_text(encoding="utf-8")
+    requirements = Path("requirements.txt").read_text(encoding="utf-8")
+    wrapper = Path("outlook_dashboard/kyc/automation.py").read_text(encoding="utf-8")
+    launcher = Path("run_desktop.py").read_text(encoding="utf-8")
+    assert "selenium" in requirements
+    assert '"selenium"' in script
+    assert "--collect-all selenium" in script
+    assert "--collect-submodules selenium" in script
+    assert "--hidden-import selenium.webdriver.edge.webdriver" in script
+    assert "selenium.webdriver.edge.webdriver" in wrapper
+    assert "_automation_source_path" in wrapper
+    assert '"_MEIPASS"' in wrapper
+    assert "--kyc-smoke" in launcher
+    assert "_automation_source_path() is None" in launcher
+    assert "_module() is None" in launcher
+
+
 def test_build_exe_script_does_not_copy_env() -> None:
     """Ensure build_exe.ps1 does not copy .env to the packaged output."""
     script = Path("build_exe.ps1").read_text(encoding="utf-8")
@@ -71,6 +89,47 @@ def test_sample_env_has_only_empty_values_for_secrets() -> None:
             assert not v.strip(), (
                 f"installer/sample.env has non-empty value for {k.strip()!r}: {line!r}"
             )
+
+
+def test_pyinstaller_collect_all_covers_runtime_top_level_packages() -> None:
+    """--collect-all must cover every package that is imported at the top level
+    of outlook_dashboard (i.e. packages that PyInstaller cannot trace lazily).
+
+    Packages verified:
+    - fastapi, starlette, pydantic: top-level imports in main.py
+    - httpx: used in every Supabase HTTP function
+    - anthropic: AI call path (collect-all to pick up streaming transports)
+    - openai: AI call path (dynamic imports inside openai client)
+    - sklearn / scikit_learn: ML classifiers
+    - dateparser: date extraction
+    - joblib / threadpoolctl: sklearn runtime deps
+    - selenium: KYC browser automation
+    - PySide6: Qt shell
+    - outlook_dashboard / replyright_qt / replyright_core: local packages
+    """
+    script = Path("build_exe.ps1").read_text(encoding="utf-8")
+    required_collect_all = [
+        "fastapi",
+        "starlette",
+        "pydantic",
+        "httpx",
+        "anthropic",
+        "openai",
+        "sklearn",
+        "scikit_learn",
+        "dateparser",
+        "joblib",
+        "threadpoolctl",
+        "selenium",
+        "PySide6",
+        "outlook_dashboard",
+        "replyright_qt",
+        "replyright_core",
+    ]
+    for pkg in required_collect_all:
+        assert f"--collect-all {pkg}" in script, (
+            f"build_exe.ps1 is missing --collect-all {pkg}"
+        )
 
 
 def test_release_workflow_uploads_setup_installer_only() -> None:

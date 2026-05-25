@@ -89,8 +89,10 @@ from .supabase_client import (
 from .taxonomy import CATEGORIES, CONTACT_TYPES, DEPARTMENT_OWNERS, PRIORITY_LEVELS, RISK_FLAGS, STATUSES
 from .kyc import router as kyc_router
 from .local_classifier import feature_importance as classifier_feature_importance
+from .local_classifier import get_classifier_status
 from .local_classifier import get_model_meta
 from .local_classifier import invalidate_cache as invalidate_classifier_cache
+from .local_classifier import rollback_model as rollback_local_classifier
 from .local_classifier import train as train_local_classifier
 from .training_pipeline import pipeline_status as training_pipeline_status
 from .training_pipeline import run_pipeline as run_training_pipeline
@@ -100,6 +102,7 @@ from .completed_training_pipeline import (
 )
 from .database import list_property_knowledge
 from .updater import get_build_info, get_update_status, start_download, start_update_check
+from . import __version__
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 _STATIC_VER = str(int(time.time()))
@@ -262,7 +265,7 @@ class _RequestLogMiddleware(BaseHTTPMiddleware):
 
 app = FastAPI(
     title="Luxury Hotel Outlook Email Intelligence",
-    version="0.1.1",
+    version=__version__,
     lifespan=lifespan,
 )
 app.add_middleware(_RateLimitMiddleware)
@@ -820,9 +823,36 @@ def api_deployment_diagnostics(request: Request) -> dict[str, object]:
             "version_id": classifier_meta.get("version_id", ""),
             "trained_at": classifier_meta.get("trained_at", ""),
             "targets": sorted((classifier_meta.get("targets") or {}).keys()),
+            "examples_at_train_time": classifier_meta.get("total_examples_downloaded", 0),
+            "examples_supabase": classifier_meta.get("examples_supabase", 0),
+            "examples_local": classifier_meta.get("examples_local", 0),
+            "accuracy_per_target": {
+                t: (tmeta.get("cv_accuracy") if tmeta.get("cv_accuracy", -1) >= 0 else None)
+                for t, tmeta in (classifier_meta.get("targets") or {}).items()
+            },
         },
         "warnings": settings.runtime_warnings,
     }
+    # Redact any value that might look like a secret before returning.
+    # None should exist here, but diagnostics must fail closed.
+    import json as _json
+    _sentinels = ("service_role", "api_key", "eyJ")
+
+    def _scrub_diagnostics(value: object) -> object:
+        if isinstance(value, str):
+            return "[redacted]" if any(s in value for s in _sentinels) else value
+        if isinstance(value, list):
+            return [_scrub_diagnostics(item) for item in value]
+        if isinstance(value, dict):
+            return {key: _scrub_diagnostics(item) for key, item in value.items()}
+        return value
+
+    scrubbed = _scrub_diagnostics(checks)
+    if _json.dumps(scrubbed) != _json.dumps(checks):
+        scrubbed["warnings"] = list(scrubbed.get("warnings") or []) + [
+            "Diagnostics redaction warning: sensitive-looking content was removed."
+        ]
+    checks = scrubbed
     return checks
 
 
@@ -967,8 +997,8 @@ def api_list_prompts(request: Request) -> dict[str, object]:
     """List all prompt versions from Supabase."""
     if request.state.user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin only.")
-    url = (os.getenv("SUPABASE_URL") or "").rstrip("/")
-    key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or ""
+    url = get_settings().supabase_url.rstrip("/")
+    key = get_settings().supabase_service_role_key
     if not url or not key:
         return {"prompts": [], "error": "Supabase not configured"}
     try:
@@ -997,8 +1027,8 @@ def api_update_prompt(prompt_id: str, payload: PromptUpdateRequest, request: Req
     """Update prompt text in Supabase and refresh the local cache."""
     if request.state.user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin only.")
-    url = (os.getenv("SUPABASE_URL") or "").rstrip("/")
-    key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or ""
+    url = get_settings().supabase_url.rstrip("/")
+    key = get_settings().supabase_service_role_key
     if not url or not key:
         raise HTTPException(status_code=503, detail="Supabase not configured")
     update = {"prompt_text": payload.prompt_text}
@@ -1058,13 +1088,48 @@ def api_classifier_train(request: Request) -> dict[str, object]:
     return result
 
 
+@app.get("/api/admin/classifier/status")
+def api_classifier_status(request: Request) -> dict[str, object]:
+    """Return a rich admin status snapshot for the local classifier.
+
+    Includes training state, per-target accuracy, label distribution, example
+    counts, stale/no-model warnings, and rollback availability.
+    """
+    if request.state.user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only.")
+    return get_classifier_status(db_path=get_settings().database_path)
+
+
+@app.post("/api/admin/classifier/rollback")
+def api_classifier_rollback(request: Request) -> dict[str, object]:
+    """Restore the previous model bundle (if available).
+
+    Safe to call at any time — if no previous model exists, returns
+    rolled_back=False with a reason string rather than raising.
+    """
+    if request.state.user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only.")
+    result = rollback_local_classifier(db_path=get_settings().database_path)
+    if result.get("rolled_back"):
+        record_audit_event(
+            action="classifier.rollback",
+            actor_user_id=None,
+            actor_email=str(request.state.user["email"]),
+            entity_type="local_classifier",
+            entity_id=None,
+            metadata=result,
+            db_path=get_settings().database_path,
+        )
+    return result
+
+
 @app.get("/api/admin/training/examples")
 def api_training_examples(request: Request, limit: int = 20) -> dict[str, object]:
     """Return unreviewed training examples from Supabase for the human-review queue."""
     if request.state.user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin only.")
-    url = (os.getenv("SUPABASE_URL") or "").rstrip("/")
-    key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or ""
+    url = get_settings().supabase_url.rstrip("/")
+    key = get_settings().supabase_service_role_key
     if not url or not key:
         return {"examples": [], "error": "Supabase not configured"}
     try:
@@ -1092,8 +1157,8 @@ def api_mark_training_reviewed(example_id: str, request: Request) -> dict[str, o
     """Mark a training example as human-reviewed in Supabase."""
     if request.state.user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin only.")
-    url = (os.getenv("SUPABASE_URL") or "").rstrip("/")
-    key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or ""
+    url = get_settings().supabase_url.rstrip("/")
+    key = get_settings().supabase_service_role_key
     if not url or not key:
         raise HTTPException(status_code=503, detail="Supabase not configured")
     try:
@@ -1134,8 +1199,8 @@ def api_dual_labeled_stats(request: Request) -> dict[str, object]:
     """Return dual-labeled counts: this week + last 4 weekly buckets for sparkline."""
     if request.state.user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin only.")
-    url = (os.getenv("SUPABASE_URL") or "").rstrip("/")
-    key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or ""
+    url = get_settings().supabase_url.rstrip("/")
+    key = get_settings().supabase_service_role_key
     if not url or not key:
         return {"this_week": 0, "weeks": [0, 0, 0, 0], "error": "Supabase not configured"}
     from datetime import datetime, timedelta, timezone as _tz

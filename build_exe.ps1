@@ -63,7 +63,8 @@ $runtimePackages = @(
     "dateparser",
     "scikit-learn",
     "joblib",
-    "threadpoolctl"
+    "threadpoolctl",
+    "selenium"
 )
 
 function Invoke-VendorPipInstall {
@@ -137,6 +138,7 @@ if (-not (Test-Path $vendorPath)) {
         "sklearn"       = "scikit-learn"
         "threadpoolctl" = "threadpoolctl"
         "PySide6"       = "PySide6>=6.7"
+        "selenium"      = "selenium"
     }
     $toInstall = @()
     foreach ($dir in $vendorChecks.Keys) {
@@ -184,12 +186,20 @@ if (Test-Path $kycEdgeDriver) {
     --collect-all PySide6 `
     --collect-all outlook_dashboard `
     --collect-all replyright_qt `
+    --collect-all replyright_core `
+    --collect-all fastapi `
+    --collect-all starlette `
+    --collect-all pydantic `
+    --collect-all httpx `
     --collect-all anthropic `
+    --collect-all openai `
     --collect-all sklearn `
     --collect-all scikit_learn `
     --collect-all dateparser `
     --collect-all joblib `
     --collect-all threadpoolctl `
+    --collect-all selenium `
+    --collect-submodules selenium `
     --collect-submodules win32com `
     --hidden-import PySide6.QtCore `
     --hidden-import PySide6.QtWidgets `
@@ -197,6 +207,15 @@ if (Test-Path $kycEdgeDriver) {
     --hidden-import pythoncom `
     --hidden-import pywintypes `
     --hidden-import win32com.client `
+    --hidden-import selenium `
+    --hidden-import selenium.common.exceptions `
+    --hidden-import selenium.webdriver.common.by `
+    --hidden-import selenium.webdriver.common.keys `
+    --hidden-import selenium.webdriver.edge.options `
+    --hidden-import selenium.webdriver.edge.service `
+    --hidden-import selenium.webdriver.edge.webdriver `
+    --hidden-import selenium.webdriver.support.expected_conditions `
+    --hidden-import selenium.webdriver.support.ui `
     --hidden-import sklearn.utils._cython_blas `
     --hidden-import sklearn.neighbors._partition_nodes `
     run_desktop.py

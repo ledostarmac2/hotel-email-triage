@@ -10,12 +10,12 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import sqlite3
 import threading
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from .config import get_settings
 from .runtime_log import get_logger
 
 _log = get_logger("sender_intelligence")
@@ -121,8 +121,8 @@ def load_from_sqlite(db_path: str) -> int:
 
 
 def _fetch_feedback_rows() -> list[dict] | None:
-    url = os.getenv("SUPABASE_URL", "").rstrip("/")
-    key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+    url = get_settings().supabase_url.rstrip("/")
+    key = get_settings().supabase_service_role_key
     if not url or not key:
         return None
     try:

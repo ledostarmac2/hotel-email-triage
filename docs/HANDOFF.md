@@ -1,5 +1,219 @@
 # Handoff Log
 
+## 2026-05-25 - KYC automation bundle path audit
+
+Summary:
+
+- Audited the KYC inspection integration after the Selenium packaging fix because the packaged popup still reported a Selenium/module availability failure.
+- Found a second packaging bug: the KYC automation source file was bundled, but the frozen wrapper could resolve `.external\KYC-Auto\Files\kyc_automation.py` relative to `_internal\outlook_dashboard\` instead of the PyInstaller runtime root.
+- Updated `outlook_dashboard/kyc/automation.py` to search source and frozen runtime roots, including `sys._MEIPASS`, before dynamically importing the bundled KYC automation script.
+- Strengthened `run_desktop.py --kyc-smoke` so it validates Selenium imports, verifies the bundled KYC automation file is discoverable, and imports the dynamic module without launching Edge.
+- Confirmed the rebuilt package contains `selenium`, `msedgedriver.exe`, and `.external\KYC-Auto\Files\kyc_automation.py`.
+
+Files changed:
+
+- `outlook_dashboard/kyc/automation.py`
+- `run_desktop.py`
+- `tests/test_installer_contract.py`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+
+Verification:
+
+- `python -m py_compile run_desktop.py outlook_dashboard\kyc\automation.py` - passed.
+- `python -m pytest tests/test_installer_contract.py tests/test_kyc_backend.py tests/test_kyc_service_full.py -q --timeout=60` - 67 passed.
+- `.\build_exe.ps1` - completed; rebuilt `dist\ReplyRight\ReplyRight.exe` with version `0.4.0`, commit `4ccd0cd6`, build date `2026-05-25T17:48:23Z`.
+- `.\dist\ReplyRight\ReplyRight.exe --kyc-smoke` - passed.
+- `.\dist\ReplyRight\ReplyRight.exe --health-smoke` - passed.
+
+Remaining work:
+
+- Brian should test KYC Auto `Run Now` from the rebuilt EXE. If it now advances past module availability, any remaining failure is likely live-runtime dependent: Edge installed, EdgeDriver/Edge compatibility, Hilton KYC login/MFA, site availability, or changed page selectors.
+
+## 2026-05-25 - KYC Selenium packaging repair
+
+Summary:
+
+- Investigated KYC Auto runtime failure: `No module named 'selenium'`.
+- Root cause: Selenium was added to `.vendor` only after the first repair, but the KYC automation script is dynamically imported from bundled data. PyInstaller did not statically see its Selenium imports, so the frozen EXE still lacked the module.
+- Added Selenium to `requirements.txt`, `build_exe.ps1` runtime/vendor checks, PyInstaller collection/submodule/hidden-import rules, and explicit wrapper imports in `outlook_dashboard/kyc/automation.py`.
+- Added a packaged `run_desktop.py --kyc-smoke` mode to prove the frozen EXE can import the KYC Selenium dependency without launching the full app.
+- Added installer contract assertions so Selenium and the KYC smoke path stay wired.
+
+Files changed:
+
+- `requirements.txt`
+- `build_exe.ps1`
+- `outlook_dashboard/kyc/automation.py`
+- `run_desktop.py`
+- `tests/test_installer_contract.py`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+
+Verification:
+
+- `python -m py_compile run_desktop.py outlook_dashboard\kyc\automation.py` - passed.
+- `python -m pytest tests/test_installer_contract.py -q --timeout=60` - 10 passed.
+- `.\build_exe.ps1` - passed; built `dist\ReplyRight\ReplyRight.exe` with version `0.4.0`, commit `4ccd0cd6`, build date `2026-05-25T17:29:01Z`.
+- `.\dist\ReplyRight\ReplyRight.exe --kyc-smoke` - passed.
+- `.\dist\ReplyRight\ReplyRight.exe --health-smoke` - passed.
+
+Remaining work:
+
+- Brian should test KYC Auto `Run Now` again from the rebuilt EXE. If it advances past Selenium, the next likely external dependency risk is EdgeDriver/browser compatibility.
+
+## 2026-05-25 - Native startup auto-refresh repair
+
+Summary:
+
+- Investigated why the rebuilt EXE did not auto-refresh Outlook on launch.
+- Root cause: the native Qt app called `_load_emails()` on startup but never called `_on_sync()` / `ApiClient.sync_outlook()` automatically. The earlier fix had repaired the Refresh button path, not startup auto-refresh.
+- Updated `replyright_qt/windows/main_window.py` so `load_inbox()` performs the cached/local inbox load, then starts the same read-only Outlook refresh once per app session after a short `QTimer.singleShot(...)` delay.
+- Added a regression check so the startup auto-refresh wiring is not dropped again.
+- Rebuilt the EXE after stopping a locked running `ReplyRight.exe` process.
+
+Files changed:
+
+- `replyright_qt/windows/main_window.py`
+- `tests/test_pyside6_no_browser_engine.py`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+
+Verification:
+
+- `python -m py_compile replyright_qt\windows\main_window.py` - passed.
+- `python -m pytest tests/test_pyside6_no_browser_engine.py -q --timeout=60` - 10 passed.
+- `git diff --check` - passed with line-ending warnings only.
+- `.\build_exe.ps1` - passed; built `dist\ReplyRight\ReplyRight.exe` with version `0.4.0`, commit `4ccd0cd6`, build date `2026-05-25T16:40:12Z`.
+- `.\dist\ReplyRight\ReplyRight.exe --health-smoke` - passed.
+
+Remaining work:
+
+- Brian should launch the rebuilt EXE with classic Outlook open and confirm the inbox status changes to refreshing automatically after login/open.
+- If auto-refresh fails visibly, inspect `dist\ReplyRight\data\replyright-startup.log` and the UI status label text from the Refresh control.
+
+## 2026-05-25 - Codex review of Claude v1 hardening and EXE rebuild
+
+Summary:
+
+- Reviewed Claude's step 4-8 work after completion, with extra focus on classifier/admin hardening and rollback safety.
+- Fixed a real rollback integrity issue in `outlook_dashboard/local_classifier.py`: previous model rollback now restores the previous metadata with the model blob, and rollback is only advertised when both previous artifacts exist.
+- Fixed classifier status collection to use managed SQLite connections and persisted Supabase/local training source counts into classifier metadata.
+- Tightened deployment diagnostics so secret-looking values are actively scrubbed from response values before return.
+- Added regression tests proving metadata/model rollback consistency, rejecting model-only rollback, persisted source counts after training, and diagnostics redaction for secret-like warning values.
+- Rebuilt the onedir EXE and refreshed local shortcuts through `build_exe.ps1`.
+- Posted a follow-up Claude delegation note in `agent_comms/from_codex.md` assigning manual/lightweight validation and evidence gathering while Codex keeps ownership of core classifier/release integrity.
+
+Files changed:
+
+- `outlook_dashboard/local_classifier.py`
+- `tests/test_diagnostics_contract.py`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+- `agent_comms/from_codex.md`
+
+Verification:
+
+- `python -m py_compile outlook_dashboard\local_classifier.py outlook_dashboard\main.py` - passed.
+- `python -m pytest tests/test_diagnostics_contract.py -q --timeout=60` - 29 passed.
+- `python -m pytest tests/test_version_consistency.py tests/test_pipeline_docs_contract.py tests/test_safety_guardrails.py tests/test_completed_training_pipeline.py -q --timeout=60` - 115 passed.
+- `python -m pytest tests/ -x --timeout=60` - 1043 passed, 6 existing `datetime.utcnow()` warnings, 35 subtests.
+- `git diff --check` - passed with line-ending warnings only.
+- `.\build_exe.ps1` - passed; built `dist\ReplyRight\ReplyRight.exe` with version `0.4.0`, commit `4ccd0cd6`, build date `2026-05-25T15:38:30Z`.
+- `.\dist\ReplyRight\ReplyRight.exe --health-smoke` - passed.
+- `python scripts\synthetic_beta.py` - passed 25/25 synthetic scenarios; 1 known same-day urgency gap remains documented in `docs/reports/synthetic_beta_report.json`.
+
+Remaining work:
+
+- Human review remains required for real Outlook/beta behavior, installer wizard flow, and any real Completed Request labeling/training data.
+- Non-human next best checks: run the synthetic beta report after this build, inspect UI review indicators in a live Qt session, and prepare the installer artifact once Brian is ready to cut a release.
+
+## 2026-05-25 - v1 safety + UI hardening (Claude steps 4-8)
+
+Summary:
+
+- Added `tests/test_safety_guardrails.py` (102 tests): Outlook mutation scan for both import sources (`.SaveAs` allowed — saves local .msg copy), runtime AI routing check (triage_email never calls Claude), training export privacy (body_redacted only), risk-class review indicators, and all four needs_review trigger conditions.
+- Added `get_classifier_status()` and `rollback_model()` to `outlook_dashboard/local_classifier.py`; exposed them as `GET /api/admin/classifier/status` and `POST /api/admin/classifier/rollback`.
+- Enriched `GET /api/admin/deployment/diagnostics` with `examples_at_train_time`, `examples_supabase`, `examples_local`, `accuracy_per_target`, and a paranoid secret-sentinel guard.
+- Added `scripts/synthetic_beta.py`: 25 deterministic hotel email scenarios, 25/25 pass, 1 known v1 gap (same-day arrival urgency stays 2 — `compute_urgency()` doesn't handle "Urgent same-day arrival" hint).
+- UI safety polish: red "Review" badge in `ConversationRow` when `needs_review=True`; "Needs Human Review" red banner + inline reason in detail panel; "Classification Source" metric in triage grid; risk flags rendered with red `risk-chip` style; new CSS in `replyright_qt/styles/theme.py`.
+- Added `tests/test_diagnostics_contract.py` (25 tests): response shape/types for diagnostics, classifier status, and rollback endpoints; no-model state; JWT-prefix secret-redaction check.
+
+Files changed:
+
+- `tests/test_safety_guardrails.py` (new)
+- `tests/test_diagnostics_contract.py` (new)
+- `scripts/synthetic_beta.py` (new)
+- `outlook_dashboard/local_classifier.py` (get_classifier_status, rollback_model)
+- `outlook_dashboard/main.py` (two new admin endpoints + enriched diagnostics)
+- `replyright_qt/widgets/conversation_list.py` (needs_review badge)
+- `replyright_qt/widgets/conversation_detail.py` (banner, source metric, risk-chip)
+- `replyright_qt/styles/theme.py` (badge-needs-review, needs-review-banner, risk-chip CSS)
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+
+Verification:
+
+- `python -m py_compile replyright_qt/widgets/conversation_list.py replyright_qt/widgets/conversation_detail.py replyright_qt/styles/theme.py` — passed.
+- `python -m pytest tests/test_safety_guardrails.py -q` — 102 passed.
+- `python -m pytest tests/test_diagnostics_contract.py -q` — 25 passed.
+- `python -m pytest tests/ -x --timeout=60` — 1039 passed, 0 failures, 6 existing `datetime.utcnow()` warnings, 35 subtests.
+
+Known v1 gaps carried forward (not regressions, pre-existing):
+
+- `compute_urgency()` returns 2 for "Urgent same-day arrival" category hint — arrival_window_hours from entity extraction is the only path to urgency 4+. Fix: add `"same-day"` / `"urgent same-day arrival"` to the `_hint_contains` check in `urgency_engine.py`.
+- UI safety polish is code-complete but not UI-tested (no active Qt display in CI). Visual inspection needed on next local run.
+
+## 2026-05-25 - v1 readiness consolidation, version hygiene, and pipeline doc repair
+
+Summary:
+
+- Posted a detailed current work order to Claude in `agent_comms/from_codex.md` assigning steps 4-8 of the v1 readiness push: additional safety tests, classifier/admin hardening, synthetic beta simulation, UI safety polish, and installer/diagnostics hardening.
+- Added `docs/V1_RELEASE_PLAN.md` to define v1 gates, canonical docs, current status, and the Codex/Claude work split.
+- Fixed version drift by aligning `pyproject.toml`, `installer/replyright_setup.iss`, FastAPI app metadata, and `outlook_dashboard.__version__` at `0.4.0`.
+- Added tests to keep version metadata aligned across package metadata, installer fallback, FastAPI metadata, updater fallback, and build metadata generation.
+- Added tests to prevent the training folder README, coordination docs, and archived planning/migration docs from becoming competing stale source-of-truth again.
+- Converted `training/README.md` into a pointer to canonical docs and removed the obsolete Completed Requests dump/Claude extraction workflow text.
+- Marked `docs/coordination/README.md` and archived planning/migration/review Markdown files as historical.
+- Updated `docs/TRAINING_PIPELINE.md` to use the current `"Completed Request"` folder name and reaffirmed the zero-credit in-app training contract.
+- Updated `AGENTS.md` so broad v1/training/classifier work reads the v1 plan and so Claude/Anthropic is explicitly excluded from bulk refresh and in-app training endpoints.
+
+Files changed:
+
+- `AGENTS.md`
+- `agent_comms/from_codex.md`
+- `docs/V1_RELEASE_PLAN.md`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+- `docs/TRAINING_PIPELINE.md`
+- `docs/archive/**`
+- `docs/coordination/README.md`
+- `docs/V1_RELEASE_PLAN.md`
+- `installer/replyright_setup.iss`
+- `outlook_dashboard/main.py`
+- `pyproject.toml`
+- `tests/test_completed_training_pipeline.py`
+- `tests/test_pipeline_docs_contract.py`
+- `tests/test_version_consistency.py`
+- `training/README.md`
+
+Verification:
+
+- `python -m py_compile outlook_dashboard\main.py outlook_dashboard\completed_training_pipeline.py outlook_dashboard\training_pipeline.py` - passed.
+- `python -m pytest tests/test_version_consistency.py tests/test_pipeline_docs_contract.py tests/test_completed_training_pipeline.py tests/test_training_pipeline.py -q --timeout=60` - 28 passed.
+- `python -m pytest tests/test_version_consistency.py tests/test_pipeline_docs_contract.py tests/test_completed_training_pipeline.py tests/test_training_pipeline.py tests/test_installer_contract.py -q --timeout=60` - 37 passed.
+- `git diff --check` - passed with line-ending warnings only.
+- After Claude tightened the shared safety guardrail, `python -m pytest tests/test_version_consistency.py tests/test_pipeline_docs_contract.py tests/test_completed_training_pipeline.py tests/test_training_pipeline.py tests/test_installer_contract.py tests/test_safety_guardrails.py -q --timeout=60` passed.
+- `python -m pytest tests/ -x --timeout=60` - 1008 passed, 6 existing `datetime.utcnow()` warnings, 35 subtests.
+- Follow-up closure after Brian requested the remaining gaps: added updater/build metadata version checks and historical archive/coordination doc checks.
+- `python -m pytest tests/test_version_consistency.py tests/test_pipeline_docs_contract.py tests/test_completed_training_pipeline.py tests/test_training_pipeline.py tests/test_installer_contract.py tests/test_safety_guardrails.py -q --timeout=60` - passed.
+- `git diff --check` - passed with line-ending warnings only.
+- `python -m pytest tests/ -x --timeout=60` - 1039 passed, 6 existing `datetime.utcnow()` warnings, 35 subtests.
+
+Remaining work:
+
+- Claude's concurrent lane still includes classifier/admin hardening, synthetic beta artifacts, UI safety polish, and diagnostics changes; review and package those together before the next EXE/installer rebuild.
+
 ## 2026-05-20 - native sidebar icon polish and DO-178C handoff
 
 Summary:

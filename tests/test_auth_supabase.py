@@ -175,10 +175,13 @@ def test_ensure_admin_create_and_update_paths(monkeypatch) -> None:
 
 
 def test_admin_setup_available_requires_supabase_service_role(monkeypatch) -> None:
+    from outlook_dashboard.config import get_settings
     monkeypatch.setenv("SUPABASE_URL", SUPABASE_URL)
     monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service-role-test-key")
     assert admin_setup_available() is True
 
+    # get_settings is @lru_cache — must clear between env changes within the same test
+    get_settings.cache_clear()
     monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", " ")
     assert admin_setup_available() is False
 

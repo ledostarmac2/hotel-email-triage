@@ -1,11 +1,46 @@
 # Current State
 
-Last updated: 2026-05-20 (native icon polish)
+Last updated: 2026-05-25 (v1 safety + UI hardening — steps 4-8)
 
 ## Status
 
 - Product name is ReplyRight.
 - Current runnable app is `outlook_dashboard/` plus `run_desktop.py`.
+- 2026-05-25 KYC Selenium packaging repair:
+  - KYC Auto failed at runtime with `No module named 'selenium'` because the KYC automation script is loaded dynamically from bundled data, so PyInstaller did not see its Selenium imports.
+  - Added Selenium to runtime dependencies and PyInstaller vendor/collection rules; added explicit Selenium imports in `outlook_dashboard/kyc/automation.py` so the frozen app bundles the modules needed by the dynamic automation script.
+  - Follow-up KYC wiring audit found and fixed a second packaged-runtime issue: the frozen wrapper could search for `.external\KYC-Auto\Files\kyc_automation.py` under `_internal\outlook_dashboard\` instead of the PyInstaller runtime root. `outlook_dashboard/kyc/automation.py` now searches frozen and source runtime roots, including `sys._MEIPASS`.
+  - Strengthened `run_desktop.py --kyc-smoke` so it validates Selenium, locates the bundled KYC automation source file, and imports the dynamic KYC module without launching Edge or the full UI.
+  - Validation passed: `python -m py_compile run_desktop.py outlook_dashboard\kyc\automation.py`, `python -m pytest tests/test_installer_contract.py tests/test_kyc_backend.py tests/test_kyc_service_full.py -q --timeout=60`, `.\build_exe.ps1`, `.\dist\ReplyRight\ReplyRight.exe --kyc-smoke`, and `.\dist\ReplyRight\ReplyRight.exe --health-smoke`.
+  - Rebuilt the onedir app at `dist\ReplyRight\ReplyRight.exe`; build info now reports commit `4ccd0cd6`, build date `2026-05-25T17:48:23Z`, version `0.4.0`.
+- 2026-05-25 auto-refresh repair:
+  - The previous native UI work fixed the Refresh Inbox button path but did not automatically call it after login. `replyright_qt/windows/main_window.py` now performs the initial local inbox load and then triggers the same read-only Outlook refresh once per app session through `QTimer.singleShot(...)`.
+  - Added a regression check in `tests/test_pyside6_no_browser_engine.py` so the native startup auto-refresh wiring is not dropped again.
+  - Validation passed: `python -m py_compile replyright_qt\windows\main_window.py`, `python -m pytest tests/test_pyside6_no_browser_engine.py -q --timeout=60`, `git diff --check` with line-ending warnings only, `.\build_exe.ps1`, and `.\dist\ReplyRight\ReplyRight.exe --health-smoke`.
+  - Rebuilt the onedir app at `dist\ReplyRight\ReplyRight.exe`; build metadata now reports commit `4ccd0cd6`, build date `2026-05-25T16:40:12Z`, version `0.4.0`.
+- 2026-05-25 Codex review/fix after Claude steps 4-8:
+  - Reviewed Claude's classifier/admin hardening and found a rollback/status integrity issue: previous model rollback restored the model blob without restoring the matching metadata, and classifier status checked rollback availability through an unmanaged SQLite context.
+  - Fixed `outlook_dashboard/local_classifier.py` so model metadata is rotated with the model bundle, training persists Supabase/local source counts in metadata, classifier status uses managed SQLite access, and rollback only reports available when both previous model and previous metadata are present.
+  - Tightened deployment diagnostics so secret-looking values are actively scrubbed from response values, not merely warned about.
+  - Added regression tests in `tests/test_diagnostics_contract.py` proving rollback restores previous metadata, unsafe model-only rollback is rejected, training source counts survive into persisted metadata, and secret-like diagnostics values are redacted.
+  - Rebuilt the onedir app at `dist\ReplyRight\ReplyRight.exe`; build metadata now reports commit `4ccd0cd6`, build date `2026-05-25T15:38:30Z`, version `0.4.0`.
+  - Validation passed: full suite `1043 passed`, 6 existing `datetime.utcnow()` warnings, 35 subtests; `git diff --check` passed with line-ending warnings only; `.\build_exe.ps1` passed; `.\dist\ReplyRight\ReplyRight.exe --health-smoke` passed; `python scripts\synthetic_beta.py` passed 25/25 synthetic scenarios with the documented same-day urgency known gap.
+- 2026-05-25 v1 safety + UI hardening (Claude steps 4-8):
+  - **Step 4 — Automated safety guardrail tests** (`tests/test_safety_guardrails.py`, 102 tests): verifies Outlook read-only behavior in both import sources, that `triage_email()` never calls Claude/Anthropic at runtime, training export privacy (`body_redacted` only, no `body_text`/`sender_email`/`graph_message_id`), risk-class needs_review triggers, and all four `needs_review` compound boolean conditions.
+  - **Step 5 — Classifier/admin hardening**: added `get_classifier_status()` and `rollback_model()` to `outlook_dashboard/local_classifier.py`; exposed `GET /api/admin/classifier/status` and `POST /api/admin/classifier/rollback` in `outlook_dashboard/main.py`; enriched `GET /api/admin/deployment/diagnostics` with `examples_at_train_time`, `examples_supabase`, `examples_local`, `accuracy_per_target`, and a paranoid secret-sentinel scan that appends a warning if any of `service_role`, `api_key`, or `eyJ` appear in the serialised diagnostics output.
+  - **Step 6 — Synthetic beta simulation** (`scripts/synthetic_beta.py`): 25 deterministic hotel email scenarios covering all 14 taxonomy categories; produces a triage report to stdout and `docs/reports/synthetic_beta_report.json`; 25/25 scenarios pass; 1 known v1 gap documented (same-day arrival urgency stays at 2 instead of 4+ because `compute_urgency()` does not yet handle the "Urgent same-day arrival" category hint).
+  - **Step 7 — UI safety polish**: `replyright_qt/widgets/conversation_list.py` now shows a red "Review" badge in the right column of every conversation row where `needs_review=True`; `replyright_qt/widgets/conversation_detail.py` now shows a red "Needs Human Review" banner (with inline reason: low confidence %, risk flags, high-risk category) at the top of each detail panel when `needs_review=True`, adds a "Classification Source" metric card (heuristic / local ML classifier / OpenAI / Claude AI) in the triage grid row 3, and renders risk flags with a red `risk-chip` style instead of the generic blue chip; `replyright_qt/styles/theme.py` has the new CSS for all three: `badge-needs-review`, `needs-review-banner`, `risk-chip`, `risk-flags-label`.
+  - **Step 8 — Diagnostics contract tests** (`tests/test_diagnostics_contract.py`, 25 tests): verifies response shape/types for `/api/admin/deployment/diagnostics` (all top-level sections + new classifier fields), `/api/admin/classifier/status` (all required keys + types + no-model state), `/api/admin/classifier/rollback` (rolled_back bool, version_id, reason; no-model returns `rolled_back=False`), and secret-redaction invariants (no `eyJ` JWT prefix in diagnostics output).
+  - **Full test suite: 1039 passed, 0 failures, 6 existing `datetime.utcnow()` deprecation warnings, 35 subtests.**
+- 2026-05-25 v1 readiness consolidation:
+  - Added `docs/V1_RELEASE_PLAN.md` as the v1 gate/checklist document and source-of-truth map for scattered roadmap, pipeline, classifier, deployment, and operations docs.
+  - Reconciled version drift: runtime package, FastAPI metadata, `pyproject.toml`, and the Inno Setup fallback version now align at `0.4.0`.
+  - Added version consistency tests so future package, installer, FastAPI, updater fallback, and build metadata generation drift fails in CI.
+  - Converted `training/README.md` from an obsolete Completed Requests dump/Claude extraction runbook into a pointer to the canonical docs.
+  - Marked `docs/coordination/README.md` and all archived planning/migration/review Markdown files as historical, with regression tests to keep stale docs from becoming implicit source-of-truth again.
+  - Reaffirmed the current origin training contract: in-app training endpoints are zero-credit and must not call Claude/Anthropic, OpenAI, or Google AI. External human/agent labeling can happen outside the app and flow back through reviewed labels.
+  - Updated `AGENTS.md` to include the v1 plan in broad-work first reads and to state that Claude is not used by bulk refresh or in-app training endpoints.
+  - Validation passed: version/doc/training targeted tests, safety guardrails, archive/source-of-truth checks, compile checks, `git diff --check`, and the full suite (`1039 passed`, 6 existing `datetime.utcnow()` warnings, 35 subtests).
 - 2026-05-20 native icon polish:
   - Sidebar navigation now uses polished PNG image assets in `replyright_qt/resources/icons/` instead of the temporary native line drawing widget. Icons are themed for the dark ReplyRight sidebar and bundled through the existing `--collect-all replyright_qt` packaging path.
   - Conversation list selection now marks the actual row widget as selected and lets QSS paint a subtler row surface, reducing the blocky text-highlight look while keeping labels transparent.
@@ -230,7 +265,7 @@ Tests: `python -m unittest tests.test_kernel_plugins tests.test_kernel_orchestra
 2. **KYC Auto validation**: keep KYC Auto as a themed native PySide6 popup launched from the sidebar. It should run the bundled KYC browser automation from Start Timer or Run Now only; do not add due/history/snooze/skip/completed-by workflows back into the user-facing UI.
 3. **KYC automation safety**: do not store KYC passwords in ReplyRight or run browser automation without an explicit user action.
 4. **GitHub Secrets**: in the GitHub repo Settings → Secrets → Actions, confirm `ANTHROPIC_API_KEY`, `SUPABASE_URL`, `SUPABASE_KEY`, `SUPABASE_SERVICE_ROLE_KEY` are set so CI can build and test.
-5. **Emergency v0.1.1 Release**: after tests and installer smoke checks pass, push a tag (`git tag v0.1.1 && git push origin v0.1.1`) to trigger the release job. It must publish `ReplyRightSetup-v0.1.1.exe` as the primary asset, not a bare EXE.
+5. **v1 readiness plan**: use `docs/V1_RELEASE_PLAN.md` as the current gate list. The stale v0.1.1 emergency release checklist is historical; the next meaningful release work should align package, installer, diagnostics, beta evidence, training/classifier readiness, and safety UX.
 6. **Local classifier training (Phase 7 long-term)**: import historical completed emails → redact PII → AI-label → human-review samples → store sanitized Supabase training set → train lightweight local classifiers. Start with urgency, owner, category, status, missing_information targets only.
 7. **Refresh check**: click Refresh Inbox once and visually confirm the feedback box, resized window behavior, and Outlook-like independent scrolling.
 8. **Login check**: confirm the app never prompts for API keys. On a fresh install with no admin, `/setup` creates the first admin through Supabase when service-role configuration exists and through local SQLite otherwise. Existing local database users should still be able to sign in. Bad credentials should show a persistent error with an X, good credentials should enter the app.

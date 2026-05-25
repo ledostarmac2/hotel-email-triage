@@ -1,0 +1,678 @@
+{
+  "generated_at": "2026-05-25T15:41:02.749905+00:00",
+  "note": "SYNTHETIC DATA ONLY \u2014 does not contain real guest emails or PII",
+  "summary": {
+    "total": 25,
+    "passed": 25,
+    "failed": 0,
+    "known_gaps": 1
+  },
+  "known_gaps": [
+    {
+      "name": "same_day_arrival_explicit",
+      "gap": "Urgency engine does not boost same-day arrival category without an explicit arrival_window_hours entity \u2014 urgency stays 2 instead of 4+. Fix: add category_hint='Urgent same-day arrival' handling to compute_urgency()."
+    }
+  ],
+  "results": [
+    {
+      "name": "routine_room_service",
+      "subject": "Room service menu",
+      "actual_category": "General inquiry",
+      "actual_urgency": 2,
+      "actual_needs_review": true,
+      "actual_risk_flags": [],
+      "actual_confidence": 32,
+      "expected_category": "General inquiry",
+      "expected_urgency_min": null,
+      "expected_urgency_max": 3,
+      "expected_needs_review": null,
+      "expected_risk_flags": [],
+      "tags": [
+        "routine",
+        "low-urgency"
+      ],
+      "known_gap": null,
+      "category_ok": true,
+      "urgency_ok": true,
+      "needs_review_ok": true,
+      "risk_flags_ok": true,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "name": "thank_you_note",
+      "subject": "Thank you for a wonderful stay",
+      "actual_category": "General inquiry",
+      "actual_urgency": 1,
+      "actual_needs_review": true,
+      "actual_risk_flags": [],
+      "actual_confidence": 32,
+      "expected_category": null,
+      "expected_urgency_min": null,
+      "expected_urgency_max": 2,
+      "expected_needs_review": null,
+      "expected_risk_flags": [],
+      "tags": [
+        "routine",
+        "thank-you"
+      ],
+      "known_gap": null,
+      "category_ok": true,
+      "urgency_ok": true,
+      "needs_review_ok": true,
+      "risk_flags_ok": true,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "name": "future_reservation_inquiry",
+      "subject": "Availability inquiry for December",
+      "actual_category": "General inquiry",
+      "actual_urgency": 1,
+      "actual_needs_review": true,
+      "actual_risk_flags": [],
+      "actual_confidence": 44,
+      "expected_category": "General inquiry",
+      "expected_urgency_min": null,
+      "expected_urgency_max": 3,
+      "expected_needs_review": null,
+      "expected_risk_flags": [],
+      "tags": [
+        "routine"
+      ],
+      "known_gap": null,
+      "category_ok": true,
+      "urgency_ok": true,
+      "needs_review_ok": true,
+      "risk_flags_ok": true,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "name": "amenity_request",
+      "subject": "Champagne and roses on arrival",
+      "actual_category": "Amenity request",
+      "actual_urgency": 2,
+      "actual_needs_review": false,
+      "actual_risk_flags": [],
+      "actual_confidence": 50,
+      "expected_category": "Amenity request",
+      "expected_urgency_min": null,
+      "expected_urgency_max": 3,
+      "expected_needs_review": null,
+      "expected_risk_flags": [],
+      "tags": [
+        "amenity"
+      ],
+      "known_gap": null,
+      "category_ok": true,
+      "urgency_ok": true,
+      "needs_review_ok": true,
+      "risk_flags_ok": true,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "name": "billing_dispute_overcharge",
+      "subject": "Incorrect charge on my credit card",
+      "actual_category": "Billing dispute",
+      "actual_urgency": 4,
+      "actual_needs_review": true,
+      "actual_risk_flags": [
+        "Billing"
+      ],
+      "actual_confidence": 73,
+      "expected_category": "Billing dispute",
+      "expected_urgency_min": 4,
+      "expected_urgency_max": null,
+      "expected_needs_review": true,
+      "expected_risk_flags": [],
+      "tags": [
+        "billing",
+        "high-risk"
+      ],
+      "known_gap": null,
+      "category_ok": true,
+      "urgency_ok": true,
+      "needs_review_ok": true,
+      "risk_flags_ok": true,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "name": "chargeback_filed",
+      "subject": "Chargeback initiated with Amex",
+      "actual_category": "Billing dispute",
+      "actual_urgency": 4,
+      "actual_needs_review": true,
+      "actual_risk_flags": [
+        "Billing",
+        "Chargeback",
+        "Leadership review required"
+      ],
+      "actual_confidence": 74,
+      "expected_category": null,
+      "expected_urgency_min": 4,
+      "expected_urgency_max": null,
+      "expected_needs_review": true,
+      "expected_risk_flags": [
+        "Chargeback"
+      ],
+      "tags": [
+        "billing",
+        "chargeback",
+        "high-risk"
+      ],
+      "known_gap": null,
+      "category_ok": true,
+      "urgency_ok": true,
+      "needs_review_ok": true,
+      "risk_flags_ok": true,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "name": "billing_inquiry_benign",
+      "subject": "Question about my folio",
+      "actual_category": "Billing dispute",
+      "actual_urgency": 4,
+      "actual_needs_review": true,
+      "actual_risk_flags": [
+        "Billing"
+      ],
+      "actual_confidence": 73,
+      "expected_category": "Billing dispute",
+      "expected_urgency_min": null,
+      "expected_urgency_max": 4,
+      "expected_needs_review": null,
+      "expected_risk_flags": [],
+      "tags": [
+        "billing"
+      ],
+      "known_gap": null,
+      "category_ok": true,
+      "urgency_ok": true,
+      "needs_review_ok": true,
+      "risk_flags_ok": true,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "name": "legal_lawsuit_threat",
+      "subject": "Legal action \u2014 personal injury",
+      "actual_category": "Complaint",
+      "actual_urgency": 4,
+      "actual_needs_review": true,
+      "actual_risk_flags": [
+        "Legal",
+        "Medical",
+        "Reputation risk",
+        "Leadership review required"
+      ],
+      "actual_confidence": 59,
+      "expected_category": null,
+      "expected_urgency_min": 4,
+      "expected_urgency_max": null,
+      "expected_needs_review": true,
+      "expected_risk_flags": [
+        "Legal"
+      ],
+      "tags": [
+        "legal",
+        "high-risk"
+      ],
+      "known_gap": null,
+      "category_ok": true,
+      "urgency_ok": true,
+      "needs_review_ok": true,
+      "risk_flags_ok": true,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "name": "legal_better_business_bureau",
+      "subject": "BBB complaint \u2014 unacceptable service",
+      "actual_category": "Complaint",
+      "actual_urgency": 4,
+      "actual_needs_review": false,
+      "actual_risk_flags": [
+        "Reputation risk"
+      ],
+      "actual_confidence": 67,
+      "expected_category": null,
+      "expected_urgency_min": 3,
+      "expected_urgency_max": null,
+      "expected_needs_review": null,
+      "expected_risk_flags": [],
+      "tags": [
+        "legal",
+        "complaint",
+        "high-risk"
+      ],
+      "known_gap": null,
+      "category_ok": true,
+      "urgency_ok": true,
+      "needs_review_ok": true,
+      "risk_flags_ok": true,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "name": "ada_wheelchair_request",
+      "subject": "ADA accessible room required \u2014 wheelchair guest",
+      "actual_category": "Accessibility request",
+      "actual_urgency": 4,
+      "actual_needs_review": true,
+      "actual_risk_flags": [
+        "ADA / accessibility",
+        "Leadership review required"
+      ],
+      "actual_confidence": 61,
+      "expected_category": "Accessibility request",
+      "expected_urgency_min": 4,
+      "expected_urgency_max": null,
+      "expected_needs_review": true,
+      "expected_risk_flags": [],
+      "tags": [
+        "ada",
+        "accessibility",
+        "high-risk"
+      ],
+      "known_gap": null,
+      "category_ok": true,
+      "urgency_ok": true,
+      "needs_review_ok": true,
+      "risk_flags_ok": true,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "name": "ada_service_animal",
+      "subject": "Service animal accommodation",
+      "actual_category": "Accessibility request",
+      "actual_urgency": 4,
+      "actual_needs_review": true,
+      "actual_risk_flags": [
+        "ADA / accessibility",
+        "Leadership review required"
+      ],
+      "actual_confidence": 61,
+      "expected_category": "Accessibility request",
+      "expected_urgency_min": null,
+      "expected_urgency_max": null,
+      "expected_needs_review": true,
+      "expected_risk_flags": [],
+      "tags": [
+        "ada",
+        "accessibility"
+      ],
+      "known_gap": null,
+      "category_ok": true,
+      "urgency_ok": true,
+      "needs_review_ok": true,
+      "risk_flags_ok": true,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "name": "medical_emergency",
+      "subject": "Guest collapsed \u2014 medical emergency",
+      "actual_category": "General inquiry",
+      "actual_urgency": 4,
+      "actual_needs_review": true,
+      "actual_risk_flags": [
+        "Medical",
+        "Leadership review required"
+      ],
+      "actual_confidence": 43,
+      "expected_category": null,
+      "expected_urgency_min": 4,
+      "expected_urgency_max": null,
+      "expected_needs_review": true,
+      "expected_risk_flags": [
+        "Medical"
+      ],
+      "tags": [
+        "medical",
+        "high-risk"
+      ],
+      "known_gap": null,
+      "category_ok": true,
+      "urgency_ok": true,
+      "needs_review_ok": true,
+      "risk_flags_ok": true,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "name": "medical_allergy",
+      "subject": "Severe nut allergy \u2014 urgent food safety",
+      "actual_category": "Amenity request",
+      "actual_urgency": 4,
+      "actual_needs_review": true,
+      "actual_risk_flags": [
+        "Medical",
+        "Leadership review required"
+      ],
+      "actual_confidence": 58,
+      "expected_category": null,
+      "expected_urgency_min": 3,
+      "expected_urgency_max": null,
+      "expected_needs_review": true,
+      "expected_risk_flags": [],
+      "tags": [
+        "medical",
+        "allergy"
+      ],
+      "known_gap": null,
+      "category_ok": true,
+      "urgency_ok": true,
+      "needs_review_ok": true,
+      "risk_flags_ok": true,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "name": "vip_virtuoso_booking",
+      "subject": "Virtuoso VIP booking \u2014 pre-arrival amenities",
+      "actual_category": "VIP pre-arrival",
+      "actual_urgency": 3,
+      "actual_needs_review": false,
+      "actual_risk_flags": [
+        "VIP"
+      ],
+      "actual_confidence": 71,
+      "expected_category": "VIP pre-arrival",
+      "expected_urgency_min": 3,
+      "expected_urgency_max": null,
+      "expected_needs_review": null,
+      "expected_risk_flags": [],
+      "tags": [
+        "vip",
+        "consortia"
+      ],
+      "known_gap": null,
+      "category_ok": true,
+      "urgency_ok": true,
+      "needs_review_ok": true,
+      "risk_flags_ok": true,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "name": "consortia_fhr_booking",
+      "subject": "Four Seasons referral \u2014 FHR upgrade confirmation",
+      "actual_category": "Consortia / FHR / Virtuoso",
+      "actual_urgency": 3,
+      "actual_needs_review": false,
+      "actual_risk_flags": [],
+      "actual_confidence": 68,
+      "expected_category": "Consortia / FHR / Virtuoso",
+      "expected_urgency_min": null,
+      "expected_urgency_max": null,
+      "expected_needs_review": null,
+      "expected_risk_flags": [],
+      "tags": [
+        "vip",
+        "consortia"
+      ],
+      "known_gap": null,
+      "category_ok": true,
+      "urgency_ok": true,
+      "needs_review_ok": true,
+      "risk_flags_ok": true,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "name": "serious_complaint",
+      "subject": "Extremely disappointed \u2014 worst stay ever",
+      "actual_category": "Billing dispute",
+      "actual_urgency": 4,
+      "actual_needs_review": true,
+      "actual_risk_flags": [
+        "Billing"
+      ],
+      "actual_confidence": 66,
+      "expected_category": null,
+      "expected_urgency_min": 4,
+      "expected_urgency_max": null,
+      "expected_needs_review": true,
+      "expected_risk_flags": [],
+      "tags": [
+        "complaint",
+        "high-risk"
+      ],
+      "known_gap": null,
+      "category_ok": true,
+      "urgency_ok": true,
+      "needs_review_ok": true,
+      "risk_flags_ok": true,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "name": "mild_complaint",
+      "subject": "Room was a bit noisy",
+      "actual_category": "General inquiry",
+      "actual_urgency": 1,
+      "actual_needs_review": true,
+      "actual_risk_flags": [],
+      "actual_confidence": 32,
+      "expected_category": null,
+      "expected_urgency_min": null,
+      "expected_urgency_max": 3,
+      "expected_needs_review": null,
+      "expected_risk_flags": [],
+      "tags": [
+        "complaint"
+      ],
+      "known_gap": null,
+      "category_ok": true,
+      "urgency_ok": true,
+      "needs_review_ok": true,
+      "risk_flags_ok": true,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "name": "same_day_arrival_explicit",
+      "subject": "Same day arrival urgent check-in",
+      "actual_category": "Urgent same-day arrival",
+      "actual_urgency": 2,
+      "actual_needs_review": false,
+      "actual_risk_flags": [],
+      "actual_confidence": 71,
+      "expected_category": "Urgent same-day arrival",
+      "expected_urgency_min": null,
+      "expected_urgency_max": null,
+      "expected_needs_review": null,
+      "expected_risk_flags": [],
+      "tags": [
+        "same-day",
+        "urgency-gap"
+      ],
+      "known_gap": "Urgency engine does not boost same-day arrival category without an explicit arrival_window_hours entity \u2014 urgency stays 2 instead of 4+. Fix: add category_hint='Urgent same-day arrival' handling to compute_urgency().",
+      "category_ok": true,
+      "urgency_ok": true,
+      "needs_review_ok": true,
+      "risk_flags_ok": true,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "name": "arrival_today_language",
+      "subject": "Arriving today at 3pm",
+      "actual_category": "General inquiry",
+      "actual_urgency": 2,
+      "actual_needs_review": false,
+      "actual_risk_flags": [],
+      "actual_confidence": 55,
+      "expected_category": null,
+      "expected_urgency_min": null,
+      "expected_urgency_max": null,
+      "expected_needs_review": null,
+      "expected_risk_flags": [],
+      "tags": [
+        "same-day"
+      ],
+      "known_gap": null,
+      "category_ok": true,
+      "urgency_ok": true,
+      "needs_review_ok": true,
+      "risk_flags_ok": true,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "name": "internal_shift_note",
+      "subject": "FWD: Shift handover \u2014 pending CCA forms",
+      "actual_category": "Internal request",
+      "actual_urgency": 2,
+      "actual_needs_review": false,
+      "actual_risk_flags": [],
+      "actual_confidence": 66,
+      "expected_category": "Internal request",
+      "expected_urgency_min": null,
+      "expected_urgency_max": 3,
+      "expected_needs_review": null,
+      "expected_risk_flags": [],
+      "tags": [
+        "internal"
+      ],
+      "known_gap": null,
+      "category_ok": true,
+      "urgency_ok": true,
+      "needs_review_ok": true,
+      "risk_flags_ok": true,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "name": "cca_form_submission",
+      "subject": "CCA form attached \u2014 please apply to reservation",
+      "actual_category": "General inquiry",
+      "actual_urgency": 2,
+      "actual_needs_review": true,
+      "actual_risk_flags": [],
+      "actual_confidence": 35,
+      "expected_category": null,
+      "expected_urgency_min": null,
+      "expected_urgency_max": 3,
+      "expected_needs_review": null,
+      "expected_risk_flags": [],
+      "tags": [
+        "cca",
+        "completed-form"
+      ],
+      "known_gap": null,
+      "category_ok": true,
+      "urgency_ok": true,
+      "needs_review_ok": true,
+      "risk_flags_ok": true,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "name": "group_block_inquiry",
+      "subject": "Corporate group block \u2014 40 rooms May conference",
+      "actual_category": "Rooming list / group",
+      "actual_urgency": 2,
+      "actual_needs_review": false,
+      "actual_risk_flags": [],
+      "actual_confidence": 81,
+      "expected_category": "Rooming list / group",
+      "expected_urgency_min": null,
+      "expected_urgency_max": null,
+      "expected_needs_review": null,
+      "expected_risk_flags": [],
+      "tags": [
+        "group"
+      ],
+      "known_gap": null,
+      "category_ok": true,
+      "urgency_ok": true,
+      "needs_review_ok": true,
+      "risk_flags_ok": true,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "name": "cancellation_request",
+      "subject": "Cancellation request \u2014 reservation WA-12345",
+      "actual_category": "Cancellation / modification",
+      "actual_urgency": 2,
+      "actual_needs_review": false,
+      "actual_risk_flags": [],
+      "actual_confidence": 58,
+      "expected_category": "Cancellation / modification",
+      "expected_urgency_min": null,
+      "expected_urgency_max": null,
+      "expected_needs_review": null,
+      "expected_risk_flags": [],
+      "tags": [
+        "cancellation"
+      ],
+      "known_gap": null,
+      "category_ok": true,
+      "urgency_ok": true,
+      "needs_review_ok": true,
+      "risk_flags_ok": true,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "name": "rate_inquiry",
+      "subject": "Best available rate for December",
+      "actual_category": "Rate inquiry",
+      "actual_urgency": 2,
+      "actual_needs_review": false,
+      "actual_risk_flags": [],
+      "actual_confidence": 61,
+      "expected_category": "Rate inquiry",
+      "expected_urgency_min": null,
+      "expected_urgency_max": null,
+      "expected_needs_review": null,
+      "expected_risk_flags": [],
+      "tags": [
+        "rate-inquiry"
+      ],
+      "known_gap": null,
+      "category_ok": true,
+      "urgency_ok": true,
+      "needs_review_ok": true,
+      "risk_flags_ok": true,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "name": "discrimination_complaint",
+      "subject": "Discrimination by staff \u2014 formal complaint",
+      "actual_category": "Complaint",
+      "actual_urgency": 4,
+      "actual_needs_review": true,
+      "actual_risk_flags": [
+        "Discrimination",
+        "Reputation risk",
+        "Leadership review required"
+      ],
+      "actual_confidence": 53,
+      "expected_category": null,
+      "expected_urgency_min": 4,
+      "expected_urgency_max": null,
+      "expected_needs_review": true,
+      "expected_risk_flags": [],
+      "tags": [
+        "discrimination",
+        "high-risk"
+      ],
+      "known_gap": null,
+      "category_ok": true,
+      "urgency_ok": true,
+      "needs_review_ok": true,
+      "risk_flags_ok": true,
+      "passed": true,
+      "failures": []
+    }
+  ]
+}

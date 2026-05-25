@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QApplication,
     QHBoxLayout,
@@ -36,6 +36,7 @@ class MainWindow(QMainWindow):
         self._kyc_window: KycReminderWindow | None = None
         self._current_queue = "inbox"
         self._current_filters: dict = {}
+        self._auto_sync_started = False
 
         self.setWindowTitle("ReplyRight")
         self.setMinimumSize(1180, 720)
@@ -105,6 +106,9 @@ class MainWindow(QMainWindow):
 
     def load_inbox(self) -> None:
         self._load_emails()
+        if not self._auto_sync_started:
+            self._auto_sync_started = True
+            QTimer.singleShot(400, self._on_sync)
 
     def _on_queue_changed(self, queue: str) -> None:
         previous_queue = self._current_queue

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import os
 
 from .config import get_settings
 from . import __version__
@@ -27,11 +26,11 @@ _prompt_versions_cache: list[dict] = []
 
 
 def _url() -> str:
-    return os.getenv("SUPABASE_URL", "").rstrip("/")
+    return get_settings().supabase_url.rstrip("/")
 
 
 def _key() -> str:
-    return os.getenv("SUPABASE_KEY", "")
+    return get_settings().supabase_key
 
 
 def _configured() -> bool:
