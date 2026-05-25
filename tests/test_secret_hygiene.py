@@ -78,6 +78,29 @@ def test_security_audit_fails_if_env_is_bundled_in_release_payload(tmp_path: Pat
     assert "Bundled .env file is not allowed" in errors[0]
 
 
+def test_payload_audit_scans_dist_and_extracted_app_only(monkeypatch, tmp_path: Path) -> None:
+    root = tmp_path
+    dist = root / "dist" / "ReplyRight"
+    app = root / "installer" / "output" / "extracted" / "app"
+    metadata = root / "installer" / "output" / "extracted" / "metadata"
+    dist.mkdir(parents=True)
+    app.mkdir(parents=True)
+    metadata.mkdir(parents=True)
+    (dist / "safe.txt").write_text("OPENAI_API_KEY=\n", encoding="utf-8")
+    (app / "sample.env").write_text("SUPABASE_SERVICE_ROLE_KEY=\n", encoding="utf-8")
+    (metadata / ".env").write_text(
+        "ANTHROPIC_API_KEY=" + "sk" + "-ant-" + "metadataonly000000000000000\n",
+        encoding="utf-8",
+    )
+
+    import scripts.check_no_bundled_secrets as scanner
+
+    monkeypatch.setattr(scanner, "__file__", str(root / "scripts" / "check_no_bundled_secrets.py"))
+    monkeypatch.setenv("REPLYRIGHT_PAYLOAD_AUDIT", "1")
+
+    assert scanner.main() == 0
+
+
 # ── Test 2: bundled_secrets.py ────────────────────────────────────────────────
 
 

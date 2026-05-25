@@ -28,7 +28,8 @@ Last updated: 2026-05-25 (deterministic recommended_action + operational queues)
   - Follow-up release target `0.5.2` hardened the installer extraction security audit: generated `innoextract` metadata is skipped, but any bundled `.env` under `dist` or installer extraction still fails the audit.
   - Follow-up release target `0.5.3` fixed the full-suite lint failure from key-shaped test fixture strings and updated first-party GitHub Actions to Node 24-native major versions, but the tag release failed at `Security Lint (Installer Extraction)`.
   - Follow-up release target `0.5.4` excluded `.env`/`*.env` from the Inno onedir payload while still shipping safe `sample.env`, and fixed the CCA substring false-positive where `cca` matched inside words like `occasion`; its tag release still failed at `Security Lint (Installer Extraction)`.
-  - Follow-up release target `0.5.5` additionally purges `.env`/`*.env` files from `dist\ReplyRight` before Inno compiles the installer.
+  - Follow-up release target `0.5.5` additionally purged `.env`/`*.env` files from `dist\ReplyRight` before Inno compiles the installer; its tag release still failed at `Security Lint (Installer Extraction)`.
+  - Follow-up release target `0.5.6` scopes the installer extraction audit to actual payload locations (`dist\ReplyRight` and extracted `app`) while leaving source audit broad.
 - 2026-05-25 local classifier training pass:
   - Claude completed the primary Completed Request training run before Codex began its own cycle: imported 1000, labeled 983, uploaded 983, skipped 17, failed 0, purged 1000 local completed-request rows; no in-app external AI providers were called.
   - Claude performed an agent-assisted review/approval pass on sanitized examples and retrained the local classifier to version `20260525T200024Z`.

@@ -12,13 +12,14 @@ Last updated: 2026-05-25
 
 ## Current Active Task
 
-Prepare the `v0.5.5` release after repeated installer extraction audit failures, while preserving Claude's planned `recommended_action` work as a follow-up task requiring Codex review.
+Prepare the `v0.5.6` release after repeated installer extraction audit failures, while preserving Claude's `recommended_action` work for Codex review.
 
 ## Current Release Context
 
 - `v0.5.3` repaired lint/build lanes but failed the release job at `Security Lint (Installer Extraction)`.
 - `v0.5.4` (commit `62b0098`, tag pushed) fixed installer `.env` exclusion and the CCA false-positive, but still failed at `Security Lint (Installer Extraction)`.
-- `v0.5.5` is the next release target: purge `.env`/`*.env` files from `dist\ReplyRight` before Inno Setup compiles the installer, preserving only the separately sourced safe `sample.env`.
+- `v0.5.5` also failed at `Security Lint (Installer Extraction)`.
+- `v0.5.6` is the next release target: payload audit mode scans only the actual release payload locations (`dist\ReplyRight` and extracted `app`) after installer extraction, while source audit remains broad.
 - `agent_comms/` retired as of 2026-05-25; `agent-workspace/AGENT_MESSAGES.md` is the active coordination channel.
 - Docker CI restored with root `Dockerfile` and `docker-compose.yml`.
 - Do not commit local runtime files, `.env`, databases, build outputs, or packaged binaries.

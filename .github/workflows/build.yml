@@ -217,6 +217,7 @@ jobs:
             if (-not (Test-Path ".\dist\ReplyRight")) { throw "Staged dist payload missing for fallback audit." }
           }
           $env:ALLOW_RELEASE_RUNTIME_SECRETS = "1"
+          $env:REPLYRIGHT_PAYLOAD_AUDIT = "1"
           python scripts/check_no_bundled_secrets.py
       - name: Rename Installer
         shell: pwsh

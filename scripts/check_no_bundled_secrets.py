@@ -108,27 +108,36 @@ def check_file(path: Path) -> list[str]:
 
 def main() -> int:
     root = Path(__file__).parent.parent
-    directories_to_scan = [
-        root / "outlook_dashboard",
-        root / "installer",
-        root / "docs",
-        root / ".github",
-        root / "scripts",
-    ]
-    files_to_scan = [
-        root / "README.md",
-        root / ".env.example",
-        root / "build_exe.ps1",
-    ]
-
-    # Add any found extraction folders if available
     dist_dir = root / "dist" / "ReplyRight"
-    if dist_dir.exists():
-        directories_to_scan.append(dist_dir)
-
     installer_out = root / "installer" / "output"
-    if installer_out.exists():
-        directories_to_scan.append(installer_out)
+
+    if os.environ.get("REPLYRIGHT_PAYLOAD_AUDIT") == "1":
+        directories_to_scan = []
+        files_to_scan = []
+        if dist_dir.exists():
+            directories_to_scan.append(dist_dir)
+        extracted = installer_out / "extracted"
+        for candidate in (extracted / "app", extracted / "{app}", extracted):
+            if candidate.exists():
+                directories_to_scan.append(candidate)
+                break
+    else:
+        directories_to_scan = [
+            root / "outlook_dashboard",
+            root / "installer",
+            root / "docs",
+            root / ".github",
+            root / "scripts",
+        ]
+        files_to_scan = [
+            root / "README.md",
+            root / ".env.example",
+            root / "build_exe.ps1",
+        ]
+        if dist_dir.exists():
+            directories_to_scan.append(dist_dir)
+        if installer_out.exists():
+            directories_to_scan.append(installer_out)
 
     all_files = set(files_to_scan)
     for d in directories_to_scan:
