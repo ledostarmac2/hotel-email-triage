@@ -12,11 +12,12 @@ Last updated: 2026-05-25
 
 ## Current Active Task
 
-Strengthen the repo-native Claude/Codex coordination protocol so both agents read shared state, respond to unresolved messages, update task state and handoffs, and leave a direct message before ending each session.
+Proceed with the v0.5.3 release/watch lane and enforce the new Claude/Codex coordination protocol on all follow-up work.
 
 ## Current Release Context
 
 - `v0.5.3` was pushed to repair the `v0.5.2` lint failure and replace forced Node 24 behavior with Node 24-native first-party GitHub Actions.
+- `f2b50db` pushed the mandatory `agent-workspace/` coordination layer to `main`.
 - Docker CI was restored with a root `Dockerfile` and `docker-compose.yml`.
 - Do not commit local runtime files, `.env`, databases, build outputs, or packaged binaries.
 
@@ -25,4 +26,3 @@ Strengthen the repo-native Claude/Codex coordination protocol so both agents rea
 - Preserve read-only Outlook behavior.
 - Do not add send/archive/move/category/mark-read behavior without explicit user approval.
 - Do not store raw email bodies, credentials, service-role keys, mailbox contents, or large memory dumps in coordination files.
-

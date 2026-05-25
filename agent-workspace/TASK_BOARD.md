@@ -5,6 +5,7 @@
 Allowed statuses:
 
 - Not Started
+- Assigned to Codex
 - Assigned to Claude
 - Waiting for Codex Review
 - Needs Claude Changes
@@ -28,12 +29,13 @@ If the user explicitly bypasses Codex review, document that bypass in `agent-wor
 
 | Task | Owner | Status | Next Required Action |
 |---|---|---|---|
-| Mandatory Claude/Codex coordination protocol | Codex | Approved by Codex | Claude must read the new protocol files and use `AGENT_MESSAGES.md` before implementation work. |
+| Watch `v0.5.3` release workflow to completion | Codex | Assigned to Codex | Codex is actively watching; docker-build is green, lint/build-exe still running at last check. |
+| Adopt mandatory coordination protocol | Claude | Assigned to Claude | Claude must acknowledge the protocol in `AGENT_MESSAGES.md` before implementation work. |
+| Review/own local triage behavior test file if applicable | Claude | Assigned to Claude | If `tests/test_email_triage_behavior.py` is Claude's work, Claude must leave a Review Request in `AGENT_MESSAGES.md` before Codex reviews or commits it. |
 
 ## Backlog
 
 | Task | Owner | Status | Next Required Action |
 |---|---|---|---|
 | Review remaining unreviewed training examples before another retrain | Claude/Codex | Not Started | Use aggregate/sanitized review only; do not bulk-approve without controlled review. |
-| Watch `v0.5.3` release workflow to completion | Codex | Not Started | Confirm lint, build-exe, docker-build, release, and installer asset. |
-
+| Watch follow-up main CI for coordination commit | Codex | Not Started | Confirm the coordination contract test passes in GitHub Actions. |
