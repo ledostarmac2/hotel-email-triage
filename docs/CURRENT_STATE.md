@@ -13,6 +13,7 @@ Last updated: 2026-05-25 (v1 safety + UI hardening — steps 4-8)
   - Clarified the training split in `AGENTS.md`, `docs/TRAINING_WORKFLOW.md`, `docs/V1_RELEASE_PLAN.md`, and `docs/ARCHITECTURE.md`: in-app training endpoints remain zero-credit and never call Claude/OpenAI/Google, while Codex/Claude may perform an explicit outside-the-app agent-assisted labeling/review pass only when Brian directly asks an agent to "train the model."
   - Validation passed: `python -m pytest tests/test_asset_contract.py tests/test_pipeline_docs_contract.py -q --timeout=60`. Local Docker runtime is not installed on this PC, so the actual image build must be verified by GitHub Actions or on a machine with Docker.
   - Follow-up release target is `0.5.1`, containing the Docker CI restoration and training-workflow clarification on top of the `0.5.0` anchor cleanup.
+  - Follow-up release target `0.5.2` hardens the installer extraction security audit: generated `innoextract` metadata is skipped, but any bundled `.env` under `dist` or installer extraction still fails the audit.
 - 2026-05-25 local classifier training pass:
   - Claude completed the primary Completed Request training run before Codex began its own cycle: imported 1000, labeled 983, uploaded 983, skipped 17, failed 0, purged 1000 local completed-request rows; no in-app external AI providers were called.
   - Claude performed an agent-assisted review/approval pass on sanitized examples and retrained the local classifier to version `20260525T200024Z`.

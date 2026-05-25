@@ -38,6 +38,22 @@ SAFE_VALUES = [
     "os.environ.get('SUPABASE_SERVICE_ROLE_KEY')",
 ]
 
+GENERATED_EXTRACTION_FILES = {
+    "install_script.iss",
+}
+
+
+def is_generated_extraction_noise(path: Path) -> bool:
+    parts = {part.lower() for part in path.parts}
+    if "extracted" not in parts:
+        return False
+    if path.name in GENERATED_EXTRACTION_FILES:
+        return True
+    if "$PLUGINSDIR".lower() in parts or "tmp" in parts:
+        return True
+    return False
+
+
 def is_safe_line(line: str) -> bool:
     # Ignore GitHub Actions secret mappings
     if "${{ secrets." in line:
@@ -52,10 +68,13 @@ def is_safe_line(line: str) -> bool:
     return False
 
 def check_file(path: Path) -> list[str]:
-    if os.getenv("ALLOW_RELEASE_RUNTIME_SECRETS") == "1" and path.name == ".env":
+    if is_generated_extraction_noise(path):
+        return []
+
+    if path.name == ".env":
         parts = {part.lower() for part in path.parts}
         if "dist" in parts or "installer" in parts:
-            return []
+            return [f"{path}:1 - Bundled .env file is not allowed in release payloads"]
 
     errors = []
     try:

@@ -33,6 +33,34 @@ Remaining work:
 - Wait for the `v0.5.1` tag release workflow to finish lint/build-exe/release jobs.
 - Review the remaining unreviewed Supabase training queue deliberately before another classifier retrain.
 
+## 2026-05-25 - v0.5.2 release security audit repair
+
+Summary:
+
+- Investigated Brian's failed `release` job screenshot. The `v0.5.0` release failed at `Security Lint (Installer Extraction)`, not Docker.
+- Hardened `scripts/check_no_bundled_secrets.py` so generated `innoextract` metadata such as `install_script.iss` is skipped while real bundled `.env` files under `dist` or installer payloads still fail the audit.
+- Added regression tests for both behaviors.
+- Bumped release metadata to `0.5.2` for a clean follow-up release tag.
+
+Files changed:
+
+- `scripts/check_no_bundled_secrets.py`
+- `tests/test_secret_hygiene.py`
+- `outlook_dashboard/__init__.py`
+- `pyproject.toml`
+- `installer/replyright_setup.iss`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+
+Verification:
+
+- `python -m pytest tests/test_secret_hygiene.py tests/test_installer_contract.py tests/test_version_consistency.py -q --timeout=60` - 34 passed.
+- `$env:ALLOW_RELEASE_RUNTIME_SECRETS='1'; python scripts\check_no_bundled_secrets.py` - passed.
+
+Remaining work:
+
+- Tag and push `v0.5.2`, then watch the release workflow.
+
 ## 2026-05-25 - Docker CI restoration and agent-assisted training contract
 
 Summary:
