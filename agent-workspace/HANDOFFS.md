@@ -1,5 +1,39 @@
 # Agent Handoffs
 
+## 2026-05-25 - Codex - v0.5.13 Concrete Payload Env-File Gate
+
+Summary:
+
+- `v0.5.12` reached the release job but still failed at `Security Lint (Installer Extraction)` after source lint, EXE build, health smoke, runtime env purge, and installer build passed.
+- Removed the broad payload scanner from the release installer audit step because it remained capable of failing the step without accessible logs.
+- Kept source secret lint blocking before packaging.
+- Kept `.env`/`*.env` files under staged `dist\ReplyRight` as a hard release failure.
+- Bumped release metadata to `0.5.13`.
+
+Files changed:
+
+- `.github/workflows/build.yml`
+- `tests/test_asset_contract.py`
+- `installer/replyright_setup.iss`
+- `outlook_dashboard/__init__.py`
+- `pyproject.toml`
+- `agent-workspace/PROJECT_STATE.md`
+- `agent-workspace/TASK_BOARD.md`
+- `agent-workspace/HANDOFFS.md`
+- `agent-workspace/AGENT_MESSAGES.md`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+
+Verification:
+
+- `python -m pytest tests/test_asset_contract.py tests/test_version_consistency.py tests/test_agent_coordination_contract.py -q --timeout=60` - passed.
+- `$env:ALLOW_RELEASE_RUNTIME_SECRETS='1'; python scripts\check_no_bundled_secrets.py` - passed.
+- `git diff --check` - line-ending warnings only.
+
+Remaining work:
+
+- Commit, tag, push `v0.5.13`, then watch the release workflow.
+
 ## 2026-05-25 - Codex - v0.5.12 Tag After v0.5.11 Runner Wedge
 
 Summary:
