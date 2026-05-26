@@ -1,5 +1,34 @@
 # Agent Handoffs
 
+## 2026-05-25 - Codex - recommended_action Review And Stale Routing Repair
+
+Summary:
+
+- Reviewed Claude's deterministic `recommended_action` and operational queue work.
+- Found one correctness issue: `recommended_action` was computed from the initial heuristic and could become stale after local classifier, OpenAI/Google refresh classification, shared rules, or adaptive feedback changed the final triage labels.
+- Added `_refresh_recommended_action()` and call sites so the action is recomputed from the final analysis before returning from `triage_email()`.
+- Added regression coverage proving a local-classifier category override recomputes the action.
+- Approved Claude's feature with this Codex follow-up repair.
+
+Files changed:
+
+- `outlook_dashboard/ai.py`
+- `tests/test_recommended_action.py`
+- `agent-workspace/TASK_BOARD.md`
+- `agent-workspace/HANDOFFS.md`
+- `agent-workspace/AGENT_MESSAGES.md`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+- `docs/CHANGELOG_AI.md`
+
+Verification:
+
+- `python -m pytest tests/test_recommended_action.py tests/test_safety_regression.py -q --timeout=60` - passed.
+
+Remaining work:
+
+- Commit and push the Codex review repair after the active release tag is already running.
+
 ## 2026-05-25 - Codex - v0.5.11 PowerShell Warning-Only Payload Scanner Fix
 
 Summary:

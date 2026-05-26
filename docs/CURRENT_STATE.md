@@ -9,6 +9,10 @@ Last updated: 2026-05-25 (deterministic recommended_action + operational queues)
 - 2026-05-25 release audit follow-up:
   - `v0.5.10` still failed at `Security Lint (Installer Extraction)` even though lint, docker-build, build-exe, health smoke, runtime env purge, and installer build passed.
   - Follow-up release target `0.5.11` keeps `.env`/`*.env` in the staged payload as a hard failure, but makes the broader payload scanner genuinely warning-only under GitHub PowerShell native-command behavior.
+- 2026-05-25 Codex review of deterministic `recommended_action`:
+  - Codex reviewed Claude's implementation and approved it with one follow-up repair.
+  - Fixed stale action routing: `triage_email()` now recomputes `recommended_action` from the final analysis after local classifier, refresh AI, shared rules, or adaptive feedback may have changed category/owner/risk/missing/urgency fields.
+  - Regression coverage proves classifier category overrides recompute the action.
 - 2026-05-25 deterministic recommended_action + operational queue filters (Claude, bypass-reviewed by Brian):
   - Added `_recommended_action_for()` to `outlook_dashboard/ai.py` — 14-value priority-ordered decision tree computed from locally-derived triage fields only. No external AI, no network calls, no Outlook writes.
   - `heuristic_analysis()` now returns `recommended_action` in every output dict.

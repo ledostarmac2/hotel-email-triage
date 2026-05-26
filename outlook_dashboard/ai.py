@@ -679,6 +679,7 @@ def triage_email(
             _apply_shared_rules(analysis, str(email.get("sender_email") or "").lower())
             if feedback_entries:
                 analysis = apply_adaptive_feedback(email, analysis, feedback_entries)
+            _refresh_recommended_action(email, analysis)
             analysis["suggested_reply_draft"] = ""
             return analysis
     except Exception:
@@ -710,10 +711,44 @@ def triage_email(
     # Apply local adaptive feedback from this installation's correction history.
     if feedback_entries:
         analysis = apply_adaptive_feedback(email, analysis, feedback_entries)
+    _refresh_recommended_action(email, analysis)
     analysis["suggested_reply_draft"] = ""
     if analysis.get("analysis_engine") in ("heuristic", "heuristic+rules"):
         analysis["model"] = "local-rules"
     return analysis
+
+
+def _refresh_recommended_action(email: dict[str, Any], analysis: dict[str, Any]) -> None:
+    """Refresh deterministic action routing after classifier, AI, rules, or feedback mutate labels."""
+    subject = str(email.get("subject") or "(No subject)")
+    raw_body = email.get("body_text") or email.get("body_content") or email.get("body_preview") or ""
+    body = latest_message_text(str(raw_body)) or str(raw_body)
+    text = f"{subject}\n{body}".lower()
+
+    urgency_value = analysis.get("urgency_score")
+    if urgency_value in (None, ""):
+        urgency_value = PRIORITY_SCORE.get(str(analysis.get("priority_level") or "Normal"), 2)
+    try:
+        urgency = int(urgency_value)
+    except (TypeError, ValueError):
+        urgency = 2
+
+    confidence_value = analysis.get("confidence_score")
+    try:
+        confidence = int(confidence_value)
+    except (TypeError, ValueError):
+        confidence = 50
+
+    analysis["recommended_action"] = _recommended_action_for(
+        text=text,
+        category=str(analysis.get("category") or "General inquiry"),
+        owner=str(analysis.get("recommended_department_owner") or "Reservations"),
+        urgency=urgency,
+        risks=_as_list(analysis.get("risk_flags")),
+        missing=_as_list(analysis.get("missing_information")),
+        contact_type=str(analysis.get("contact_type") or "Direct guest"),
+        confidence=confidence,
+    )
 
 
 def _apply_shared_rules(analysis: dict[str, Any], sender_email: str) -> None:

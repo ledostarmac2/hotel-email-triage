@@ -20,7 +20,7 @@ os.environ.setdefault("GOOGLE_AI_API_KEY", "")
 os.environ.setdefault("SUPABASE_URL", "")
 os.environ.setdefault("SUPABASE_KEY", "")
 
-from outlook_dashboard.ai import _recommended_action_for, heuristic_analysis
+from outlook_dashboard.ai import _recommended_action_for, heuristic_analysis, triage_email
 from outlook_dashboard.taxonomy import RECOMMENDED_ACTIONS, OPERATIONAL_QUEUES
 
 
@@ -294,6 +294,28 @@ class TestRecommendedActionViaHeuristic:
             "Please find the completed credit card authorization form attached for your records.",
         ))
         assert result["recommended_action"] == "verify_payment_authorization"
+
+    def test_classifier_override_recomputes_recommended_action(self, monkeypatch) -> None:
+        from outlook_dashboard import local_classifier
+
+        monkeypatch.setattr(
+            local_classifier,
+            "predict",
+            lambda *args, **kwargs: {
+                "urgency": 2,
+                "owner": "Reservations",
+                "category": "Billing dispute",
+            },
+        )
+
+        result = triage_email(_email(
+            "Spa planning",
+            "Can you help arrange a spa appointment for my upcoming stay?",
+        ))
+
+        assert result["analysis_engine"] == "local-classifier"
+        assert result["category"] == "Billing dispute"
+        assert result["recommended_action"] == "review_folio"
 
 
 # ── 3. TestOperationalQueueFilter ────────────────────────────────────────────

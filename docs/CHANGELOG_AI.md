@@ -1,5 +1,11 @@
 # AI Change Log
 
+## 2026-05-25 - Deterministic action routing follow-up
+
+- Added a final `recommended_action` recomputation step after local classifier predictions, refresh AI classification, shared rules, and adaptive feedback mutate triage labels.
+- This keeps operational queues aligned to the final displayed category, owner, risk, missing-information, and urgency fields.
+- Added regression coverage for classifier overrides so action routing cannot remain stuck on the initial heuristic snapshot.
+
 ## 2026-05-20 - Zero-credit training pipeline guardrail
 
 - Removed in-app Claude/Anthropic calls from the Completed Requests training pipeline.

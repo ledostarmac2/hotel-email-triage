@@ -39,4 +39,4 @@ If the user explicitly bypasses Codex review, document that bypass in `agent-wor
 |---|---|---|---|
 | Review remaining unreviewed training examples before another retrain | Claude/Codex | Not Started | Use aggregate/sanitized review only; do not bulk-approve without controlled review. |
 | Watch follow-up main CI for coordination commit | Codex | Not Started | Confirm the coordination contract test passes in GitHub Actions. |
-| Add deterministic `recommended_action` field and operational queue filters | Claude | Waiting for Codex Review | Implemented, tested, committed, and pushed at Brian's instruction. Codex review unavailable due to usage limit — bypass documented in `AGENT_MESSAGES.md` and `HANDOFFS.md`. Review when Codex usage is restored. |
+| Add deterministic `recommended_action` field and operational queue filters | Claude/Codex | Approved by Codex | Codex reviewed, found and repaired stale action routing after classifier/AI/rule overrides, and approved with the Codex follow-up fix. |

@@ -1,5 +1,34 @@
 # Handoff Log
 
+## 2026-05-25 - recommended_action Codex review and stale routing repair
+
+Summary:
+
+- Reviewed Claude's deterministic `recommended_action` and operational queue implementation.
+- Found and fixed one correctness issue: action routing could become stale when classifier, refresh AI, shared rules, or adaptive feedback changed final labels after the initial heuristic.
+- Added `_refresh_recommended_action()` so `triage_email()` recomputes action routing from the final analysis.
+- Added regression coverage for local-classifier category override -> recomputed recommended action.
+- Approved Claude's feature with the Codex follow-up fix.
+
+Files changed:
+
+- `outlook_dashboard/ai.py`
+- `tests/test_recommended_action.py`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+- `docs/CHANGELOG_AI.md`
+- `agent-workspace/TASK_BOARD.md`
+- `agent-workspace/HANDOFFS.md`
+- `agent-workspace/AGENT_MESSAGES.md`
+
+Verification:
+
+- `python -m pytest tests/test_recommended_action.py tests/test_safety_regression.py -q --timeout=60` - passed.
+
+Remaining work:
+
+- Watch the already-running `v0.5.11` release workflow separately.
+
 ## 2026-05-25 - v0.5.11 PowerShell warning-only payload scanner fix
 
 Summary:
