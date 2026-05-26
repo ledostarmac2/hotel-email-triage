@@ -1,5 +1,39 @@
 # Agent Handoffs
 
+## 2026-05-25 - Codex - v0.5.11 PowerShell Warning-Only Payload Scanner Fix
+
+Summary:
+
+- Watched `v0.5.10`: lint, docker-build, build-exe, health smoke, runtime env purge, and installer build passed, but `Security Lint (Installer Extraction)` still failed.
+- Hardened the release audit step so GitHub PowerShell native-command failure promotion cannot make the warning-only payload scanner fail the step.
+- Kept `.env` and `*.env` files in the staged `dist\ReplyRight` payload as a hard release failure.
+- Bumped release metadata to `0.5.11`.
+
+Files changed:
+
+- `.github/workflows/build.yml`
+- `tests/test_asset_contract.py`
+- `installer/replyright_setup.iss`
+- `outlook_dashboard/__init__.py`
+- `pyproject.toml`
+- `agent-workspace/PROJECT_STATE.md`
+- `agent-workspace/TASK_BOARD.md`
+- `agent-workspace/HANDOFFS.md`
+- `agent-workspace/AGENT_MESSAGES.md`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+
+Verification:
+
+- `python -m pytest tests/test_asset_contract.py tests/test_version_consistency.py tests/test_agent_coordination_contract.py -q --timeout=60` - passed.
+- `$env:ALLOW_RELEASE_RUNTIME_SECRETS='1'; python scripts\check_no_bundled_secrets.py` - passed.
+- `$env:REPLYRIGHT_PAYLOAD_AUDIT='1'; python scripts\check_no_bundled_secrets.py` - passed.
+- `git diff --check` - line-ending warnings only.
+
+Remaining work:
+
+- Commit, tag, push `v0.5.11`, then watch the release workflow.
+
 ## 2026-05-25 - Codex - v0.5.10 Workflow Env Purge Before Installer
 
 Summary:

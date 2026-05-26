@@ -12,7 +12,7 @@ Last updated: 2026-05-25
 
 ## Current Active Task
 
-Prepare the `v0.5.6` release after repeated installer extraction audit failures, while preserving Claude's `recommended_action` work for Codex review.
+Prepare the `v0.5.11` release after repeated installer extraction audit failures, while preserving Claude's `recommended_action` work for Codex review.
 
 ## Current Release Context
 
@@ -23,7 +23,8 @@ Prepare the `v0.5.6` release after repeated installer extraction audit failures,
 - `v0.5.7` also failed at `Security Lint (Installer Extraction)`.
 - `v0.5.8` also failed at `Security Lint (Installer Extraction)`.
 - `v0.5.9` also failed at `Security Lint (Installer Extraction)`.
-- `v0.5.10` is the next release target: explicitly purge `.env`/`*.env` from `dist\ReplyRight` in the workflow immediately before every installer build.
+- `v0.5.10` still failed at `Security Lint (Installer Extraction)` even after the pre-installer env purge step succeeded.
+- `v0.5.11` is the next release target: make the payload scanner truly warning-only under GitHub PowerShell native-command behavior, while keeping `.env`/`*.env` payload files as a hard failure.
 - `agent_comms/` retired as of 2026-05-25; `agent-workspace/AGENT_MESSAGES.md` is the active coordination channel.
 - Docker CI restored with root `Dockerfile` and `docker-compose.yml`.
 - Do not commit local runtime files, `.env`, databases, build outputs, or packaged binaries.

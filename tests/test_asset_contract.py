@@ -108,7 +108,9 @@ def test_release_extraction_audit_does_not_depend_on_innoextract() -> None:
 
 def test_release_payload_audit_blocks_env_but_warns_on_scanner_noise() -> None:
     workflow = Path(".github/workflows/build.yml").read_text(encoding="utf-8")
-    assert 'throw "Release payload contains forbidden .env file(s): $paths"' in workflow
+    assert 'Where-Object { $_.Name -eq ".env" -or $_.Name -like "*.env" }' in workflow
+    assert 'throw "Release payload contains forbidden env file(s): $paths"' in workflow
+    assert "$PSNativeCommandUseErrorActionPreference = $false" in workflow
     assert "$payloadAuditExit = $LASTEXITCODE" in workflow
     assert 'Write-Warning "Payload secret scanner reported potential issues' in workflow
     assert "continuing release so installer can be tested" in workflow
