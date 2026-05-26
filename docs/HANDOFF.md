@@ -1,5 +1,35 @@
 # Handoff Log
 
+## 2026-05-25 - v0.5.12 tag after v0.5.11 runner wedge
+
+Summary:
+
+- The `v0.5.11` main workflow for the same commit passed.
+- The `v0.5.11` tag workflow wedged in lint pytest after docker-build and build-exe succeeded, preventing the release job from starting.
+- Prepared `v0.5.12` from reviewed main so the release includes the payload scanner PowerShell fix and the Codex `recommended_action` final-state recompute repair.
+- Bumped release metadata to `0.5.12`.
+
+Files changed:
+
+- `installer/replyright_setup.iss`
+- `outlook_dashboard/__init__.py`
+- `pyproject.toml`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+- `agent-workspace/PROJECT_STATE.md`
+- `agent-workspace/TASK_BOARD.md`
+- `agent-workspace/HANDOFFS.md`
+- `agent-workspace/AGENT_MESSAGES.md`
+
+Verification:
+
+- `python -m pytest tests/test_version_consistency.py tests/test_agent_coordination_contract.py -q --timeout=60` - passed.
+- `git diff --check` - line-ending warnings only.
+
+Remaining work:
+
+- Watch the `v0.5.12` release workflow to completion.
+
 ## 2026-05-25 - recommended_action Codex review and stale routing repair
 
 Summary:

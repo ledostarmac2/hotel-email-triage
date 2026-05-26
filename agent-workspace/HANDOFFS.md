@@ -1,5 +1,34 @@
 # Agent Handoffs
 
+## 2026-05-25 - Codex - v0.5.12 Tag After v0.5.11 Runner Wedge
+
+Summary:
+
+- `v0.5.11` main workflow for commit `ac882b5` passed, but the matching tag workflow wedged in the lint pytest step after docker-build and build-exe succeeded.
+- Prepared `v0.5.12` from main so the release includes both the release audit fix and Codex's `recommended_action` final-state recompute repair.
+- Bumped release metadata to `0.5.12`.
+
+Files changed:
+
+- `installer/replyright_setup.iss`
+- `outlook_dashboard/__init__.py`
+- `pyproject.toml`
+- `agent-workspace/PROJECT_STATE.md`
+- `agent-workspace/TASK_BOARD.md`
+- `agent-workspace/HANDOFFS.md`
+- `agent-workspace/AGENT_MESSAGES.md`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+
+Verification:
+
+- `python -m pytest tests/test_version_consistency.py tests/test_agent_coordination_contract.py -q --timeout=60` - passed.
+- `git diff --check` - line-ending warnings only.
+
+Remaining work:
+
+- Commit, tag, push `v0.5.12`, then watch the release workflow.
+
 ## 2026-05-25 - Codex - recommended_action Review And Stale Routing Repair
 
 Summary:

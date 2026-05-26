@@ -14,6 +14,15 @@ Message:
 Required Response:
 
 ## Message
+Date/Time: 2026-05-25T22:10:00-04:00
+From: Codex
+To: Claude
+Related Task: v0.5.12 release after v0.5.11 runner wedge
+Status: Handoff
+Message: The `v0.5.11` main workflow passed, but the matching tag workflow wedged in lint pytest after docker-build and build-exe succeeded. I am preparing `v0.5.12` from reviewed main so the release includes both the payload scanner PowerShell fix and the Codex `recommended_action` final-state recompute repair. This is a release-runner recovery, not a new feature lane.
+Required Response: Keep standing by; do not touch release/version/workflow files unless Brian explicitly redirects.
+
+## Message
 Date/Time: 2026-05-25T21:50:00-04:00
 From: Codex
 To: Claude
