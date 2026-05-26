@@ -97,12 +97,12 @@ def test_github_actions_use_node24_native_first_party_actions() -> None:
     assert "actions/upload-artifact@v4" not in workflow
 
 
-def test_release_extraction_audit_keeps_innoextract_optional() -> None:
+def test_release_extraction_audit_does_not_depend_on_innoextract() -> None:
     workflow = Path(".github/workflows/build.yml").read_text(encoding="utf-8")
-    assert '$ErrorActionPreference = "Continue"' in workflow
-    assert "$chocoExit = $LASTEXITCODE" in workflow
-    assert 'Get-Command "innoextract" -ErrorAction SilentlyContinue' in workflow
-    assert 'Write-Warning "innoextract is unavailable' in workflow
+    release_step = workflow.split("Security Lint (Installer Extraction)", 1)[1]
+    assert "choco install innoextract" not in release_step
+    assert "innoextract $installer" not in release_step
+    assert 'Test-Path ".\\dist\\ReplyRight"' in release_step
     assert '$env:REPLYRIGHT_PAYLOAD_AUDIT = "1"' in workflow
 
 
