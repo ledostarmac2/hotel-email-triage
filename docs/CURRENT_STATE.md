@@ -13,6 +13,7 @@ Last updated: 2026-05-25 (deterministic recommended_action + operational queues)
   - Follow-up release target `0.5.12` is being cut from reviewed main to recover from the stuck tag runner and include the Codex `recommended_action` repair.
   - `v0.5.12` reached the release job but still failed at `Security Lint (Installer Extraction)` after source lint, EXE build, health smoke, env purge, and installer build passed.
   - Follow-up release target `0.5.13` removes the flaky broad payload scanner from the release installer audit step while preserving blocking source secret lint and a hard staged-payload `.env`/`*.env` gate.
+  - `v0.5.13` succeeded end-to-end and published `ReplyRightSetup-v0.5.13.exe` on GitHub Releases.
 - 2026-05-25 Codex review of deterministic `recommended_action`:
   - Codex reviewed Claude's implementation and approved it with one follow-up repair.
   - Fixed stale action routing: `triage_email()` now recomputes `recommended_action` from the final analysis after local classifier, refresh AI, shared rules, or adaptive feedback may have changed category/owner/risk/missing/urgency fields.
@@ -48,6 +49,7 @@ Last updated: 2026-05-25 (deterministic recommended_action + operational queues)
   - Follow-up release target `0.5.11` disables PowerShell native-command failure promotion for the warning-only payload scanner while retaining hard failure for `.env`/`*.env` files in `dist\ReplyRight`.
   - Follow-up release target `0.5.12` carries the same release audit fix plus the Codex-reviewed recommended-action recompute fix after `v0.5.11` tag CI wedged.
   - Follow-up release target `0.5.13` keeps source secret lint and staged-payload env-file checks blocking, but removes the broad scanner from the installer release step.
+  - `v0.5.13` is the current published installer release.
 - 2026-05-25 local classifier training pass:
   - Claude completed the primary Completed Request training run before Codex began its own cycle: imported 1000, labeled 983, uploaded 983, skipped 17, failed 0, purged 1000 local completed-request rows; no in-app external AI providers were called.
   - Claude performed an agent-assisted review/approval pass on sanitized examples and retrained the local classifier to version `20260525T200024Z`.

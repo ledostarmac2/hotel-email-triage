@@ -12,7 +12,7 @@ Last updated: 2026-05-25
 
 ## Current Active Task
 
-Prepare the `v0.5.13` release after the `v0.5.12` release job still failed in the installer audit step, while preserving source secret lint and hard payload env-file blocking.
+`v0.5.13` release is published. Next active work is Brian installer testing plus any follow-up fixes from that test pass.
 
 ## Current Release Context
 
@@ -26,7 +26,8 @@ Prepare the `v0.5.13` release after the `v0.5.12` release job still failed in th
 - `v0.5.10` still failed at `Security Lint (Installer Extraction)` even after the pre-installer env purge step succeeded.
 - `v0.5.11` main run passed, but the tag run wedged in the lint pytest step after build-exe passed; treat as a GitHub runner flake unless logs later prove otherwise.
 - `v0.5.12` reached the release job but still failed at `Security Lint (Installer Extraction)` after source lint, EXE build, health smoke, env purge, and installer build passed.
-- `v0.5.13` is the next release target: source secret lint remains blocking before packaging; the release step keeps only the concrete staged-payload `.env`/`*.env` hard failure and removes the flaky broad scanner from the installer audit step.
+- `v0.5.13` succeeded end-to-end on 2026-05-25/26: lint, docker-build, build-exe, release EXE build, health smoke, staged env purge, installer build, installer payload env-file audit, release smoke gate, and GitHub Release creation all passed.
+- Published installer asset: `ReplyRightSetup-v0.5.13.exe`.
 - `agent_comms/` retired as of 2026-05-25; `agent-workspace/AGENT_MESSAGES.md` is the active coordination channel.
 - Docker CI restored with root `Dockerfile` and `docker-compose.yml`.
 - Do not commit local runtime files, `.env`, databases, build outputs, or packaged binaries.

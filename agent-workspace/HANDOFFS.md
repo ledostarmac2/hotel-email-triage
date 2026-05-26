@@ -1,5 +1,34 @@
 # Agent Handoffs
 
+## 2026-05-25 - Codex - v0.5.13 Release Published
+
+Summary:
+
+- Watched `v0.5.13` to completion.
+- GitHub Actions passed lint, docker-build, build-exe, release EXE build, packaged health smoke, runtime env purge, installer build, installer payload env-file audit, release smoke gate, and GitHub Release creation.
+- Verified the published release and installer asset through the GitHub API.
+- Release URL: `https://github.com/ledostarmac2/hotel-email-triage/releases/tag/v0.5.13`
+- Installer asset: `ReplyRightSetup-v0.5.13.exe` (327,783,241 bytes).
+
+Files changed:
+
+- `agent-workspace/PROJECT_STATE.md`
+- `agent-workspace/TASK_BOARD.md`
+- `agent-workspace/HANDOFFS.md`
+- `agent-workspace/AGENT_MESSAGES.md`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+
+Verification:
+
+- GitHub Actions run `26428918559` completed successfully.
+- GitHub release `v0.5.13` exists.
+- Release asset `ReplyRightSetup-v0.5.13.exe` exists.
+
+Remaining work:
+
+- Brian/manual installer test: install, sign in, verify read-only Refresh Inbox, auto-refresh, KYC popup, operational queues, and Claude-only AI Suggestion behavior.
+
 ## 2026-05-25 - Codex - v0.5.13 Concrete Payload Env-File Gate
 
 Summary:

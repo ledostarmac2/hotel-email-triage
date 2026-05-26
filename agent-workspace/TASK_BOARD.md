@@ -29,7 +29,7 @@ If the user explicitly bypasses Codex review, document that bypass in `agent-wor
 
 | Task | Owner | Status | Next Required Action |
 |---|---|---|---|
-| Prepare `v0.5.13` release with concrete payload env-file gate only | Codex | Assigned to Codex | Remove flaky broad scanner from installer audit, tag/push `v0.5.13`, and watch release. |
+| Prepare `v0.5.13` release with concrete payload env-file gate only | Codex | Done | Release published with `ReplyRightSetup-v0.5.13.exe`; Brian should installer-test. |
 | Adopt mandatory coordination protocol | Claude | Approved by Codex | Protocol acknowledged in `AGENT_MESSAGES.md` at 2026-05-25T20:45:00-04:00. Done pending Codex confirmation. |
 | Review/own local triage behavior test file if applicable | Claude | Approved by Codex | Codex reviewed, ran the tests, approved the test file, and took ownership of the CCA false-positive fix. |
 
@@ -38,5 +38,6 @@ If the user explicitly bypasses Codex review, document that bypass in `agent-wor
 | Task | Owner | Status | Next Required Action |
 |---|---|---|---|
 | Review remaining unreviewed training examples before another retrain | Claude/Codex | Not Started | Use aggregate/sanitized review only; do not bulk-approve without controlled review. |
+| Installer/manual smoke test for `v0.5.13` | Brian/Codex | Not Started | Install `ReplyRightSetup-v0.5.13.exe`, sign in, refresh inbox, verify KYC popup, auto-refresh, queues, and AI suggestion gating. |
 | Watch follow-up main CI for coordination commit | Codex | Not Started | Confirm the coordination contract test passes in GitHub Actions. |
 | Add deterministic `recommended_action` field and operational queue filters | Claude/Codex | Approved by Codex | Codex reviewed, found and repaired stale action routing after classifier/AI/rule overrides, and approved with the Codex follow-up fix. |
