@@ -114,6 +114,13 @@ def test_release_payload_audit_blocks_env_but_warns_on_scanner_noise() -> None:
     assert "continuing release so installer can be tested" in workflow
 
 
+def test_workflow_purges_env_files_before_building_installer() -> None:
+    workflow = Path(".github/workflows/build.yml").read_text(encoding="utf-8")
+    assert workflow.count("Remove runtime env from installer payload") >= 2
+    assert 'Where-Object { $_.Name -eq ".env" -or $_.Name -like "*.env" }' in workflow
+    assert "Remove-Item -Force" in workflow
+
+
 def test_static_dir_is_importable_from_config() -> None:
     """main.py resolves STATIC_DIR from DATA_DIR at import time — the directory must exist."""
     static = Path("outlook_dashboard/static")

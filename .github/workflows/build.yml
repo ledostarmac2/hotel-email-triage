@@ -87,6 +87,12 @@ jobs:
       - name: Packaged health smoke
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -Command "& '.\dist\ReplyRight\ReplyRight.exe' --health-smoke"
+      - name: Remove runtime env from installer payload
+        shell: pwsh
+        run: |
+          Get-ChildItem ".\dist\ReplyRight" -Recurse -Force -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -eq ".env" -or $_.Name -like "*.env" } |
+            Remove-Item -Force
       - name: Build Installer
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -File .\installer\build_installer.ps1
@@ -201,6 +207,12 @@ jobs:
       - name: Packaged health smoke
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -Command "& '.\dist\ReplyRight\ReplyRight.exe' --health-smoke"
+      - name: Remove runtime env from installer payload
+        shell: pwsh
+        run: |
+          Get-ChildItem ".\dist\ReplyRight" -Recurse -Force -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -eq ".env" -or $_.Name -like "*.env" } |
+            Remove-Item -Force
       - name: Build Installer
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -File .\installer\build_installer.ps1

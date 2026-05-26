@@ -22,7 +22,8 @@ Prepare the `v0.5.6` release after repeated installer extraction audit failures,
 - `v0.5.6` also failed at `Security Lint (Installer Extraction)`, likely before/during the optional extraction tool path.
 - `v0.5.7` also failed at `Security Lint (Installer Extraction)`.
 - `v0.5.8` also failed at `Security Lint (Installer Extraction)`.
-- `v0.5.9` is the next release target: remove the `innoextract` dependency from release CI and audit the staged `dist\ReplyRight` payload directly.
+- `v0.5.9` also failed at `Security Lint (Installer Extraction)`.
+- `v0.5.10` is the next release target: explicitly purge `.env`/`*.env` from `dist\ReplyRight` in the workflow immediately before every installer build.
 - `agent_comms/` retired as of 2026-05-25; `agent-workspace/AGENT_MESSAGES.md` is the active coordination channel.
 - Docker CI restored with root `Dockerfile` and `docker-compose.yml`.
 - Do not commit local runtime files, `.env`, databases, build outputs, or packaged binaries.

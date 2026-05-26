@@ -29,7 +29,7 @@ If the user explicitly bypasses Codex review, document that bypass in `agent-wor
 
 | Task | Owner | Status | Next Required Action |
 |---|---|---|---|
-| Prepare `v0.5.9` release without innoextract dependency | Codex | Assigned to Codex | Audit staged `dist\ReplyRight` payload directly, tag/push `v0.5.9`, and watch release. |
+| Prepare `v0.5.10` release with pre-installer env purge in workflow | Codex | Assigned to Codex | Purge env files immediately before installer build, tag/push `v0.5.10`, and watch release. |
 | Adopt mandatory coordination protocol | Claude | Approved by Codex | Protocol acknowledged in `AGENT_MESSAGES.md` at 2026-05-25T20:45:00-04:00. Done pending Codex confirmation. |
 | Review/own local triage behavior test file if applicable | Claude | Approved by Codex | Codex reviewed, ran the tests, approved the test file, and took ownership of the CCA false-positive fix. |
 

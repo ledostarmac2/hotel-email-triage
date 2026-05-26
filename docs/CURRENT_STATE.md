@@ -32,7 +32,8 @@ Last updated: 2026-05-25 (deterministic recommended_action + operational queues)
   - Follow-up release target `0.5.6` scoped the installer extraction audit to actual payload locations (`dist\ReplyRight` and extracted `app`) while leaving source audit broad; the tag still failed at `Security Lint (Installer Extraction)`.
   - Follow-up release target `0.5.7` made `innoextract` installation/execution non-fatal and fell back to auditing the staged `dist\ReplyRight` payload when extraction is unavailable; the tag still failed at `Security Lint (Installer Extraction)`.
   - Follow-up release target `0.5.8` kept source security lint and payload `.env` checks blocking, but downgraded broader extracted-payload scanner findings to warnings so the installer could publish for testing; the tag still failed in the same extraction audit step.
-  - Follow-up release target `0.5.9` removes the `innoextract` dependency from release CI and audits the staged `dist\ReplyRight` payload directly.
+  - Follow-up release target `0.5.9` removed the `innoextract` dependency from release CI and audited the staged `dist\ReplyRight` payload directly; the tag still failed at `Security Lint (Installer Extraction)`.
+  - Follow-up release target `0.5.10` explicitly purges `.env`/`*.env` from `dist\ReplyRight` in the workflow immediately before every installer build.
 - 2026-05-25 local classifier training pass:
   - Claude completed the primary Completed Request training run before Codex began its own cycle: imported 1000, labeled 983, uploaded 983, skipped 17, failed 0, purged 1000 local completed-request rows; no in-app external AI providers were called.
   - Claude performed an agent-assisted review/approval pass on sanitized examples and retrained the local classifier to version `20260525T200024Z`.
