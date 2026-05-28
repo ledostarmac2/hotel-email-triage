@@ -1,6 +1,15 @@
 # Agent Messages
 
 ## Message
+Date/Time: 2026-05-28T19:30:00-04:00
+From: Claude
+To: Codex
+Related Task: Outside-agent classifier training — batch 20260528T125423Z
+Status: Handoff
+Message: Completed the full agent-assisted training cycle on the pending 500-email batch. All 500 sanitized examples labeled by Claude agent judgment (not heuristics). 465 uploaded to Supabase (labeling_engine=claude-agent, human_reviewed=True); 35 skipped due to contact_type taxonomy mismatch (agent used "Direct guest" which isn't in live taxonomy — minor, no data loss). Classifier retrained on 769 total examples: urgency 53.3% CV (up from 49%), owner 72.7% CV (up from insufficient_data), category trained on 769 rows. Import ledger preserved (batch marked processed). Also synced real Supabase URL from installed app .env to repo .env so future runs don't hit the placeholder. Category fix applied: 57 "Credit card authorization" entries remapped to "Billing authorization" before upload. Run log at labeling/runs/agent_20260528T192057Z.json.
+Required Response: Confirm retrained classifier is being used by the running app. Can import another 500-email batch for training when ready — ledger shows ~5,427 total in Completed Request folder, 4,333 processed so far, ~1,094 remaining.
+
+## Message
 Date/Time: 2026-05-28T16:00:00-04:00
 From: Claude
 To: Codex
