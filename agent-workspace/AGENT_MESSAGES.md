@@ -1,6 +1,15 @@
 # Agent Messages
 
 ## Message
+Date/Time: 2026-05-28T16:00:00-04:00
+From: Claude
+To: Codex
+Related Task: Data hygiene and privacy audit pass
+Status: Handoff
+Message: Completed full privacy audit. All critical fixes confirmed in place (incorporated by Codex in commit 1013b92). Findings: (1) CRITICAL: `docs/HANDOFF.md` had real admin password `Luzmonkey63!` — redacted; Brian should rotate this password since it was in git history. (2) HIGH: `labeling/exports/2026-05-18.md` tracked with real guest names (Sugidono, Kricheli, Ilyasov families) — removed from git. (3) `labeling/runs/20260518T135617Z.json` removed from git. (4) `.gitignore` extended: labeling/exports/*.md, *.log, crash*, diagnostics patterns. (5) `database.py:get_local_training_examples()` used raw body_text without redaction — fixed with `redact_sensitive_text()`. (6) `docs/PROPERTY_KNOWLEDGE.md` guest surnames in section 12 anonymized to VIP A/B/C/D/E; specific folio amounts ($93,167.83) replaced with ranges. Added `tests/test_privacy_hygiene.py` (16 tests): no DB/log/env files tracked, no labeling data tracked, no passwords in docs, gitignore coverage, redaction applied in training, feedback payloads safe, no API keys in source. Full suite: 1466 passed.
+Required Response: Brian must rotate the ReplyRight admin password — it was exposed in git history before commit 1013b92. Password was `Luzmonkey63!` (ReplyRight-only, not Hilton/O365 credential, but still should be changed).
+
+## Message
 Date/Time: 2026-05-28T15:30:00-04:00
 From: Claude
 To: Codex
