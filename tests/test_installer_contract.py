@@ -7,7 +7,9 @@ def test_pyinstaller_build_uses_onedir_bundle() -> None:
     script = Path("build_exe.ps1").read_text(encoding="utf-8")
     assert "--onedir" in script
     assert "--onefile" not in script
-    assert "dist\\ReplyRight\\ReplyRight.exe" in script
+    assert '$exeCandidate = Join-Path $distRoot "ReplyRight\\ReplyRight.exe"' in script
+    assert "Test-RequiredPath" in script
+    assert "Required build input missing" in script
 
 
 def test_pyinstaller_build_bundles_kyc_selenium_dependency() -> None:
@@ -37,6 +39,7 @@ def test_build_exe_script_does_not_copy_env() -> None:
 
 def test_installer_build_purges_runtime_env_from_payload() -> None:
     script = Path("installer/build_installer.ps1").read_text(encoding="utf-8")
+    assert "Required installer input missing" in script
     assert "Get-ChildItem -LiteralPath $appDir -Recurse -Force -File" in script
     assert '$_.Name -eq ".env"' in script
     assert '$_.Name -like "*.env"' in script
@@ -68,7 +71,9 @@ def test_inno_installer_is_per_user_and_no_admin_override() -> None:
 
 def test_inno_installer_version_is_overridable() -> None:
     iss = Path("installer/replyright_setup.iss").read_text(encoding="utf-8")
+    build_script = Path("installer/build_installer.ps1").read_text(encoding="utf-8")
     assert "#ifndef MyAppVersion" in iss
+    assert "Could not read __version__" in build_script
 
 
 def test_inno_installer_ships_sample_env() -> None:
@@ -143,6 +148,8 @@ def test_pyinstaller_collect_all_covers_runtime_top_level_packages() -> None:
 
 def test_release_workflow_uploads_setup_installer_only() -> None:
     workflow = Path(".github/workflows/build.yml").read_text(encoding="utf-8")
+    assert "Upload CI installer artifact (not a release)" in workflow
+    assert "ReplyRightSetup-ci-${{ github.sha }}" in workflow
     assert "installer/output/ReplyRightSetup-v*.exe" in workflow
     assert "installer/output/ReplyRightSetup-${{ github.ref_name }}.exe" in workflow
     assert "dist/ReplyRight.exe" not in workflow

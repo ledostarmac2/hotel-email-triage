@@ -1,5 +1,25 @@
 $ErrorActionPreference = "Stop"
 
+$repoRoot = Get-Location
+
+function Test-RequiredPath {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Description
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        throw "Required build input missing: $Description ($Path)"
+    }
+}
+
+Test-RequiredPath -Path (Join-Path $repoRoot "run_desktop.py") -Description "desktop launcher"
+Test-RequiredPath -Path (Join-Path $repoRoot "outlook_dashboard\__init__.py") -Description "runtime version module"
+Test-RequiredPath -Path (Join-Path $repoRoot "outlook_dashboard\main.py") -Description "FastAPI application"
+Test-RequiredPath -Path (Join-Path $repoRoot "outlook_dashboard\static") -Description "static assets directory"
+Test-RequiredPath -Path (Join-Path $repoRoot "outlook_dashboard\static\replyright.ico") -Description "application icon"
+Test-RequiredPath -Path (Join-Path $repoRoot "replyright_qt") -Description "native PySide6 UI package"
+
 # Prefer the project venv if it has PyInstaller (avoids Windows App Store Python --target restriction).
 # Fall back to the first non-venv system Python if the venv lacks PyInstaller.
 $PYTHON = $null
@@ -24,6 +44,19 @@ if (-not $PYTHON) {
 }
 if (-not $PYTHON) { throw "Could not find a Python with PyInstaller. Run: pip install pyinstaller" }
 Write-Host "Using Python: $PYTHON"
+
+$previousErrorActionPreference = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+try {
+    $pyinstallerVersion = & $PYTHON -m PyInstaller --version 2>$null
+    $pyinstallerExitCode = $LASTEXITCODE
+} finally {
+    $ErrorActionPreference = $previousErrorActionPreference
+}
+if ($pyinstallerExitCode -ne 0) {
+    throw "Selected Python does not have PyInstaller installed: $PYTHON. Run: python -m pip install pyinstaller"
+}
+Write-Host "Using PyInstaller: $pyinstallerVersion"
 
 # If a previous build is locked (e.g. by Windows Defender scanning it), rename
 # it out of the way so PyInstaller can write the new onedir bundle.
@@ -142,7 +175,9 @@ if (-not (Test-Path $vendorPath)) {
     }
     $toInstall = @()
     foreach ($dir in $vendorChecks.Keys) {
-        if (-not (Test-Path (Join-Path $vendorPath $dir))) {
+        $vendorEntry = Join-Path $vendorPath $dir
+        $vendorModuleFile = Join-Path $vendorPath "$dir.py"
+        if (-not (Test-Path $vendorEntry) -and -not (Test-Path $vendorModuleFile)) {
             $toInstall += $vendorChecks[$dir]
         }
     }
@@ -157,8 +192,12 @@ $gitCommit = try { (git rev-parse HEAD 2>$null).Trim() } catch { "unknown" }
 if (-not $gitCommit) { $gitCommit = "unknown" }
 $gitShort = $gitCommit.Substring(0, [Math]::Min(8, $gitCommit.Length))
 $buildDate = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
-$initContent = Get-Content "outlook_dashboard\__init__.py" -Raw -ErrorAction SilentlyContinue
-$appVersion = if ($initContent -match '"(\d+\.\d+\.\d+)"') { $Matches[1] } else { "0.1.0" }
+$initPath = Join-Path $repoRoot "outlook_dashboard\__init__.py"
+$initContent = Get-Content $initPath -Raw -ErrorAction Stop
+if ($initContent -notmatch '__version__\s*=\s*"(\d+\.\d+\.\d+[^"]*)"') {
+    throw "Could not read __version__ from $initPath. Expected: __version__ = `"x.y.z`""
+}
+$appVersion = $Matches[1]
 $buildInfoJson = "{`"commit`":`"$gitShort`",`"build_date`":`"$buildDate`",`"version`":`"$appVersion`"}"
 $buildInfoJson | Set-Content "outlook_dashboard\build_info.json" -Encoding utf8
 Write-Host "Build metadata: $buildInfoJson"
@@ -220,7 +259,13 @@ if (Test-Path $kycEdgeDriver) {
     --hidden-import sklearn.neighbors._partition_nodes `
     run_desktop.py
 
-$exePath = (Resolve-Path "dist\ReplyRight\ReplyRight.exe").Path
+if ($LASTEXITCODE -ne 0) {
+    throw "PyInstaller failed with exit code $LASTEXITCODE"
+}
+
+$exeCandidate = Join-Path $distRoot "ReplyRight\ReplyRight.exe"
+Test-RequiredPath -Path $exeCandidate -Description "packaged ReplyRight executable"
+$exePath = (Resolve-Path $exeCandidate).Path
 
 function New-ReplyRightShortcut {
     param(

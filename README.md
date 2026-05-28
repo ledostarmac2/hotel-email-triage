@@ -83,11 +83,19 @@ Invoke-RestMethod http://127.0.0.1:8000/api/health
 
 The app does not seed mock/demo messages in the active dashboard path. Refresh Inbox treats Outlook as the source of truth and removes local rows that are no longer in the current Outlook import.
 
-## Build The Windows EXE
+## Build And Installer Checks
+
+There are four separate paths. Keep them distinct:
+
+- Local EXE build: creates the internal PyInstaller onedir app under `dist\ReplyRight`.
+- CI build: runs tests, builds the EXE, runs health smoke, builds an installer, and uploads a CI artifact for inspection.
+- Local installer build: creates `installer\output\ReplyRightSetup-v{version}.exe` from the local onedir app.
+- Release publishing: happens only from a `v*.*.*` tag in GitHub Actions. Do not tag unless you intend to publish.
+
+Local EXE build:
 
 ```powershell
 .\build_exe.ps1
-.\installer\build_installer.ps1
 ```
 
 Output:
@@ -96,9 +104,23 @@ Output:
 dist\ReplyRight\ReplyRight.exe
 ```
 
-The EXE starts the local FastAPI server, waits for `/healthz`, then opens the native PySide6 desktop shell. Runtime data, copied secrets, logs, and packaged binaries are ignored by git.
+Health smoke:
+
+```powershell
+.\dist\ReplyRight\ReplyRight.exe --health-smoke
+```
+
+The EXE starts the local FastAPI server, waits for `/healthz`, then opens the native PySide6 desktop shell. In health-smoke mode it prints the checked health URL and diagnostics log path, then exits without opening the UI.
+
+Local installer build:
+
+```powershell
+.\installer\build_installer.ps1
+```
 
 User-facing releases should distribute `installer\output\ReplyRightSetup-v{version}.exe`. The installer is per-user/no-admin and installs under `%LOCALAPPDATA%\Programs\ReplyRight`.
+
+The build scripts fail early if required inputs such as `run_desktop.py`, `outlook_dashboard\static\replyright.ico`, `replyright_qt\`, `installer\sample.env`, or the PyInstaller onedir output are missing.
 
 ## Training Pipeline
 
@@ -131,7 +153,7 @@ Tests require no live credentials. External services are mocked or disabled.
 Run the full suite:
 
 ```powershell
-python -m pytest tests/ -x
+python -m pytest tests/ -x --timeout=60 -q --no-header
 ```
 
 Run targeted suites:

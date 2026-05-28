@@ -3,6 +3,22 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $issPath = Join-Path $PSScriptRoot "replyright_setup.iss"
 
+function Test-RequiredPath {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Description
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        throw "Required installer input missing: $Description ($Path)"
+    }
+}
+
+Test-RequiredPath -Path $issPath -Description "Inno Setup script"
+Test-RequiredPath -Path (Join-Path $PSScriptRoot "sample.env") -Description "safe sample env template"
+Test-RequiredPath -Path (Join-Path $repoRoot "outlook_dashboard\__init__.py") -Description "runtime version module"
+Test-RequiredPath -Path (Join-Path $repoRoot "outlook_dashboard\static\replyright.ico") -Description "installer icon"
+
 function Find-Iscc {
     $cmd = Get-Command "ISCC.exe" -ErrorAction SilentlyContinue
     if ($cmd) { return $cmd.Source }
@@ -72,8 +88,12 @@ foreach ($envFile in $runtimeEnvFiles) {
 }
 
 # Read version from __init__.py so the installer name stays in sync with the code.
-$initContent = Get-Content (Join-Path $repoRoot "outlook_dashboard\__init__.py") -Raw -ErrorAction SilentlyContinue
-$appVersion = if ($initContent -match '"(\d+\.\d+\.\d+[^"]*)"') { $Matches[1] } else { "0.1.1" }
+$initPath = Join-Path $repoRoot "outlook_dashboard\__init__.py"
+$initContent = Get-Content $initPath -Raw -ErrorAction Stop
+if ($initContent -notmatch '__version__\s*=\s*"(\d+\.\d+\.\d+[^"]*)"') {
+    throw "Could not read __version__ from $initPath. Expected: __version__ = `"x.y.z`""
+}
+$appVersion = $Matches[1]
 Write-Host "App version: $appVersion"
 
 $iscc = Find-Iscc

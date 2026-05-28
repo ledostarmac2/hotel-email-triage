@@ -10,6 +10,23 @@ Run the full suite the same way Codex and release-prep tasks do:
 python -m pytest tests/ -x --timeout=60 -q --no-header
 ```
 
+Build confidence checks:
+
+```powershell
+python -m pytest tests/test_installer_contract.py tests/test_desktop_startup.py tests/test_version_consistency.py tests/test_diagnostics_contract.py -q --timeout=60
+python -m py_compile run_desktop.py
+```
+
+On Windows, after source checks pass:
+
+```powershell
+.\build_exe.ps1
+.\dist\ReplyRight\ReplyRight.exe --health-smoke
+.\installer\build_installer.ps1
+```
+
+Those commands do not create a release. GitHub Release publishing only happens from a `v*.*.*` tag in the workflow release job.
+
 Useful focused runs:
 
 ```powershell

@@ -868,3 +868,46 @@ Verification:
 Remaining work:
 
 - Claude must adopt the new start/finish protocol and leave future review requests in `agent-workspace/AGENT_MESSAGES.md`.
+
+## 2026-05-28 - Codex - Build and install confidence pass
+
+Summary:
+
+- Completed Brian's build/install confidence pass without creating a release, tag, or published artifact.
+- Added clear build-script and installer-script required-input/version checks.
+- Improved packaged health smoke output with the checked health URL, diagnostics log path, and success message.
+- Clarified CI artifact naming as non-release output.
+- Updated README, deployment, and testing docs to separate local EXE builds, CI builds, installer builds, and release publishing.
+
+Files changed:
+
+- `.github/workflows/build.yml`
+- `README.md`
+- `build_exe.ps1`
+- `installer/build_installer.ps1`
+- `run_desktop.py`
+- `tests/test_desktop_startup.py`
+- `tests/test_installer_contract.py`
+- `tests/test_version_consistency.py`
+- `docs/CURRENT_STATE.md`
+- `docs/DEPLOYMENT.md`
+- `docs/HANDOFF.md`
+- `docs/TESTING.md`
+- `agent-workspace/PROJECT_STATE.md`
+- `agent-workspace/TASK_BOARD.md`
+- `agent-workspace/HANDOFFS.md`
+- `agent-workspace/AGENT_MESSAGES.md`
+
+Verification:
+
+- `python -m pytest tests/ -x --timeout=60 -q --no-header` - passed.
+- `python -m py_compile run_desktop.py` - passed.
+- PowerShell parse checks for `build_exe.ps1` and `installer/build_installer.ps1` - passed.
+- `.\build_exe.ps1` - passed.
+- `.\dist\ReplyRight\ReplyRight.exe --health-smoke` - passed with local Supabase fallback warning only.
+- `.\installer\build_installer.ps1` - passed.
+
+Remaining work:
+
+- Keep local build artifacts uncommitted.
+- No release-publishing action is pending from this task.

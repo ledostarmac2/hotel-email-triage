@@ -27,10 +27,11 @@ def test_fastapi_metadata_version_matches_runtime_version() -> None:
 
 def test_build_script_embeds_runtime_version_in_build_metadata() -> None:
     script = Path("build_exe.ps1").read_text(encoding="utf-8")
-    assert 'Get-Content "outlook_dashboard\\__init__.py"' in script
+    assert "outlook_dashboard\\__init__.py" in script
     assert "$appVersion" in script
     assert '"version`":`"$appVersion`"' in script
     assert '"version`":`"0.1.0`"' not in script
+    assert "Could not read __version__" in script
 
 
 def test_updater_build_info_fallback_uses_runtime_version() -> None:

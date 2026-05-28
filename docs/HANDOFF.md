@@ -2893,3 +2893,46 @@ Remaining work:
 
 - Run the full suite after syncing/pushing Claude's native startup commits and this login repair.
 - Rebuild `dist\ReplyRight\ReplyRight.exe`, run `--health-smoke`, and manually sign in with the Supabase-backed admin credentials.
+
+## 2026-05-28 - Build and install confidence pass
+
+Summary:
+
+- Added clear required-input checks to the local EXE and installer build scripts.
+- Made build/version failures explicit instead of silently falling back.
+- Improved packaged `--health-smoke` output so it reports the checked health URL and diagnostics log path without opening Qt.
+- Clarified that CI installer artifacts are not releases; tag workflows remain the release-publishing path.
+- Updated README, deployment, and testing docs to distinguish local EXE builds, CI builds, installer builds, and release publishing.
+
+Files changed:
+
+- `.github/workflows/build.yml`
+- `README.md`
+- `build_exe.ps1`
+- `installer/build_installer.ps1`
+- `run_desktop.py`
+- `tests/test_desktop_startup.py`
+- `tests/test_installer_contract.py`
+- `tests/test_version_consistency.py`
+- `docs/CURRENT_STATE.md`
+- `docs/DEPLOYMENT.md`
+- `docs/HANDOFF.md`
+- `docs/TESTING.md`
+- `agent-workspace/PROJECT_STATE.md`
+- `agent-workspace/TASK_BOARD.md`
+- `agent-workspace/HANDOFFS.md`
+- `agent-workspace/AGENT_MESSAGES.md`
+
+Verification:
+
+- `python -m pytest tests/ -x --timeout=60 -q --no-header` - passed.
+- `python -m py_compile run_desktop.py` - passed.
+- PowerShell parse checks for `build_exe.ps1` and `installer/build_installer.ps1` - passed.
+- `.\build_exe.ps1` - passed.
+- `.\dist\ReplyRight\ReplyRight.exe --health-smoke` - passed; Supabase was unreachable locally and the app fell back to local auth as expected.
+- `.\installer\build_installer.ps1` - passed and produced local ignored installer output only.
+
+Remaining work:
+
+- No release, tag, or published artifact was created for this task.
+- Installer output under `installer\output\` is local build output and should remain uncommitted.

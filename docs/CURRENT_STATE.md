@@ -6,6 +6,13 @@ Last updated: 2026-05-28 (test suite cleanup pass)
 
 - Product name is ReplyRight.
 - Current runnable app is `outlook_dashboard/` plus `run_desktop.py`.
+- 2026-05-28 build and install confidence pass:
+  - `build_exe.ps1` now fails early with clear messages when required app, static asset, PySide6 shell, PyInstaller, version, or packaged EXE inputs are missing.
+  - `installer/build_installer.ps1` now fails early for missing installer inputs and requires a parseable app version instead of silently falling back.
+  - Packaged `--health-smoke` now prints the checked health URL, diagnostics log path, and success state without opening the Qt window.
+  - CI build artifacts are labeled as CI installer artifacts, not releases; release publishing remains tag-only.
+  - `README.md`, `docs/DEPLOYMENT.md`, and `docs/TESTING.md` now distinguish local EXE builds, CI builds, installer builds, and release publishing.
+  - Validation passed: `python -m pytest tests/ -x --timeout=60 -q --no-header`; `python -m py_compile run_desktop.py`; PowerShell parse checks for `build_exe.ps1` and `installer/build_installer.ps1`; `.\build_exe.ps1`; `.\dist\ReplyRight\ReplyRight.exe --health-smoke`; `.\installer\build_installer.ps1`.
 - 2026-05-28 test suite cleanup pass:
   - Added registered pytest markers for `unit`, `integration`, `ui`, `slow`, and `safety`, with automatic file-based grouping in `tests/conftest.py`.
   - Kept tests local-first by clearing live AI/Supabase environment variables by default; tests that need configured values set fake values and mock network boundaries.

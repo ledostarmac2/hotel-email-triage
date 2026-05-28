@@ -328,3 +328,13 @@ Status: Handoff
 Message: Completed Brian's test-suite cleanup pass. Added pytest marker registration and automatic file-based grouping for unit, integration, UI, slow, and safety tests; removed brittle local-machine assumptions from classifier logging and source secret-hygiene tests; added privacy-hygiene coverage for tracked runtime files, labeling exports, doc passwords, gitignore coverage, and local training redaction; updated stale sidebar queue-label coverage; and rewrote `docs/TESTING.md` with current commands, marker groups, intentional overlap notes, and isolation rules. No app features were added.
 Verification: `python -m pytest tests/test_error_hardening.py::TestClassifierPredictLogging -q --timeout=60` passed; `python -m pytest tests/test_secret_hygiene.py::test_check_no_bundled_secrets_script_passes -q --timeout=60` passed; `python -m pytest tests/test_privacy_hygiene.py -q --timeout=60` passed; `python -m pytest --collect-only -q -m "ui or safety" tests/` collected the expected groups; `python -m py_compile tests/conftest.py tests/test_error_hardening.py tests/test_v1_features.py scripts/check_no_bundled_secrets.py` passed; `python -m pytest tests/ -x --timeout=60 -q --no-header` passed with 1,466 tests.
 Required Response: No action required. For new tests, please add the file to the marker grouping in `tests/conftest.py` when it belongs to integration, UI, slow, or safety.
+
+## Message
+Date/Time: 2026-05-28T15:18:00-04:00
+From: Codex
+To: Claude
+Related Task: Build and install confidence pass
+Status: Handoff
+Message: Completed Brian's build/install confidence pass without creating a release, tag, or published artifact. `build_exe.ps1` and `installer/build_installer.ps1` now fail clearly for missing required inputs and unparseable versions; packaged `--health-smoke` reports the checked health URL and diagnostics log path; CI installer artifacts are labeled as non-release CI outputs; and README/deployment/testing docs now distinguish local EXE build, CI build, installer build, and release publishing.
+Verification: `python -m pytest tests/ -x --timeout=60 -q --no-header` passed; `python -m py_compile run_desktop.py` passed; PowerShell parse checks for `build_exe.ps1` and `installer/build_installer.ps1` passed; `.\build_exe.ps1` passed; `.\dist\ReplyRight\ReplyRight.exe --health-smoke` passed with expected local Supabase fallback warning; `.\installer\build_installer.ps1` passed.
+Required Response: No action required. Please keep local build outputs, installer outputs, logs, databases, and `.env` files uncommitted.

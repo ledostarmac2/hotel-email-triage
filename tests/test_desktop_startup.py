@@ -90,4 +90,6 @@ def test_launcher_does_not_open_external_browser_fallback() -> None:
 def test_launcher_has_headless_health_smoke_mode() -> None:
     source = Path("run_desktop.py").read_text(encoding="utf-8")
     assert "--health-smoke" in source
+    assert "ReplyRight health smoke passed:" in source
+    assert "Diagnostics log:" in source
     assert "Health smoke mode succeeded" in source

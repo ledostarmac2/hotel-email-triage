@@ -1,6 +1,6 @@
 # Deployment
 
-Last updated: 2026-05-20
+Last updated: 2026-05-28
 
 ## Active Deployment Shape
 
@@ -101,13 +101,25 @@ OUTLOOK_EXPORT_FOLDER=Inbox
 
 Microsoft Graph code exists but is not the active path because tenant/enterprise access can block it. A future centralized mailbox worker would require a separate approved Graph app registration or another server-side mail ingestion design.
 
-## Local Build
+## Build Paths
+
+ReplyRight has four distinct build/publishing paths:
+
+| Path | Command or trigger | Output | Publishes? |
+|---|---|---|---|
+| Local EXE build | `.\build_exe.ps1` | `dist\ReplyRight\ReplyRight.exe` | No |
+| CI build | push to `main` | GitHub Actions CI installer artifact | No release |
+| Local installer build | `.\installer\build_installer.ps1` | `installer\output\ReplyRightSetup-v{version}.exe` | No |
+| Release publishing | push tag `v*.*.*` | GitHub Release with setup EXE | Yes |
+
+Do not create a tag unless the goal is to publish a GitHub Release.
+
+## Local EXE Build
 
 From the repository root:
 
 ```powershell
 .\build_exe.ps1
-.\installer\build_installer.ps1
 ```
 
 `build_exe.ps1` builds the internal PyInstaller onedir app at:
@@ -116,13 +128,65 @@ From the repository root:
 dist\ReplyRight\ReplyRight.exe
 ```
 
+The script fails before PyInstaller runs if required build inputs are missing:
+
+- `run_desktop.py`
+- `outlook_dashboard\__init__.py`
+- `outlook_dashboard\main.py`
+- `outlook_dashboard\static\`
+- `outlook_dashboard\static\replyright.ico`
+- `replyright_qt\`
+
+It also checks that the selected Python can run PyInstaller and that a runtime version can be read from `outlook_dashboard\__init__.py`.
+
+Build metadata is written to `outlook_dashboard\build_info.json` and bundled into the EXE:
+
+- `version`
+- short git `commit`
+- UTC `build_date`
+
+The PyInstaller command collects the native UI and runtime packages explicitly, including PySide6, FastAPI/Starlette/Pydantic, HTTP clients, AI clients, scikit-learn/joblib/threadpoolctl, dateparser, Selenium, pywin32 COM modules, `outlook_dashboard`, `replyright_qt`, and `replyright_core`.
+
+## Local Installer Build
+
+From the repository root:
+
+```powershell
+.\installer\build_installer.ps1
+```
+
 `installer\build_installer.ps1` builds:
 
 ```text
 installer\output\ReplyRightSetup-v{version}.exe
 ```
 
+The installer script fails clearly if these inputs are missing:
+
+- `installer\replyright_setup.iss`
+- `installer\sample.env`
+- `outlook_dashboard\__init__.py`
+- `outlook_dashboard\static\replyright.ico`
+- `dist\ReplyRight\ReplyRight.exe`
+
+Before Inno Setup runs, the script removes runtime `.env` / `*.env` files from `dist\ReplyRight` while preserving the safe `sample.env` template.
+
 The setup installer is the artifact users should download. The onedir EXE is an internal build input.
+
+## CI Build
+
+The `build-exe` GitHub Actions job runs on pushes to `main`. It:
+
+1. Writes a CI-only `.env` from GitHub secrets.
+2. Verifies required runtime keys for installer packaging without printing values.
+3. Installs dependencies.
+4. Runs `.\build_exe.ps1`.
+5. Runs `.\dist\ReplyRight\ReplyRight.exe --health-smoke`.
+6. Removes runtime env files from the staged installer payload.
+7. Runs `.\installer\build_installer.ps1`.
+8. Uploads a CI installer artifact named `ReplyRightSetup-ci-{sha}`.
+
+The CI artifact is for build inspection only. It is not a GitHub Release.
 
 ## Smoke Tests
 
@@ -131,6 +195,15 @@ Packaged health smoke:
 ```powershell
 dist\ReplyRight\ReplyRight.exe --health-smoke
 ```
+
+Expected useful output:
+
+```text
+ReplyRight health smoke passed: http://127.0.0.1:<port>/healthz
+Diagnostics log: <path>\data\replyright-startup.log
+```
+
+Health smoke starts the packaged FastAPI backend, waits for `/healthz`, prints the checked URL and log path, then exits without opening the native UI. On failure, use the diagnostics log path from the output or the startup error dialog.
 
 Source tests:
 
@@ -168,7 +241,7 @@ The response intentionally contains no secrets. It reports:
 - local classifier version/targets
 - runtime warnings
 
-## GitHub Release Path
+## GitHub Release Publishing
 
 GitHub Actions includes Windows lint/test/build, installer build, Docker health, and tag-based release jobs.
 
@@ -181,6 +254,8 @@ ReplyRightSetup-v{version}.exe
 ```
 
 Raw `dist\ReplyRight\ReplyRight.exe` must not be attached as the default user download.
+
+Only the `release` job creates a GitHub Release, and only when the ref is a tag matching `v*.*.*`.
 
 Before tagging:
 

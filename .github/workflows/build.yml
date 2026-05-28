@@ -96,10 +96,10 @@ jobs:
       - name: Build Installer
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -File .\installer\build_installer.ps1
-      - name: Upload Installer artifact
+      - name: Upload CI installer artifact (not a release)
         uses: actions/upload-artifact@v7
         with:
-          name: ReplyRightSetup-${{ github.sha }}
+          name: ReplyRightSetup-ci-${{ github.sha }}
           path: installer/output/ReplyRightSetup-v*.exe
           if-no-files-found: error
 

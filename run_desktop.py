@@ -37,6 +37,21 @@ def _log(message: str) -> None:
         pass
 
 
+def _emit_health_smoke_line(message: str) -> None:
+    """Write health-smoke status to the log and any available console stream."""
+    _log(message)
+    # PyInstaller --windowed can leave stdout in an invalid state; stderr is
+    # more reliable when a user runs the EXE from PowerShell or CI captures it.
+    for stream in (getattr(sys, "stderr", None), getattr(sys, "__stderr__", None)):
+        try:
+            if stream and not getattr(stream, "closed", False):
+                stream.write(message + "\n")
+                stream.flush()
+                break
+        except Exception:
+            continue
+
+
 def _show_error(message: str) -> None:
     try:
         ctypes.windll.user32.MessageBoxW(None, message, WINDOW_TITLE, 0x10)
@@ -202,7 +217,9 @@ def main() -> None:
             raise RuntimeError(server_error[-1])
 
         if health_smoke_only:
-            _log("Health smoke mode succeeded; not opening Qt window")
+            _emit_health_smoke_line(f"ReplyRight health smoke passed: {url}{HEALTH_PATH}")
+            _emit_health_smoke_line(f"Diagnostics log: {LOG_PATH}")
+            _emit_health_smoke_line("Health smoke mode succeeded; not opening Qt window")
             return
 
         # _open_qt_window blocks until the user closes the ReplyRight window,
