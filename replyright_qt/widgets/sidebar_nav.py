@@ -9,8 +9,8 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QScrollArea,
     QSizePolicy,
-    QSpacerItem,
     QVBoxLayout,
     QWidget,
 )
@@ -166,6 +166,8 @@ class _UserCard(QWidget):
     def __init__(self) -> None:
         super().__init__()
         self.setObjectName("user-card")
+        self.setMinimumHeight(54)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         row = QHBoxLayout(self)
         row.setContentsMargins(10, 8, 10, 8)
         row.setSpacing(10)
@@ -249,6 +251,7 @@ class SidebarNav(QWidget):
         super().__init__()
         self.setObjectName("sidebar")
         self.setFixedWidth(250)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
         self._items: dict[str, _SidebarItem] = {}
         self._active_queue = "inbox"
         self._build_ui()
@@ -261,6 +264,9 @@ class SidebarNav(QWidget):
         logo = QLabel("ReplyRight")
         logo.setObjectName("brand")
         logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        logo.setMinimumHeight(48)
+        logo.setMaximumHeight(58)
+        logo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         logo_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
             "outlook_dashboard",
@@ -283,33 +289,52 @@ class SidebarNav(QWidget):
         layout.addWidget(self._user_card)
         layout.addSpacing(12)
 
+        nav_scroll = QScrollArea()
+        nav_scroll.setObjectName("sidebar-scroll")
+        nav_scroll.setWidgetResizable(True)
+        nav_scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        nav_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        nav_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        nav_scroll.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
+        nav_body = QWidget()
+        nav_body.setObjectName("sidebar-scroll-body")
+        nav_layout = QVBoxLayout(nav_body)
+        nav_layout.setContentsMargins(0, 0, 0, 0)
+        nav_layout.setSpacing(0)
+
         for group_name, items in _QUEUE_GROUPS:
             header = QLabel(group_name)
             header.setObjectName("sidebar-section-header")
-            layout.addWidget(header)
-            layout.addSpacing(3)
+            nav_layout.addWidget(header)
+            nav_layout.addSpacing(3)
             for icon, key, label in items:
                 item = _SidebarItem(icon, key, label)
                 item.clicked.connect(self._select)
                 self._items[key] = item
-                layout.addWidget(item)
-            layout.addSpacing(9)
+                nav_layout.addWidget(item)
+            nav_layout.addSpacing(9)
 
-        layout.addItem(QSpacerItem(0, 0, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
+        nav_layout.addStretch()
+        nav_scroll.setWidget(nav_body)
+        layout.addWidget(nav_scroll)
 
         wa_label = QLabel("WALDORF ASTORIA")
         wa_label.setObjectName("waldorf-label")
         wa_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        wa_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         layout.addWidget(wa_label)
 
         wa_mark = QLabel("WA")
         wa_mark.setObjectName("waldorf-mark")
         wa_mark.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        wa_mark.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         layout.addWidget(wa_mark)
 
         wa_sub = QLabel("HOTELS & RESORTS")
         wa_sub.setObjectName("waldorf-sub")
         wa_sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        wa_sub.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         layout.addWidget(wa_sub)
         layout.addSpacing(10)
 

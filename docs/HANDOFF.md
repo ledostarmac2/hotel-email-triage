@@ -1,5 +1,36 @@
 # Handoff Log
 
+## 2026-05-28 - Native sidebar responsive polish and local EXE rebuild
+
+Summary:
+
+- Fixed sidebar logo/profile clipping by keeping brand/profile/footer widgets at stable heights.
+- Moved the queue list into a transparent native scroll area so smaller windows scroll the navigation stack instead of squeezing images and labels.
+- Rebuilt the local onedir executable at `dist\ReplyRight\ReplyRight.exe`.
+
+Files changed:
+
+- `replyright_qt/widgets/sidebar_nav.py`
+- `replyright_qt/styles/theme.py`
+- `tests/test_pyside6_no_browser_engine.py`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+- `agent-workspace/TASK_BOARD.md`
+- `agent-workspace/HANDOFFS.md`
+- `agent-workspace/AGENT_MESSAGES.md`
+
+Verification:
+
+- `python -m py_compile replyright_qt\widgets\sidebar_nav.py replyright_qt\styles\theme.py` - passed.
+- `python -m pytest tests\test_pyside6_no_browser_engine.py -q --timeout=60` - 12 passed.
+- `.\build_exe.ps1` - passed and rebuilt `dist\ReplyRight\ReplyRight.exe`.
+- `.\dist\ReplyRight\ReplyRight.exe --health-smoke` - passed.
+
+Remaining work:
+
+- Brian should visually confirm the rebuilt app no longer clips/squeezes the sidebar branding or profile area at the target window size.
+
+
 ## 2026-05-28 - Native PySide label highlight fix and local EXE rebuild
 
 Summary:

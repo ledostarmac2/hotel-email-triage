@@ -102,3 +102,13 @@ def test_theme_makes_plain_labels_transparent() -> None:
     # Intentional badge/chip backgrounds should remain explicitly styled.
     assert "QLabel#badge-urgency-1 { background-color:" in stylesheet
     assert "QLabel#chip {\n    background-color:" in stylesheet
+
+
+def test_sidebar_nav_uses_scroll_area_for_adaptive_height() -> None:
+    """The nav stack should scroll instead of squeezing brand/profile assets."""
+    source = Path("replyright_qt/widgets/sidebar_nav.py").read_text(encoding="utf-8")
+    assert "QScrollArea" in source
+    assert 'nav_scroll.setObjectName("sidebar-scroll")' in source
+    assert "nav_scroll.setWidgetResizable(True)" in source
+    assert "logo.setMinimumHeight" in source
+    assert "self.setMinimumHeight(54)" in source

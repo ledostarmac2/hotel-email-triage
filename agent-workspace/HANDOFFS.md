@@ -1,5 +1,36 @@
 # Agent Handoffs
 
+## 2026-05-28 - Codex - Native Sidebar Responsive Polish And Local EXE Rebuild
+
+Summary:
+
+- Fixed sidebar logo/profile clipping by preventing the brand/profile/footer widgets from being squeezed by the long queue list.
+- Moved the sidebar queue stack into a transparent native `QScrollArea` so smaller window heights scroll the nav area instead of distorting images/text.
+- Rebuilt the local onedir app at `dist\ReplyRight\ReplyRight.exe`; build metadata reported version `0.5.13`, commit `a38a035d`, build date `2026-05-28T14:33:08Z`.
+
+Files changed:
+
+- `replyright_qt/widgets/sidebar_nav.py`
+- `replyright_qt/styles/theme.py`
+- `tests/test_pyside6_no_browser_engine.py`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+- `agent-workspace/TASK_BOARD.md`
+- `agent-workspace/HANDOFFS.md`
+- `agent-workspace/AGENT_MESSAGES.md`
+
+Verification:
+
+- `python -m py_compile replyright_qt\widgets\sidebar_nav.py replyright_qt\styles\theme.py` - passed.
+- `python -m pytest tests\test_pyside6_no_browser_engine.py -q --timeout=60` - 12 passed.
+- `.\build_exe.ps1` - passed and rebuilt `dist\ReplyRight\ReplyRight.exe`.
+- `.\dist\ReplyRight\ReplyRight.exe --health-smoke` - passed.
+
+Remaining work:
+
+- Brian should visually confirm the rebuilt desktop app no longer clips/squeezes the sidebar logo/profile assets at the target window size.
+
+
 ## 2026-05-28 - Codex - Native Label Highlight Fix And Local EXE Rebuild
 
 Summary:

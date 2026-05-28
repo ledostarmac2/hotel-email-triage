@@ -6,6 +6,10 @@ Last updated: 2026-05-28 (native label highlight fix and local EXE rebuild)
 
 - Product name is ReplyRight.
 - Current runnable app is `outlook_dashboard/` plus `run_desktop.py`.
+- 2026-05-28 native sidebar responsive polish:
+  - Fixed sidebar logo/profile clipping by preventing brand/profile/footer widgets from being squeezed and moving the queue list into a native scroll area.
+  - Rebuilt the local onedir executable at `dist\ReplyRight\ReplyRight.exe`; build metadata version `0.5.13`, commit `a38a035d`, build date `2026-05-28T14:33:08Z`.
+  - Validation passed: `python -m py_compile replyright_qt\widgets\sidebar_nav.py replyright_qt\styles\theme.py`; `python -m pytest tests\test_pyside6_no_browser_engine.py -q --timeout=60`; `.\build_exe.ps1`; `.\dist\ReplyRight\ReplyRight.exe --health-smoke`.
 - 2026-05-28 native PySide6 visual polish:
   - Fixed the dark rectangular background strips behind plain text in Settings and Conversation Detail by making default `QLabel` backgrounds transparent in the shared Qt theme.
   - Kept intentional badge/chip backgrounds intact with regression coverage.

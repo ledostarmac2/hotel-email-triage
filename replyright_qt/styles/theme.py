@@ -69,6 +69,11 @@ QWidget#sidebar {{
     border-right: 1px solid #061025;
 }}
 
+QScrollArea#sidebar-scroll, QWidget#sidebar-scroll-body {{
+    background-color: transparent;
+    border: none;
+}}
+
 QLabel#brand {{
     color: #ffffff;
     font-size: 20px;
