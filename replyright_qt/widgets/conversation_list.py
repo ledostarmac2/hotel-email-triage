@@ -43,6 +43,24 @@ def _urgency_value(email: dict) -> int:
         return 0
 
 
+_ACRONYMS = {
+    "ai": "AI",
+    "cca": "CCA",
+    "kyc": "KYC",
+    "ota": "OTA",
+    "vip": "VIP",
+}
+
+
+def _humanize_label(value: object) -> str:
+    text = str(value or "").strip().replace("_", " ").replace("-", " ")
+    words = []
+    for word in text.split():
+        lower = word.lower()
+        words.append(_ACRONYMS.get(lower, lower.capitalize()))
+    return " ".join(words)
+
+
 class ConversationRow(QWidget):
     """A single email row: avatar + content + right-side meta."""
 
@@ -74,9 +92,11 @@ class ConversationRow(QWidget):
         sender = QLabel(sender_name)
         sender.setObjectName("row-sender")
         sender.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        sender.setWordWrap(False)
 
         subject = QLabel(textwrap.shorten(email.get("subject", "(no subject)"), width=70, placeholder="..."))
         subject.setObjectName("row-subject")
+        subject.setWordWrap(True)
 
         content_col.addWidget(sender)
         content_col.addWidget(subject)
@@ -91,7 +111,7 @@ class ConversationRow(QWidget):
         # Category chips
         category = email.get("category") or triage.get("category", "")
         contact = email.get("contact_type") or triage.get("contact_type", "")
-        chip_texts = [t.replace("_", " ").title() for t in (category, contact) if t]
+        chip_texts = [_humanize_label(t) for t in (category, contact) if t]
         if chip_texts:
             chips_row = QHBoxLayout()
             chips_row.setContentsMargins(0, 3, 0, 0)
@@ -183,9 +203,10 @@ class ConversationListWidget(QWidget):
         self._list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self._list.currentRowChanged.connect(self._on_row_changed)
 
-        self._empty_label = QLabel("No conversations match this view.")
+        self._empty_label = QLabel("No conversations in this view.")
         self._empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._empty_label.setStyleSheet("color: #a0aec0; font-size: 13px;")
+        self._empty_label.setObjectName("empty-state-title")
+        self._empty_label.setWordWrap(True)
         self._empty_label.hide()
 
         layout.addWidget(self._list_header)
@@ -222,10 +243,11 @@ class ConversationListWidget(QWidget):
         self._list.setEnabled(not loading)
         if loading:
             self._empty_label.setText("Loading conversations...")
+            self._list.hide()
             self._empty_label.show()
             self._count_lbl.setText("Loading...")
         else:
-            self._empty_label.setText("No conversations match this view.")
+            self._empty_label.setText("No conversations in this view.")
 
     def _on_row_changed(self, row: int) -> None:
         self._sync_row_selection(row)

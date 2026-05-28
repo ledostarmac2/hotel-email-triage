@@ -104,6 +104,27 @@ def test_theme_makes_plain_labels_transparent() -> None:
     assert "QLabel#chip {\n    background-color:" in stylesheet
 
 
+def test_theme_has_distinct_detail_section_states() -> None:
+    from replyright_qt.styles.theme import get_stylesheet
+
+    stylesheet = get_stylesheet("light")
+    assert "QWidget#section-summary" in stylesheet
+    assert "QWidget#section-action" in stylesheet
+    assert "QWidget#section-risk" in stylesheet
+    assert "QWidget#section-draft" in stylesheet
+    assert "QLabel#empty-state-title" in stylesheet
+
+
+def test_native_ui_display_labels_are_human_readable() -> None:
+    from replyright_qt.widgets.conversation_detail import _display_action, _humanize_label
+    from replyright_qt.widgets.conversation_list import _humanize_label as row_label
+
+    assert _display_action("request_missing_information") == "Request missing information"
+    assert _humanize_label("vip_pre_arrival") == "VIP Pre Arrival"
+    assert _humanize_label("local-ml-classifier") == "Local ML Classifier"
+    assert row_label("travel_agent_vip") == "Travel Agent VIP"
+
+
 def test_sidebar_nav_uses_scroll_area_for_adaptive_height() -> None:
     """The nav stack should scroll instead of squeezing brand/profile assets."""
     source = Path("replyright_qt/widgets/sidebar_nav.py").read_text(encoding="utf-8")

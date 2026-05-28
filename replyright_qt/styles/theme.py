@@ -52,6 +52,10 @@ def get_stylesheet(mode: str = "light") -> str:
     login_card = "#ffffff" if mode == "light" else "#0f172a"
     login_root = "#0b1220" if mode == "light" else "#030712"
     field_border = "#cbd5e1" if mode == "light" else "#334155"
+    summary_bg = "#f8fafc" if mode == "light" else "#142033"
+    action_bg = "#f0fdf4" if mode == "light" else "#10251d"
+    risk_bg = "#fff7ed" if mode == "light" else "#2c1c13"
+    draft_bg = "#eef2ff" if mode == "light" else "#172046"
     return f"""
 QWidget {{
     font-family: {FONT_FAMILY};
@@ -360,6 +364,37 @@ QWidget#metric-box, QWidget#message-card, QWidget#settings-card, QWidget#kyc-car
     border-radius: 8px;
 }}
 
+QWidget#section-summary, QWidget#section-action, QWidget#section-risk, QWidget#section-draft {{
+    border-radius: 8px;
+    border: 1px solid {c["border"]};
+}}
+
+QWidget#section-summary {{
+    background-color: {summary_bg};
+}}
+
+QWidget#section-action {{
+    background-color: {action_bg};
+    border-color: {"#bbf7d0" if mode == "light" else "#1f6b45"};
+}}
+
+QWidget#section-risk {{
+    background-color: {risk_bg};
+    border-color: {"#fed7aa" if mode == "light" else "#9a4e1a"};
+}}
+
+QWidget#section-draft {{
+    background-color: {draft_bg};
+    border-color: {"#c7d2fe" if mode == "light" else "#33448a"};
+}}
+
+QWidget#section-summary QLabel,
+QWidget#section-action QLabel,
+QWidget#section-risk QLabel,
+QWidget#section-draft QLabel {{
+    background-color: transparent;
+}}
+
 QLabel#metric-label {{
     color: {muted};
     font-size: 11px;
@@ -375,6 +410,15 @@ QLabel#metric-value, QLabel#settings-title {{
 QLabel#summary-text {{
     color: {c["content_text"]};
     font-size: 13px;
+    line-height: 1.35;
+}}
+
+QLabel#empty-state-title {{
+    color: {muted};
+    font-size: 14px;
+    font-weight: 650;
+    padding: 24px;
+    background-color: transparent;
 }}
 
 QLabel#chip {{

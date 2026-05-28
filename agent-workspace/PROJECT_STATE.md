@@ -16,6 +16,7 @@ Completed Request classifier training is the current active work. Brian clarifie
 
 ## Current Release Context
 
+- 2026-05-28 native PySide6 UI polish pass completed: conversation list/detail labels, empty/loading/error states, and Summary/Action/Risk/Draft section styling were improved without Outlook mutation, sending, new features, or backend triage changes.
 - `v0.5.3` repaired lint/build lanes but failed the release job at `Security Lint (Installer Extraction)`.
 - `v0.5.4` (commit `62b0098`, tag pushed) fixed installer `.env` exclusion and the CCA false-positive, but still failed at `Security Lint (Installer Extraction)`.
 - `v0.5.5` also failed at `Security Lint (Installer Extraction)`.

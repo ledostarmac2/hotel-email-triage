@@ -1,5 +1,38 @@
 # Handoff Log
 
+## 2026-05-28 - Native PySide6 UI polish pass
+
+Summary:
+
+- Polished the native ReplyRight desktop UI without adding features, sending behavior, Outlook mutation, or backend triage changes.
+- Improved display-label normalization in the conversation list/detail pane so user-facing urgency, owner, category, risk, status, and recommended-action values avoid raw `snake_case` and preserve acronyms.
+- Tightened loading/empty/error states for the list, detail pane, and Qt API worker.
+- Added distinct Summary, Action, Risk, and Draft section styling in the conversation detail pane.
+
+Files changed:
+
+- `replyright_qt/api_client.py`
+- `replyright_qt/styles/theme.py`
+- `replyright_qt/widgets/conversation_detail.py`
+- `replyright_qt/widgets/conversation_list.py`
+- `tests/test_pyside6_no_browser_engine.py`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+- `agent-workspace/TASK_BOARD.md`
+- `agent-workspace/HANDOFFS.md`
+- `agent-workspace/AGENT_MESSAGES.md`
+
+Verification:
+
+- `python -m pytest tests/test_pyside6_no_browser_engine.py -q --timeout=60` - 14 passed.
+- `python -m py_compile replyright_qt/windows/main_window.py replyright_qt/widgets/conversation_list.py replyright_qt/widgets/conversation_detail.py replyright_qt/api_client.py` - passed.
+- `python -m py_compile replyright_qt/styles/theme.py` - passed.
+- `python -m pytest tests/ -x --timeout=60 -q --no-header` - attempted; stopped in `tests/test_secret_hygiene.py` because ignored `dist\ReplyRight\_internal\openai-2.37.0.dist-info\METADATA` contains the literal docs string `OPENAI_API_KEY`.
+
+Remaining work:
+
+- Brian should visually spot-check the native detail pane/list at normal and narrow-ish desktop sizes.
+
 ## 2026-05-28 - Draft Reply error hardening and local EXE rebuild
 
 Summary:

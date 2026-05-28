@@ -35,21 +35,51 @@ _ENGINE_DISPLAY = {
 }
 
 _RECOMMENDED_ACTION_DISPLAY = {
-    "reply_guest": "Reply to Guest",
+    "reply_guest": "Reply to guest",
     "loop_reservations": "Loop Reservations",
     "loop_front_office": "Loop Front Office",
     "loop_concierge": "Loop Concierge",
     "loop_housekeeping": "Loop Housekeeping",
     "loop_engineering": "Loop Engineering",
-    "escalate_manager": "Escalate to Manager",
-    "verify_payment_authorization": "Verify Payment Auth",
-    "review_folio": "Review Folio",
-    "check_reservation": "Check Reservation",
-    "request_missing_information": "Request Info",
-    "wait_for_guest": "Waiting on Guest",
-    "wait_for_internal_team": "Waiting on Team",
-    "no_action_likely": "No Action Likely",
+    "escalate_manager": "Escalate for review",
+    "verify_payment_authorization": "Verify payment authorization",
+    "review_folio": "Review folio",
+    "check_reservation": "Check reservation",
+    "request_missing_information": "Request missing information",
+    "wait_for_guest": "Waiting on guest",
+    "wait_for_internal_team": "Waiting on internal team",
+    "no_action_likely": "No action likely",
 }
+
+_ACRONYMS = {
+    "ai": "AI",
+    "api": "API",
+    "cca": "CCA",
+    "crm": "CRM",
+    "kyc": "KYC",
+    "ml": "ML",
+    "openai": "OpenAI",
+    "ota": "OTA",
+    "vip": "VIP",
+}
+
+
+def _humanize_label(value: object, fallback: str = "Not set") -> str:
+    text = str(value or "").strip()
+    if not text:
+        return fallback
+    text = re.sub(r"[_\-]+", " ", text)
+    text = re.sub(r"\s+", " ", text)
+    words = []
+    for word in text.split(" "):
+        lower = word.lower()
+        words.append(_ACRONYMS.get(lower, lower.capitalize()))
+    return " ".join(words)
+
+
+def _display_action(value: object) -> str:
+    key = str(value or "").strip()
+    return _RECOMMENDED_ACTION_DISPLAY.get(key, _humanize_label(key, "Not set"))
 
 
 def _strip_html(text: str) -> str:
@@ -133,7 +163,7 @@ class ConversationDetailWidget(QWidget):
 
         self._placeholder = QLabel("Select a conversation to review.")
         self._placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._placeholder.setStyleSheet("color: #98a2b3; font-size: 15px;")
+        self._placeholder.setObjectName("empty-state-title")
 
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
@@ -146,8 +176,8 @@ class ConversationDetailWidget(QWidget):
         content.setObjectName("detail-panel")
         content.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self._content_layout = QVBoxLayout(content)
-        self._content_layout.setContentsMargins(26, 22, 26, 26)
-        self._content_layout.setSpacing(16)
+        self._content_layout.setContentsMargins(28, 24, 28, 28)
+        self._content_layout.setSpacing(14)
         self._scroll.setWidget(content)
 
         root.addWidget(self._placeholder)
@@ -171,7 +201,7 @@ class ConversationDetailWidget(QWidget):
         self._clear_content()
         self._placeholder.hide()
         self._scroll.show()
-        self._content_layout.addWidget(self._muted("Loading conversation..."))
+        self._content_layout.addWidget(self._state_label("Loading conversation..."))
 
         self._worker = self._start_worker(
             self._client.get_email_detail,
@@ -192,7 +222,9 @@ class ConversationDetailWidget(QWidget):
 
     def _on_detail_error(self, message: str) -> None:
         self._clear_content()
-        self._content_layout.addWidget(self._error(f"Failed to load conversation: {message}"))
+        self._content_layout.addWidget(
+            self._error(f"We couldn't load this conversation. {message}")
+        )
 
     def _render(self, data: dict) -> None:
         email = data.get("email", data)
@@ -202,9 +234,9 @@ class ConversationDetailWidget(QWidget):
         title = QLabel(email.get("subject") or "(no subject)")
         title.setObjectName("detail-title")
         title.setWordWrap(True)
-        close_btn = QPushButton("x")
+        close_btn = QPushButton("Close")
         close_btn.setObjectName("secondary-btn")
-        close_btn.setFixedWidth(34)
+        close_btn.setFixedWidth(72)
         close_btn.clicked.connect(self.clear)
         header_row.addWidget(title, stretch=1)
         header_row.addWidget(close_btn)
@@ -279,31 +311,18 @@ class ConversationDetailWidget(QWidget):
         draft_btn.setMinimumWidth(108)
         draft_btn.clicked.connect(self._on_analyze)
 
-        more_btn = QPushButton("More")
-        more_btn.setObjectName("secondary-btn")
-        more_btn.setFixedHeight(30)
-
         row.addWidget(QLabel("Status"), 0, 0)
         row.addWidget(self._status_combo, 0, 1)
         row.addWidget(self._status_btn, 0, 2)
         row.addWidget(QLabel("Owner"), 0, 3)
         row.addWidget(self._owner_combo, 0, 4)
         row.addWidget(draft_btn, 1, 1)
-        row.addWidget(more_btn, 1, 2)
         row.addWidget(self._action_status, 1, 3, 1, 2)
         row.setColumnStretch(5, 1)
         self._content_layout.addLayout(row)
 
     def _render_analysis(self, email: dict) -> None:
-        hdr_row = QHBoxLayout()
-        header = QLabel("Triage Summary")
-        header.setObjectName("section-title")
-        edit_btn = QPushButton("Edit")
-        edit_btn.setObjectName("link-btn")
-        hdr_row.addWidget(header)
-        hdr_row.addStretch()
-        hdr_row.addWidget(edit_btn)
-        self._content_layout.addLayout(hdr_row)
+        section, section_layout = self._section("Summary", "section-summary")
 
         priority = email.get("urgency_score") or email.get("priority_level")
         try:
@@ -325,19 +344,19 @@ class ConversationDetailWidget(QWidget):
         engine = str(email.get("analysis_engine") or "unknown")
         engine_display = _ENGINE_DISPLAY.get(engine.lower(), engine.replace("-", " ").title())
         self._add_metric(grid, 3, 0, "Classification Source", engine_display)
-        action_key = str(email.get("recommended_action") or "")
-        action_display = _RECOMMENDED_ACTION_DISPLAY.get(action_key, action_key.replace("_", " ").title() or "—")
+        action_display = _display_action(email.get("recommended_action"))
         self._add_metric(grid, 3, 1, "Recommended Action", action_display, "metric-action")
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 1)
-        self._content_layout.addLayout(grid)
+        section_layout.addLayout(grid)
 
         summary = email.get("ai_summary") or email.get("summary")
         if summary:
             summary_lbl = QLabel(html.escape(str(summary)))
             summary_lbl.setWordWrap(True)
             summary_lbl.setObjectName("summary-text")
-            self._content_layout.addWidget(summary_lbl)
+            section_layout.addWidget(summary_lbl)
+        self._content_layout.addWidget(section)
 
         self._render_risk_flags(_as_list(email.get("risk_flags")))
         self._render_chip_list("Missing information", _as_list(email.get("missing_information")))
@@ -345,6 +364,7 @@ class ConversationDetailWidget(QWidget):
 
         draft = email.get("suggested_reply_draft")
         if draft:
+            draft_section, draft_layout = self._section("Draft reply", "section-draft")
             draft_box = QTextBrowser()
             draft_box.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth)
             draft_box.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -352,8 +372,8 @@ class ConversationDetailWidget(QWidget):
             draft_box.setMinimumHeight(110)
             draft_box.setMaximumHeight(220)
             draft_box.setObjectName("draft-box")
-            self._content_layout.addWidget(QLabel("Suggested Reply Draft"))
-            self._content_layout.addWidget(draft_box)
+            draft_layout.addWidget(draft_box)
+            self._content_layout.addWidget(draft_section)
 
     def _add_metric(self, grid: QGridLayout, row: int, col: int, label: str, value: str, object_name: str = "") -> None:
         box = QWidget()
@@ -364,7 +384,7 @@ class ConversationDetailWidget(QWidget):
         layout.setSpacing(4)
         label_widget = QLabel(label)
         label_widget.setObjectName("metric-label")
-        value_widget = QLabel(str(value).replace("_", " ").title())
+        value_widget = QLabel(_humanize_label(value))
         value_widget.setWordWrap(True)
         if object_name:
             value_widget.setObjectName(object_name)
@@ -397,8 +417,9 @@ class ConversationDetailWidget(QWidget):
         if category in {"Billing dispute", "Accessibility request"}:
             reasons.append(f"category: {category.lower()}")
         if reasons:
-            reason_lbl = QLabel("  |  ".join(reasons))
+            reason_lbl = QLabel("  |  ".join(_humanize_label(reason) for reason in reasons))
             reason_lbl.setObjectName("muted-label")
+            reason_lbl.setWordWrap(True)
             row.addWidget(reason_lbl)
         row.addStretch()
         self._content_layout.addWidget(banner)
@@ -406,40 +427,43 @@ class ConversationDetailWidget(QWidget):
     def _render_chip_list(self, label: str, values: list) -> None:
         if not values:
             return
+        section, layout = self._section(label, "section-action")
         row = QHBoxLayout()
-        row.addWidget(QLabel(label))
+        row.setSpacing(7)
         for value in values[:5]:
-            chip = QLabel(str(value))
+            chip = QLabel(_humanize_label(value))
             chip.setObjectName("chip")
             chip.setWordWrap(True)
             row.addWidget(chip)
         row.addStretch()
-        self._content_layout.addLayout(row)
+        layout.addLayout(row)
+        self._content_layout.addWidget(section)
 
     def _render_risk_flags(self, flags: list) -> None:
         if not flags:
             return
+        section, layout = self._section("Risk", "section-risk")
         row = QHBoxLayout()
-        lbl = QLabel("Risk flags")
-        lbl.setObjectName("risk-flags-label")
-        row.addWidget(lbl)
+        row.setSpacing(7)
         for flag in flags[:5]:
-            chip = QLabel(str(flag))
+            chip = QLabel(_humanize_label(flag))
             chip.setObjectName("risk-chip")
             chip.setWordWrap(True)
             row.addWidget(chip)
         row.addStretch()
-        self._content_layout.addLayout(row)
+        layout.addLayout(row)
+        self._content_layout.addWidget(section)
 
     def _render_steps(self, steps: list) -> None:
         if not steps:
             return
-        self._content_layout.addWidget(QLabel("Next Steps"))
+        section, layout = self._section("Action", "section-action")
         for step in steps[:6]:
-            item = QLabel(f"✓  {step}")
+            item = QLabel(f"- {str(step).replace('_', ' ').strip()}")
             item.setWordWrap(True)
             item.setObjectName("summary-text")
-            self._content_layout.addWidget(item)
+            layout.addWidget(item)
+        self._content_layout.addWidget(section)
 
     def _render_thread(self, messages: list[dict]) -> None:
         title = QLabel(f"Conversation Thread ({len(messages)})")
@@ -536,6 +560,17 @@ class ConversationDetailWidget(QWidget):
             combo.addItem(label, value)
         return combo
 
+    def _section(self, title: str, object_name: str) -> tuple[QWidget, QVBoxLayout]:
+        section = QWidget()
+        section.setObjectName(object_name)
+        layout = QVBoxLayout(section)
+        layout.setContentsMargins(14, 12, 14, 14)
+        layout.setSpacing(9)
+        header = QLabel(title)
+        header.setObjectName("section-title")
+        layout.addWidget(header)
+        return section, layout
+
     def _on_update_status(self) -> None:
         if not self._current_email_id:
             return
@@ -557,7 +592,7 @@ class ConversationDetailWidget(QWidget):
 
     def _on_status_error(self, message: str) -> None:
         self._status_btn.setEnabled(True)
-        self._action_status.setText(f"Status error: {message}")
+        self._action_status.setText(f"Couldn't update status. {message}")
 
     def _on_analyze(self) -> None:
         if not self._current_email_id:
@@ -567,7 +602,7 @@ class ConversationDetailWidget(QWidget):
             self._client.analyze_email,
             self._current_email_id,
             success=lambda _: self.load_email(self._current_email_id),
-            failure=lambda msg: self._action_status.setText(f"AI error: {msg}"),
+            failure=lambda msg: self._action_status.setText(f"Draft unavailable. {msg}"),
         )
 
     def _on_submit_feedback(self) -> None:
@@ -614,11 +649,18 @@ class ConversationDetailWidget(QWidget):
 
     def _on_feedback_error(self, message: str) -> None:
         self._submit_fb_btn.setEnabled(True)
-        self._fb_message.setText(f"Feedback error: {message}")
+        self._fb_message.setText(f"Couldn't save feedback. {message}")
 
     def _muted(self, text: str) -> QLabel:
         label = QLabel(text)
         label.setObjectName("muted-label")
+        label.setWordWrap(True)
+        return label
+
+    def _state_label(self, text: str) -> QLabel:
+        label = QLabel(text)
+        label.setObjectName("empty-state-title")
+        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         label.setWordWrap(True)
         return label
 

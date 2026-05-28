@@ -1,11 +1,19 @@
 # Current State
 
-Last updated: 2026-05-28 (native label highlight fix and local EXE rebuild)
+Last updated: 2026-05-28 (native PySide6 UI polish pass)
 
 ## Status
 
 - Product name is ReplyRight.
 - Current runnable app is `outlook_dashboard/` plus `run_desktop.py`.
+- 2026-05-28 native PySide6 UI polish pass:
+  - Improved the native conversation list and detail pane without adding user-facing features or changing backend triage behavior.
+  - Added shared display-label helpers so urgency/owner/category/risk/status/recommended-action labels avoid raw `snake_case` and preserve hotel acronyms such as VIP, CCA, KYC, ML, and OpenAI.
+  - Made list loading and empty states clearer, hiding stale rows while conversations load.
+  - Gave Summary, Action, Risk, and Draft sections distinct native card styling for easier scanning in the detail pane.
+  - Reworded local connection/timeout/failure states in the Qt API worker and detail pane to be less technical.
+  - Validation passed: `python -m py_compile replyright_qt/windows/main_window.py replyright_qt/widgets/conversation_list.py replyright_qt/widgets/conversation_detail.py replyright_qt/api_client.py`; `python -m py_compile replyright_qt/styles/theme.py`; `python -m pytest tests/test_pyside6_no_browser_engine.py -q --timeout=60`.
+  - Full suite was attempted with `python -m pytest tests/ -x --timeout=60 -q --no-header` and stopped at existing build-output secret hygiene noise in ignored `dist\ReplyRight\_internal\openai-2.37.0.dist-info\METADATA`, not in the PySide6 polish changes.
 - 2026-05-28 Draft Reply error hardening:
   - Hardened `/api/emails/{email_id}/analyze` so the single-email AI suggestion path falls back to a local draft instead of surfacing a raw internal server error when a provider fails.
   - If the generated draft cannot be saved locally, the endpoint now still returns the draft with a warning instead of losing the response.

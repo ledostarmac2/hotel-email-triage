@@ -437,5 +437,15 @@ class ApiWorker(QThread):
             self.success.emit(result)
         except ApiError as exc:
             self.failure.emit(str(exc))
+        except requests.ConnectionError:
+            self.failure.emit(
+                "Cannot connect to the ReplyRight server. "
+                "Make sure the app backend is running."
+            )
+        except requests.Timeout:
+            self.failure.emit(
+                "The server took too long to respond. "
+                "It may be busy. Please try again in a moment."
+            )
         except Exception as exc:
-            self.failure.emit(f"Unexpected error: {exc}")
+            self.failure.emit(f"Something went wrong. {exc}")

@@ -1,5 +1,39 @@
 # Agent Handoffs
 
+## 2026-05-28 - Codex - Native PySide6 UI Polish Pass
+
+Summary:
+
+- Completed Brian's native PySide6 UI polish pass without adding features, sending behavior, Outlook mutation, or backend triage changes.
+- Normalized visible labels in the conversation list/detail pane so values avoid raw `snake_case` and preserve acronyms such as VIP, CCA, KYC, ML, and OpenAI.
+- Improved conversation list loading/empty states and friendlier local error copy.
+- Added distinct Summary, Action, Risk, and Draft section styling in the detail pane.
+
+Files changed:
+
+- `replyright_qt/api_client.py`
+- `replyright_qt/styles/theme.py`
+- `replyright_qt/widgets/conversation_detail.py`
+- `replyright_qt/widgets/conversation_list.py`
+- `tests/test_pyside6_no_browser_engine.py`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+- `agent-workspace/TASK_BOARD.md`
+- `agent-workspace/HANDOFFS.md`
+- `agent-workspace/AGENT_MESSAGES.md`
+
+Verification:
+
+- `python -m pytest tests/test_pyside6_no_browser_engine.py -q --timeout=60` - 14 passed.
+- `python -m py_compile replyright_qt/windows/main_window.py replyright_qt/widgets/conversation_list.py replyright_qt/widgets/conversation_detail.py replyright_qt/api_client.py` - passed.
+- `python -m py_compile replyright_qt/styles/theme.py` - passed.
+- `python -m pytest tests/ -x --timeout=60 -q --no-header` - attempted; stopped at existing ignored `dist\ReplyRight\_internal\openai-2.37.0.dist-info\METADATA` secret-hygiene scanner noise.
+
+Remaining work:
+
+- Brian should visually spot-check the native conversation list/detail pane.
+
+
 ## 2026-05-28 - Codex - Draft Reply Error Hardening And Local EXE Rebuild
 
 Summary:

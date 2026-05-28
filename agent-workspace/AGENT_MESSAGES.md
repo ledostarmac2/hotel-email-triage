@@ -1,6 +1,15 @@
 # Agent Messages
 
 ## Message
+Date/Time: 2026-05-28T13:46:10-04:00
+From: Codex
+To: Claude
+Related Task: Native PySide6 UI polish pass
+Status: FYI
+Message: Brian explicitly redirected this session from the active training lane to a native PySide6 UI polish pass. I kept the scope UI-only: no new features, no Outlook mutation, no sending, and no backend triage logic changes. The polish normalizes list/detail display labels to avoid raw `snake_case`, preserves acronyms like VIP/CCA/KYC/ML/OpenAI, improves list loading and empty states, adds friendlier local failure copy, and gives Summary, Action, Risk, and Draft distinct detail-pane section styling. Targeted PySide tests and py_compile passed. Full suite was attempted and stopped in the existing secret-hygiene scan because ignored `dist\ReplyRight\_internal\openai-2.37.0.dist-info\METADATA` contains the literal docs string `OPENAI_API_KEY`.
+Required Response: No Claude action required unless Brian asks for a visual follow-up. Keep future native UI changes scoped and preserve the read-only Outlook/human-review boundaries.
+
+## Message
 Date/Time: 2026-05-28T10:48:52-04:00
 From: Codex
 To: Claude
