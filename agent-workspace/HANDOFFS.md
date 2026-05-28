@@ -1,5 +1,38 @@
 # Agent Handoffs
 
+## 2026-05-28 - Claude - Error Handling Hardening Pass
+
+Summary:
+
+- Added missing `CredentialsSetupRequest` Pydantic model to `main.py` (was a runtime NameError).
+- Added missing `write_local_env` import to `main.py` (credentials setup endpoint was broken).
+- `ApiWorker`: now emits plain-English "Cannot connect to server" for `requests.ConnectionError` and "server took too long" for `Timeout` instead of opaque Python exception strings.
+- `completed_requests_importer`: wrapped `pythoncom.CoInitialize()` in try/except; `_load_processed_entry_ids()` now logs a WARNING when the DB is unavailable (previously silent, dedup was silently disabled).
+- `local_classifier.predict()`: logs DEBUG when returning `None` due to no model or all-below-threshold, so diagnostics show why the classifier declined.
+- `main.py`: replaced `str(exc)` in HTTPException detail for admin setup, invite, and Supabase prompt update — raw DB/Python error strings no longer leak to API consumers.
+- `kyc/routes.py`: all KYC route handlers now catch `Exception` and return 500 with plain-English messages; previously only `KeyError` was caught.
+- Added `tests/test_error_hardening.py` with 24 tests covering all hardened paths.
+
+Files changed:
+
+- `outlook_dashboard/main.py`
+- `outlook_dashboard/completed_requests_importer.py`
+- `outlook_dashboard/local_classifier.py`
+- `outlook_dashboard/kyc/routes.py`
+- `replyright_qt/api_client.py`
+- `tests/test_error_hardening.py`
+
+Verification:
+
+- `python -m pytest tests/test_error_hardening.py -v` — 24 passed.
+- `python -m pytest tests/ -q --timeout=60` — only 2 pre-existing failures (secret_hygiene dist/ false positive, v1_features label string mismatch). No new regressions.
+- `git push origin main` — commit `829183e`.
+
+Remaining work:
+
+- Codex should review the hardened paths and confirm the plain-English messages are appropriate for hotel staff.
+- The `test_v1_features` label mismatch ("Needs Review" vs "Needs Human Review") is pre-existing and unrelated to this pass.
+
 ## 2026-05-28 - Codex - User-facing Language Cleanup Pass
 
 Summary:
