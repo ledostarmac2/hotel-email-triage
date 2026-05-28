@@ -61,7 +61,12 @@ def read_completed_requests(
 
     already_processed = _load_processed_entry_ids(db_path)
 
-    pythoncom.CoInitialize()
+    try:
+        pythoncom.CoInitialize()
+    except Exception as exc:
+        raise OutlookDesktopExportError(
+            f"Failed to initialize Outlook COM threading: {exc}"
+        ) from exc
     try:
         outlook = _get_outlook_app()
         ns = outlook.GetNamespace("MAPI")
@@ -261,7 +266,12 @@ def _load_processed_entry_ids(db_path: Path | None) -> set[str]:
                 "SELECT outlook_entry_id FROM completed_requests_log"
             ).fetchall()
             return {str(r["outlook_entry_id"]) for r in rows}
-    except Exception:
+    except Exception as exc:
+        _log.warning(
+            "completed_requests_importer: could not load processed entry IDs "
+            "(dedup unavailable, all emails will be treated as new): %s",
+            exc,
+        )
         return set()
 
 

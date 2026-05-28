@@ -37,7 +37,7 @@ from .auth import (
     send_invite_email,
     send_reset_email,
 )
-from .config import DATA_DIR, get_settings
+from .config import DATA_DIR, get_settings, write_local_env
 from .database import (
     admin_correction_stats,
     admin_low_confidence_emails,
@@ -520,6 +520,13 @@ class ResetPasswordRequest(BaseModel):
     new_password: str = Field(min_length=8)
 
 
+class CredentialsSetupRequest(BaseModel):
+    supabase_url: str = Field(min_length=1)
+    supabase_key: str = Field(min_length=1)
+    supabase_service_role_key: str = Field(min_length=1)
+    anthropic_api_key: str = Field(default="")
+
+
 @app.post("/api/auth/login")
 def api_login(payload: LoginRequest, request: Request):
     settings = get_settings()
@@ -594,7 +601,8 @@ def api_setup_admin(payload: SetupAdminRequest, request: Request):
         else:
             user_id = create_user(payload.email, payload.password, role="admin", db_path=settings.database_path)
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        _log.warning("api setup-admin: account creation failed: %s", exc)
+        raise HTTPException(status_code=400, detail="Could not create admin account. Check that the email is valid and try again.") from exc
     record_audit_event(
         action="auth.first_admin_setup",
         actor_user_id=None,
@@ -677,7 +685,8 @@ def api_invite(payload: InviteRequest, request: Request):
             db_path=settings.database_path,
         )
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        _log.warning("api invite: user creation failed for %s: %s", payload.email, exc)
+        raise HTTPException(status_code=400, detail="Could not create user account. The email may already be registered.") from exc
     token = create_reset_token(payload.email, settings.database_path, hours=24)
     if not token:
         raise HTTPException(status_code=500, detail="Could not generate invite token.")
@@ -1054,7 +1063,8 @@ def api_update_prompt(prompt_id: str, payload: PromptUpdateRequest, request: Req
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=str(exc)[:200]) from exc
+        _log.warning("api prompt update: Supabase request failed: %s", exc)
+        raise HTTPException(status_code=502, detail="Could not update prompt in Supabase. Check your connection and try again.") from exc
     # Refresh local cache so next Analyze call uses the new prompt immediately
     from .supabase_client import download_prompt_versions
     download_prompt_versions()

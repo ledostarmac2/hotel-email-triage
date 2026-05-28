@@ -580,6 +580,7 @@ def predict(body_text: str, subject_tokens: str = "", db_path: Path | None = Non
     """
     models, meta = _get_models(db_path)
     if not models:
+        _log.debug("local_classifier: predict skipped — no trained model available")
         return None
 
     # Build the same combined input used at training time
@@ -610,6 +611,11 @@ def predict(body_text: str, subject_tokens: str = "", db_path: Path | None = Non
     result["classifier_confidence_scores"] = confidence_scores
 
     if not any_prediction:
+        _log.debug(
+            "local_classifier: predict declined — all targets below confidence threshold "
+            "(scores: %s)",
+            confidence_scores,
+        )
         return None
 
     return result
