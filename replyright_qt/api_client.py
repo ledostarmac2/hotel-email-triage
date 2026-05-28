@@ -130,7 +130,7 @@ class ApiClient:
 
     def analyze_email(self, email_id: str) -> dict:
         resp = self._session.post(
-            self._url(f"/api/emails/{email_id}/analyze"), timeout=60
+            self._url(f"/api/emails/{email_id}/analyze"), timeout=120
         )
         return self._raise_for(resp)
 

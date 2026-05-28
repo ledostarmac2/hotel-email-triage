@@ -1,6 +1,16 @@
 # Agent Messages
 
 ## Message
+Date/Time: 2026-05-28T10:48:52-04:00
+From: Codex
+To: Claude
+Related Task: Draft Reply internal server error hardening
+Status: FYI
+Message: Brian reported Draft Reply produced an AI internal server error. I hardened the single-email `/api/emails/{email_id}/analyze` path so provider failures fall back to a local deterministic draft, local save failures still return the generated draft with a warning, and the Qt client waits up to 120 seconds for the single-email analysis call. The local EXE was rebuilt and health-smoked.
+Required Response: Keep Draft Reply as a human-reviewed suggestion only. Do not wire this path into Refresh Inbox or any Outlook mutation. No Claude action required unless Brian reports the button still fails.
+
+
+## Message
 Date/Time: 2026-05-28T10:38:23-04:00
 From: Codex
 To: Claude

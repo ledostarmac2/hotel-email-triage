@@ -6,6 +6,12 @@ Last updated: 2026-05-28 (native label highlight fix and local EXE rebuild)
 
 - Product name is ReplyRight.
 - Current runnable app is `outlook_dashboard/` plus `run_desktop.py`.
+- 2026-05-28 Draft Reply error hardening:
+  - Hardened `/api/emails/{email_id}/analyze` so the single-email AI suggestion path falls back to a local draft instead of surfacing a raw internal server error when a provider fails.
+  - If the generated draft cannot be saved locally, the endpoint now still returns the draft with a warning instead of losing the response.
+  - Increased the native Qt Draft Reply API timeout to 120 seconds.
+  - Rebuilt the local onedir executable at `dist\ReplyRight\ReplyRight.exe`; build metadata version `0.5.13`, commit `6192f9f7`, build date `2026-05-28T14:43:14Z`.
+  - Validation passed: `python -m py_compile outlook_dashboard\main.py replyright_qt\api_client.py`; `python -m pytest tests\test_api_workflow_pytest.py tests\test_safety_guardrails.py -q --timeout=60`; `.\build_exe.ps1`; `.\dist\ReplyRight\ReplyRight.exe --health-smoke`.
 - 2026-05-28 native sidebar responsive polish:
   - Fixed sidebar logo/profile clipping by preventing brand/profile/footer widgets from being squeezed and moving the queue list into a native scroll area.
   - Rebuilt the local onedir executable at `dist\ReplyRight\ReplyRight.exe`; build metadata version `0.5.13`, commit `a38a035d`, build date `2026-05-28T14:33:08Z`.

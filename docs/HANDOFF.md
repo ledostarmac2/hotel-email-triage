@@ -1,5 +1,37 @@
 # Handoff Log
 
+## 2026-05-28 - Draft Reply error hardening and local EXE rebuild
+
+Summary:
+
+- Hardened `/api/emails/{email_id}/analyze` so single-email AI/provider failures fall back to a local deterministic draft instead of surfacing a raw internal server error.
+- If the generated draft cannot be saved locally, the endpoint returns the draft with a warning instead of dropping it.
+- Increased the native Qt Draft Reply request timeout from 60 to 120 seconds.
+- Rebuilt the local onedir executable at `dist\ReplyRight\ReplyRight.exe`.
+
+Files changed:
+
+- `outlook_dashboard/main.py`
+- `replyright_qt/api_client.py`
+- `tests/test_api_workflow_pytest.py`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+- `agent-workspace/TASK_BOARD.md`
+- `agent-workspace/HANDOFFS.md`
+- `agent-workspace/AGENT_MESSAGES.md`
+
+Verification:
+
+- `python -m py_compile outlook_dashboard\main.py replyright_qt\api_client.py` - passed.
+- `python -m pytest tests\test_api_workflow_pytest.py tests\test_safety_guardrails.py -q --timeout=60` - 121 passed.
+- `.\build_exe.ps1` - passed and rebuilt `dist\ReplyRight\ReplyRight.exe`.
+- `.\dist\ReplyRight\ReplyRight.exe --health-smoke` - passed.
+
+Remaining work:
+
+- Brian should relaunch the rebuilt app and retry Draft Reply on a real conversation.
+
+
 ## 2026-05-28 - Native sidebar responsive polish and local EXE rebuild
 
 Summary:

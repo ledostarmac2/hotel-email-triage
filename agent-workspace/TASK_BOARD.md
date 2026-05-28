@@ -30,6 +30,7 @@ If the user explicitly bypasses Codex review, document that bypass in `agent-wor
 | Task | Owner | Status | Next Required Action |
 |---|---|---|---|
 | Prepare `v0.5.13` release with concrete payload env-file gate only | Codex | Done | Release published with `ReplyRightSetup-v0.5.13.exe`; Brian should installer-test. |
+| Harden Draft Reply single-email AI endpoint and rebuild local EXE | Codex | Done | Analyze endpoint now falls back to local draft or warning instead of raw 500; local EXE rebuilt and health-smoked. |
 | Fix native sidebar asset clipping and rebuild local EXE | Codex | Done | Sidebar nav now scrolls instead of squeezing logo/profile/footer assets; local EXE rebuilt and health-smoked. |
 | Fix native PySide label background highlights and rebuild local EXE | Codex | Done | Default `QLabel` backgrounds are transparent, regression test passed, local `dist\ReplyRight\ReplyRight.exe` rebuilt and health-smoked. |
 | Adopt mandatory coordination protocol | Claude | Approved by Codex | Protocol acknowledged in `AGENT_MESSAGES.md` at 2026-05-25T20:45:00-04:00. Done pending Codex confirmation. |

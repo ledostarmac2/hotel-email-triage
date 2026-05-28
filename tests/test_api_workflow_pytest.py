@@ -110,6 +110,85 @@ def test_export_inbox_returns_clear_503_on_non_windows(app_client: TestClient, m
     assert response.json()["detail"] == "Outlook COM integration is Windows-only."
 
 
+def test_analyze_email_returns_local_draft_when_ai_provider_fails(
+    app_client: TestClient,
+    monkeypatch,
+) -> None:
+    import outlook_dashboard.main as main
+
+    payload = {
+        "mailbox": "NYCWA_Reservations",
+        "folder": "Inbox",
+        "messages": [
+            {
+                "graph_message_id": "msg-ai-fallback-001",
+                "subject": "Question about dinner reservation",
+                "sender_name": "Jordan Guest",
+                "sender_email": "jordan@example.com",
+                "received_datetime": "2026-05-28T10:00:00",
+                "body_text": "Can you please help confirm my dinner reservation?",
+                "body_preview": "Can you please help confirm my dinner reservation?",
+                "conversation_id": "conv-ai-fallback-001",
+                "importance": "normal",
+                "has_attachments": False,
+            }
+        ],
+    }
+    import_response = app_client.post("/api/outlook-desktop/import-json", json=payload)
+    assert import_response.status_code == 200, import_response.text
+    selected_id = app_client.get("/api/emails").json()["emails"][0]["id"]
+
+    monkeypatch.setattr(
+        main,
+        "analyze_email",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("provider unavailable")),
+    )
+    response = app_client.post(f"/api/emails/{selected_id}/analyze")
+
+    assert response.status_code == 200, response.text
+    email = response.json()["email"]
+    assert email["suggested_reply_draft"].startswith("Dear")
+    assert "Waldorf Astoria" in email["suggested_reply_draft"]
+    assert email["analysis_error"] == "AI suggestion unavailable; returned local draft."
+
+
+def test_analyze_email_returns_generated_draft_if_local_save_fails(
+    app_client: TestClient,
+    monkeypatch,
+) -> None:
+    import outlook_dashboard.main as main
+
+    payload = {
+        "mailbox": "NYCWA_Reservations",
+        "folder": "Inbox",
+        "messages": [
+            {
+                "graph_message_id": "msg-save-fallback-001",
+                "subject": "Room availability question",
+                "sender_name": "Casey Guest",
+                "sender_email": "casey@example.com",
+                "received_datetime": "2026-05-28T10:05:00",
+                "body_text": "Do you have a king room available next Friday?",
+                "body_preview": "Do you have a king room available next Friday?",
+                "conversation_id": "conv-save-fallback-001",
+                "importance": "normal",
+                "has_attachments": False,
+            }
+        ],
+    }
+    import_response = app_client.post("/api/outlook-desktop/import-json", json=payload)
+    assert import_response.status_code == 200, import_response.text
+    selected_id = app_client.get("/api/emails").json()["emails"][0]["id"]
+
+    monkeypatch.setattr(main, "save_analysis", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("db locked")))
+    response = app_client.post(f"/api/emails/{selected_id}/analyze")
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["warning"] == "AI suggestion was generated but could not be saved locally."
+    assert payload["email"]["suggested_reply_draft"].startswith("Dear")
+
+
 def test_admin_invite_returns_manual_link_when_smtp_unconfigured(app_client: TestClient) -> None:
     response = app_client.post("/api/auth/invite", json={"email": "agent@example.com"})
 

@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from .ai import analyze_email, infer_feedback_corrections, triage_conversation, triage_email, urgency_score
+from .ai import analyze_email, heuristic_analysis, infer_feedback_corrections, triage_conversation, triage_email, urgency_score
 from .auth import (
     admin_setup_available,
     admin_user_exists,
@@ -1744,20 +1744,42 @@ def api_analyze_email(email_id: int) -> dict[str, object]:
     _log.info(
         "AI analyze requested: email_id=%s engine=%s",
         email_id,
-        "openai" if settings.openai_configured else "heuristic",
+        "claude" if settings.anthropic_configured else "openai" if settings.openai_configured else "heuristic",
     )
     try:
         analysis = analyze_email(email, settings)
     except Exception as exc:
         _log.error("AI analyze failed: email_id=%s error=%s", email_id, exc, exc_info=True)
-        raise
+        try:
+            analysis = heuristic_analysis(email, settings)
+            analysis["analysis_error"] = "AI suggestion unavailable; returned local draft."
+        except Exception as fallback_exc:
+            _log.error(
+                "AI analyze fallback failed: email_id=%s error=%s",
+                email_id,
+                fallback_exc,
+                exc_info=True,
+            )
+            raise HTTPException(
+                status_code=502,
+                detail="AI suggestion is temporarily unavailable. Please try again.",
+            ) from fallback_exc
     if analysis.get("analysis_error"):
         _log.warning("AI analyze completed with error: email_id=%s error=%s", email_id, analysis["analysis_error"])
     else:
         _log.info("AI analyze succeeded: email_id=%s engine=%s", email_id, analysis.get("analysis_engine"))
-    save_analysis(email_id, analysis, db_path=settings.database_path)
-    refreshed = get_email(email_id, db_path=settings.database_path)
-    return {"email": _decorate_email(refreshed or {})}
+    try:
+        save_analysis(email_id, analysis, db_path=settings.database_path)
+        refreshed = get_email(email_id, db_path=settings.database_path)
+        return {"email": _decorate_email(refreshed or {})}
+    except Exception as exc:
+        _log.error("AI analyze save failed: email_id=%s error=%s", email_id, exc, exc_info=True)
+        merged = dict(email)
+        merged.update(analysis)
+        return {
+            "email": _decorate_email(merged),
+            "warning": "AI suggestion was generated but could not be saved locally.",
+        }
 
 
 @app.post("/api/emails/{email_id}/feedback")
