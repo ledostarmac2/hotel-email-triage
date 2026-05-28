@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-05-28: Outside-Agent Training Requires Agent-Labeled Sanitized Examples
+
+Decision: When Brian explicitly asks Codex or Claude to "train the model" or "train the classifier," the outside agent must label sanitized Completed Request examples using its own model judgment before training the local classifier. `run_completed_pipeline()` and `heuristic_analysis()` remain zero-credit in-app/staging tools; they are not the final labeler for Brian's outside-agent training request.
+
+Rationale: Brian wants Codex/Claude to add model judgment during explicit outside-agent training while preserving the app runtime rule that Refresh Inbox and in-app training endpoints never call Claude/OpenAI/Google. Treating heuristic labels as agent-reviewed labels misstates the workflow and weakens classifier training quality.
+
+Consequences: Training handoffs must identify whether labels came from outside-agent judgment or deterministic heuristics. A workflow that only runs `run_completed_pipeline()` plus classifier `train()` is incomplete for an outside-agent training request unless a separate sanitized agent-labeling step happened. Sanitized storage, read-only Outlook behavior, raw-body purge, and duplicate-prevention metadata remain mandatory.
+
 ## 2026-05-20: Release Installer Excludes Runtime Secrets
 
 Decision: The GitHub release installer must not require or bundle `dist\ReplyRight\.env`. Release CI may create a temporary root `.env` for build-time smoke checks, but the installer payload excludes `.env` and ships only `sample.env` plus the app files. Runtime credentials must be provisioned outside the installer through ignored local files or machine/deployment environment.

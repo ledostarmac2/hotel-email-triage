@@ -1,172 +1,149 @@
-# Training the Classifier — Agent Runbook
+# Training the Classifier - Agent Runbook
 
-Last updated: 2026-05-25
+Last updated: 2026-05-28
 
-## What this document is
+## What This Document Is
 
-This is the authoritative step-by-step training workflow for any agent (Claude, Codex, or human) asked to "train the classifier" or "run training."  If you're asked to train the ReplyRight email classifier, follow this document exactly.
+This is the authoritative workflow for any agent asked to "train the model" or "train the classifier."
 
-## Overview
+There are two separate training paths. Do not merge them.
 
-The running app has four phases, always in this order:
+## Path A: In-App Zero-Credit Pipeline
 
-1. **Import** — pull ~1000 emails from the Outlook "Completed Request" folder into SQLite
-2. **Label** — heuristic analysis assigns urgency, owner, category, sentiment labels
-3. **Upload** — sanitized, redacted training examples are pushed to Supabase for review
-4. **Purge** — raw imported emails are deleted from SQLite (they are large and transient)
+The running app and FastAPI/admin training endpoints must remain zero-credit.
 
-After training examples are in Supabase and reviewed, the local classifier can be retrained from them.
+They may:
 
-When Brian explicitly tells Codex or Claude **"train the model"**, the agent may add an external agent-assisted review pass outside the running app. That means the agent uses its own model judgment to label or correct redacted/sanitized completed-request examples, writes only sanitized labels/examples back to the training store, retrains the local classifier, and purges raw imported bodies. This is not an in-app endpoint and is not part of Refresh Inbox.
+- Import completed local emails or read the Outlook `Completed Request` folder.
+- Run deterministic/local heuristic labels as staging labels.
+- Redact and compact examples.
+- Upload sanitized examples to Supabase with `human_reviewed=false`.
+- Train only from examples already marked reviewed.
 
-## Privacy and safety invariants (never violate)
+They must not:
 
-- Raw `body_text` is **never uploaded**. Only `body_redacted` is stored.
-- Full sender email is **never stored**. Only `sender_domain`.
-- Full subject is **never stored**. Only `subject_tokens`.
-- In-app training endpoints **never call external AI providers** (no Claude, OpenAI, Google AI).
-- Agent-assisted labeling is allowed only when Brian explicitly asks an agent to train the model. It must use redacted/sanitized content where possible and must not store raw bodies, full subjects, full sender emails, message IDs, reservation/payment identifiers, secrets, or private mailbox content in Supabase, docs, logs, or final responses.
-- Outlook messages are read-only: do not send, delete, archive, move, or mark-read any message.
+- Call Claude, OpenAI, Google AI, or any external model during Refresh Inbox.
+- Call Claude, OpenAI, Google AI, or any external model from in-app training endpoints.
+- Treat heuristic labels as final agent-reviewed labels.
 
-## Step 1: Import completed request emails
+`run_completed_pipeline()` belongs to this path. By itself, it does not satisfy Brian's outside-agent request to train the classifier because it uses `heuristic_analysis()` as the labeler. Heuristics are not the final labeler for outside-agent training.
 
-Call `run_completed_pipeline()` from `outlook_dashboard/completed_training_pipeline.py`.
+## Path B: Outside-Agent Assisted Training
 
-**Mailbox and folder:** The source is the **`NYCWA_Reservations`** shared Outlook mailbox, subfolder **`Completed Request`** (singular, not plural). This is the only folder the pipeline should pull from. Outlook must be open and the shared mailbox must be added to the profile.
+When Brian explicitly tells Codex or Claude to "train the model" or "train the classifier," use this path.
 
-**Via the admin API** (preferred when the app is running):
+Correct interpretation of "you classify": the outside agent labels sanitized examples using its own model judgment, then trains the local classifier from those agent-reviewed labels. The app runtime still never calls external AI from Refresh Inbox or training endpoints.
 
-```http
-POST /api/training/completed-pipeline
-{
-  "mailbox_name": "NYCWA_Reservations",
-  "batch_size": 1000
-}
-```
+Required steps:
 
-**Via Python** (for agent scripts):
+1. Import Completed Request emails that have not already been imported for training.
+2. Preserve duplicate-prevention metadata, such as stable fingerprints and `completed_requests_log` entries, so future runs skip already-imported messages.
+3. Redact and sanitize imported content before labeling.
+4. Use only safe labeling inputs:
+   - redacted body excerpt
+   - sender domain only, not full sender email
+   - safe subject tokens, not raw PII-heavy subjects
+   - safe extracted metadata
+   - stable fingerprint/import ledger key
+5. The outside agent labels the sanitized examples using its own model judgment.
+6. Labels must include at minimum:
+   - urgency
+   - owner
+   - category
+7. If the current training store/classifier supports them, also label:
+   - contact type
+   - risk flags
+   - status/no-action
+   - recommended action
+8. Store only sanitized labeled training examples.
+9. Train `outlook_dashboard.local_classifier` from agent-labeled/reviewed examples.
+10. Purge raw imported Completed Request bodies.
+11. Keep safe fingerprints/import ledger data so future runs skip already-imported items.
+12. Verify classifier status, version, metrics, targets, warnings, and class imbalance.
+
+## What Is Wrong
+
+If a handoff or script says "`run_completed_pipeline()` plus `train()` does exactly this," treat that as wrong unless there is a separate outside-agent labeling step where sanitized examples are actually labeled by Codex/Claude model judgment.
+
+Wrong for Brian's outside-agent request:
+
+- Calling only `run_completed_pipeline(...)`.
+- Using `heuristic_analysis(...)` as the labeling authority.
+- Letting the deterministic engine label examples and calling the job done.
+- Calling the app's training API and assuming the model was agent-trained.
+
+Allowed as reference/staging only:
+
+- Heuristic labels.
+- Existing local classifier guesses.
+- Deterministic rule outputs.
+
+The final agent-assisted labels must come from the outside agent reviewing sanitized examples.
+
+## Privacy and Safety Invariants
+
+- Raw `body_text` is never uploaded. Only redacted body excerpts or `body_redacted` may be stored.
+- Full sender email is never stored. Only `sender_domain`.
+- Full subject is never stored. Only `subject_tokens`.
+- Raw Outlook EntryIDs/message IDs are never stored in Supabase or label files; keep import ledger data local.
+- Reservation numbers, payment identifiers, card data, confirmation numbers, attachments, session cookies, and service-role keys must not appear in Supabase, docs, logs, or final responses.
+- Outlook is read-only: do not send, delete, archive, move, categorize, flag, or mark messages read/unread.
+- Redaction must not be weakened.
+
+## Current Tooling
+
+`scripts/agent_label_completed_requests.py` is the intended outside-agent helper once reviewed. Its shape is:
+
+1. `--import`: read unimported Completed Request messages, emit sanitized pending examples, and write duplicate-prevention ledger entries.
+2. Outside agent: read the sanitized pending examples and create a labeled JSON file using model judgment.
+3. `--upload`: upload sanitized labeled examples, train the classifier, and purge transient raw imports.
+
+If using another workflow, it must meet the same contract.
+
+## Verification Checklist
+
+When reviewing Claude's work or your own training pass, check:
+
+- Did the agent actually label sanitized examples using agent/model judgment?
+- Or did it incorrectly use `heuristic_analysis()` / `run_completed_pipeline()` as the final labeler?
+- Are runtime training endpoints still zero-credit?
+- Are raw imported bodies purged after labeling/training?
+- Is duplicate-prevention metadata retained?
+- Are only sanitized examples stored?
+- Are tests proving these boundaries?
+
+## In-App Pipeline Reference
+
+The zero-credit pipeline remains useful for staging unreviewed examples:
 
 ```python
 from outlook_dashboard.completed_training_pipeline import run_completed_pipeline
 
 result = run_completed_pipeline(
     mailbox_name="NYCWA_Reservations",
-    folder_name="Completed Request",  # singular — do not change
+    folder_name="Completed Request",
     batch_size=1000,
 )
-print(result)
-# {imported, labeled, uploaded, skipped, failed, purged_email_rows, purged_export_files, ...}
 ```
 
-`batch_size=1000` targets the 1000-email goal. Adjust if the folder has fewer emails.
+Use this only as the in-app/sanitized-import path. It is not the outside-agent labeling authority.
 
-The function does all four phases (import → label → upload → purge) in a single call.
+## Classifier Training Reference
 
-## Step 2: Verify the upload
-
-Check that examples were uploaded to Supabase:
+After reviewed labels exist:
 
 ```python
-from outlook_dashboard.completed_training_pipeline import completed_pipeline_status
-print(completed_pipeline_status())
-# {processed, uploaded, labeled, failed, skipped, ...}
-```
+from outlook_dashboard.local_classifier import train, get_classifier_status
 
-Or via the admin UI at `Settings → Training → Completed Requests Pipeline`.
-
-## Step 3: Agent-assisted review when Brian asks an agent to train the model
-
-If Brian's instruction is to Codex/Claude, not just the in-app admin UI, perform a review pass before retraining:
-
-1. Work from the sanitized examples produced by `run_completed_pipeline()` or from redacted local extracts.
-2. Use agent judgment to assign or correct the classifier targets: urgency, owner, category, status, missing-information, reply-required, and escalation/review signals.
-3. Preserve the same privacy contract as the in-app pipeline: only redacted body text, sender domain, subject tokens, labels, and safe metadata may be written back.
-4. Mark the resulting examples as agent-reviewed or human-review-needed in the safest available metadata field if the storage path supports it.
-5. Do not call the app's single-email Claude suggestion path for bulk labeling.
-
-If the agent cannot safely access Outlook, Supabase, or the local database, stop and report the blocker rather than inventing labels.
-
-## Step 4: Retrain the local classifier
-
-After examples are reviewed in Supabase, retrain:
-
-```http
-POST /api/training/train
-```
-
-Or via Python:
-
-```python
-from outlook_dashboard.local_classifier import train
 result = train()
-print(result)
+status = get_classifier_status()
 ```
 
-The classifier pulls reviewed examples from Supabase, trains on them, and saves the model to SQLite (`app_kv` table).  Minimum examples threshold: `MIN_TRAINING_EXAMPLES = 10`.
+Report aggregate counts and metrics only: imported/labeled/uploaded/skipped/failed/purged, classifier version, examples, target accuracies, warnings, and class imbalance.
 
-## Step 5: Verify the classifier
+## Related Docs
 
-```http
-GET /api/training/status
-```
-
-Returns classifier version, accuracy, training timestamp, and example counts.
-
-## What data is used for labeling
-
-The pipeline uses **heuristic analysis** (`outlook_dashboard/ai.py:heuristic_analysis`).  It reads:
-
-- Email subject and body for urgency keywords (URGENT, CEO, accessibility, legal, etc.)
-- Importance flag from Outlook
-- Sender domain
-- Thread history (latest-message extraction strips quoted replies)
-
-It does NOT call any external AI API from inside the running app. Default labels are deterministic given the email content. Agent-assisted labels are only produced by Codex/Claude when Brian explicitly asks an agent to train the model.
-
-The internal response signals used for owner detection:
-
-- Whether a reservations@ / frontdesk@ / management@ address appears in the thread
-- Reply speed indicators in the subject / body if present
-- How the internal staff member signed off
-
-## Where things live
-
-| Concern | Location |
-|---|---|
-| Import from Outlook | `outlook_dashboard/completed_requests_importer.py` |
-| Full pipeline (import+label+upload+purge) | `outlook_dashboard/completed_training_pipeline.py` |
-| Raw email pipeline (from local SQLite) | `outlook_dashboard/training_pipeline.py` |
-| Heuristic labeling | `outlook_dashboard/ai.py:heuristic_analysis()` |
-| Redaction | `outlook_dashboard/redaction.py:redact_sensitive_text()` |
-| Local classifier training | `outlook_dashboard/local_classifier.py:train()` |
-| Supabase upload | `outlook_dashboard/training_pipeline.py:_upload_example()` |
-| Audit log | `completed_requests_log` table in SQLite |
-| Training examples (cloud) | `training_examples` table in Supabase |
-
-## Purge behavior
-
-`purge_processed_training_emails()` is called automatically at the end of `run_completed_pipeline()`.  It:
-
-- Deletes all rows from `emails` WHERE `source = 'completed_requests'` (cascade-deletes `email_analysis`)
-- Deletes any `.msg` files under `data/outlook_exports/`
-- Does NOT touch `completed_requests_log` (audit trail is preserved)
-- Does NOT touch Supabase (uploaded training examples are preserved)
-
-Live triage emails (`status = 'New'`) are never touched — the WHERE clause filters by source, not status.
-
-## Troubleshooting
-
-| Symptom | Check |
-|---|---|
-| `imported: 0` | Outlook COM not available (Windows only); or folder name wrong |
-| `uploaded: 0, labeled > 0` | `SUPABASE_SERVICE_ROLE_KEY` not configured in `.env` |
-| `failed > 0` | Check `completed_requests_log` result column and runtime log |
-| `purged_email_rows: 0` | Emails were already purged, or none were imported |
-| Classifier accuracy low | Review rejected/unlabeled examples in Supabase before retraining |
-
-## Related docs
-
-- `docs/TRAINING_PIPELINE.md` — privacy contract and Supabase schema details
-- `docs/CLASSIFIER.md` — local classifier behavior, rollback, feature importance
-- `docs/PROPERTY_KNOWLEDGE.md` — property-specific knowledge items that inform labeling
-- `AGENTS.md` — full agent constraints and security rules
+- `docs/TRAINING_PIPELINE.md` - privacy contract and Supabase schema details.
+- `docs/CLASSIFIER.md` - local classifier behavior, rollback, feature importance.
+- `docs/PROPERTY_KNOWLEDGE.md` - property-specific knowledge items that inform labeling.
+- `AGENTS.md` - agent constraints and security rules.

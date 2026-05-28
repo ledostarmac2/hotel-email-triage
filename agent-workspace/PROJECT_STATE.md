@@ -1,6 +1,6 @@
 # Agent Workspace Project State
 
-Last updated: 2026-05-25
+Last updated: 2026-05-28
 
 ## Active Source Of Truth
 
@@ -12,7 +12,7 @@ Last updated: 2026-05-25
 
 ## Current Active Task
 
-`v0.5.13` release is published. Next active work is Brian installer testing plus any follow-up fixes from that test pass.
+Completed Request classifier training is the current active work. Brian clarified that outside-agent training requires Codex/Claude model-judgment labels on sanitized examples; heuristic-only `run_completed_pipeline()` output is staging data, not completed outside-agent training. Codex has started labeling the 500-row `agent_pending` batch with outside-agent judgment.
 
 ## Current Release Context
 
@@ -28,6 +28,10 @@ Last updated: 2026-05-25
 - `v0.5.12` reached the release job but still failed at `Security Lint (Installer Extraction)` after source lint, EXE build, health smoke, env purge, and installer build passed.
 - `v0.5.13` succeeded end-to-end on 2026-05-25/26: lint, docker-build, build-exe, release EXE build, health smoke, staged env purge, installer build, installer payload env-file audit, release smoke gate, and GitHub Release creation all passed.
 - Published installer asset: `ReplyRightSetup-v0.5.13.exe`.
+- Latest local classifier version after Codex outside-agent retrain: `20260528T141356Z`.
+- Current training warning: owner and category CV are `insufficient_data` because the agent-labeled slices introduced rare classes with too few examples for cross-validation.
+- Current local Completed Request ledger includes 500 `agent_pending` rows. Codex labeled/uploaded 86 rows from the pending batch, representing 73 unique fingerprints; continue labeling more of this batch before another Completed Request import.
+- Training contract update: outside-agent training must include an actual sanitized agent-labeling step; app runtime and training endpoints remain zero-credit.
 - `agent_comms/` retired as of 2026-05-25; `agent-workspace/AGENT_MESSAGES.md` is the active coordination channel.
 - Docker CI restored with root `Dockerfile` and `docker-compose.yml`.
 - Do not commit local runtime files, `.env`, databases, build outputs, or packaged binaries.

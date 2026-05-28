@@ -41,6 +41,8 @@ data/
 labeling/inbox/*.json
 labeling/Claude/*.json
 labeling/ChatGPT/*.json
+labeling/agent_batches/*.json
+labeling/runs/*.json
 
 build/
 dist/

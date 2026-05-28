@@ -9,6 +9,8 @@ def test_training_workflow_doc_exists_and_references_canonical_sources() -> None
     assert "run_completed_pipeline" in text
     assert "docs/TRAINING_PIPELINE.md" in text
     assert "never calls external AI" in text.lower() or "never call" in text.lower()
+    assert "outside agent labels sanitized examples using its own model judgment" in text
+    assert "not the final labeler" in text
     # The training/ folder has been removed; confirm it's gone
     assert not Path("training").exists(), "training/ folder should be deleted"
 

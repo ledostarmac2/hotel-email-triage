@@ -38,10 +38,20 @@ Before ending a session:
 - Update task status if it changed.
 - Add a direct message to Codex in `agent-workspace/AGENT_MESSAGES.md`.
 - Include tests/checks run and the next required action.
-- Run the **Mandatory Consistency Checklist** in `agent-workspace/AGENT_RULES.md` and update any affected files.
+- Run the Mandatory Consistency Checklist in `agent-workspace/AGENT_RULES.md` and update any affected files.
 
 ## Coordination Channel
 
 Use `agent-workspace/AGENT_MESSAGES.md` for all direct Codex messages.
-Do NOT use `agent_comms/from_claude.md` — that channel is retired (2026-05-25).
+Do not use `agent_comms/from_claude.md`; that channel is retired as of 2026-05-25.
 
+## Training the Classifier
+
+When Brian asks Claude to "train the model" or "train the classifier," follow `docs/TRAINING_WORKFLOW.md`.
+
+Critical distinction:
+
+- In-app training endpoints stay zero-credit and must not call Claude/OpenAI/Google.
+- Outside-agent training requires Claude to label sanitized Completed Request examples using Claude's own model judgment before training the local classifier.
+
+Do not claim training is complete by only running `run_completed_pipeline()`, `heuristic_analysis()`, or an app training endpoint. Those are deterministic/staging paths. For Brian's outside-agent request, sanitized examples must be labeled by the outside agent, only sanitized labeled examples may be stored, raw imported bodies must be purged, and duplicate-prevention metadata must be preserved.

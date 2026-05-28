@@ -1,5 +1,143 @@
 # Handoff Log
 
+## 2026-05-28 - Native PySide label highlight fix and local EXE rebuild
+
+Summary:
+
+- Fixed the dark rectangular highlight/strip behind plain text in the native PySide6 Settings and Conversation Detail views by making default `QLabel` backgrounds transparent in the shared theme.
+- Kept intentional badge/chip backgrounds intact and added a regression test for the theme contract.
+- Rebuilt the local onedir executable at `dist\ReplyRight\ReplyRight.exe`.
+
+Files changed:
+
+- `replyright_qt/styles/theme.py`
+- `tests/test_pyside6_no_browser_engine.py`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+- `agent-workspace/TASK_BOARD.md`
+- `agent-workspace/HANDOFFS.md`
+- `agent-workspace/AGENT_MESSAGES.md`
+
+Verification:
+
+- `python -m py_compile replyright_qt\styles\theme.py replyright_qt\widgets\conversation_detail.py replyright_qt\widgets\settings_panel.py` - passed.
+- `python -m pytest tests\test_pyside6_no_browser_engine.py -q --timeout=60` - 11 passed.
+- `.\build_exe.ps1` - passed and rebuilt `dist\ReplyRight\ReplyRight.exe`.
+- `.\dist\ReplyRight\ReplyRight.exe --health-smoke` - passed.
+
+Remaining work:
+
+- Brian should visually confirm the rebuilt app no longer shows the unwanted text highlight strips.
+
+
+## 2026-05-28 - Continued outside-agent classifier training
+
+Summary:
+
+- Used the existing `labeling/agent_batches/20260528T125423Z_pending.json` sanitized batch; did not run another Outlook import.
+- Labeled 86 sanitized rows with Codex/outside-agent model judgment, representing 73 unique fingerprints after duplicate/thread collisions.
+- Uploaded the labels as agent-reviewed sanitized training examples through `scripts/agent_label_completed_requests.py`.
+- Retrained the local classifier after each controlled labeling pass. Latest classifier version: `20260528T141356Z`.
+- Latest classifier training set: 565 examples total, 527 Supabase reviewed + 38 local/bootstrap.
+- Current metrics/warnings: urgency CV accuracy 49.02% and low; owner/category CV unavailable with `insufficient_data` warnings because rare classes now have too few examples.
+- Purge step ran; no transient raw email rows/files were present to delete. Duplicate-prevention ledger remains intact.
+- Patched helper output so unavailable negative CV sentinel values print as "accuracy unavailable" instead of `-100%`.
+
+Files changed:
+
+- `.gitignore`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+- `agent-workspace/PROJECT_STATE.md`
+- `agent-workspace/TASK_BOARD.md`
+- `agent-workspace/HANDOFFS.md`
+- `agent-workspace/AGENT_MESSAGES.md`
+- `scripts/agent_label_completed_requests.py`
+- `tests/test_agent_training_workflow_contract.py`
+
+Verification:
+
+- `python -m pytest tests\test_agent_training_workflow_contract.py tests\test_pipeline_docs_contract.py tests\test_completed_training_pipeline.py tests\test_training_pipeline.py tests\test_labeling_workflow.py tests\test_diagnostics_contract.py -q --timeout=60` - passed.
+- `python -m py_compile scripts\agent_label_completed_requests.py` - passed.
+- Classifier status checked with `get_classifier_status()`.
+
+Remaining work:
+
+- Continue labeling the pending sanitized batch in controlled slices, prioritizing rare owner/category classes enough to restore owner/category cross-validation.
+- Do not run another Completed Request import until this pending batch is resolved or intentionally abandoned with a documented ledger decision.
+
+## 2026-05-28 - Outside-agent training contract clarified
+
+Summary:
+
+- Codified Brian's clarification that outside-agent "train the model/classifier" requests require Codex/Claude to label sanitized Completed Request examples using agent model judgment.
+- Made clear that `run_completed_pipeline()` and `heuristic_analysis()` are zero-credit staging/in-app paths and are not enough by themselves for Brian's outside-agent training workflow.
+- Updated agent guidance and training docs so runtime training endpoints remain zero-credit while outside agents can label sanitized examples only when Brian explicitly asks.
+- Repaired `scripts/agent_label_completed_requests.py` so new batches use the active taxonomy constants, validate labels before upload, and print current classifier train-result shapes.
+- Added tests that lock the distinction into docs/helper behavior.
+
+Files changed:
+
+- `AGENTS.md`
+- `CLAUDE.md`
+- `docs/TRAINING_WORKFLOW.md`
+- `docs/TRAINING_PIPELINE.md`
+- `docs/DECISIONS.md`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+- `agent-workspace/PROJECT_STATE.md`
+- `agent-workspace/TASK_BOARD.md`
+- `agent-workspace/DECISIONS.md`
+- `agent-workspace/HANDOFFS.md`
+- `agent-workspace/AGENT_MESSAGES.md`
+- `scripts/agent_label_completed_requests.py`
+- `tests/test_agent_training_workflow_contract.py`
+- `tests/test_pipeline_docs_contract.py`
+
+Verification:
+
+- `python -m pytest tests\test_agent_training_workflow_contract.py tests\test_pipeline_docs_contract.py -q --timeout=60` - passed.
+- `python -m py_compile scripts\agent_label_completed_requests.py` - passed.
+
+Remaining work:
+
+- Claude must resolve the existing 500-row `agent_pending` batch by labeling/uploading sanitized examples or documenting recovery.
+- Future training handoffs must identify whether labels came from outside-agent judgment or deterministic heuristics.
+
+## 2026-05-28 - Completed Request classifier retrain
+
+Summary:
+
+- Ran the read-only Completed Request training import for mailbox `NYCWA_Reservations`, folder `Completed Request`.
+- Import result: imported 1000, labeled 993, uploaded 993 sanitized examples, skipped 7, failed 0.
+- Purged 2283 local completed-request email rows after sanitized upload.
+- Cumulative local Completed Request audit status after Codex import was processed 3833, uploaded/labeled 3241, dumped 540, skipped 52, failed 0.
+- Follow-up observation: a later ledger check showed 500 additional `agent_pending` entries and a pending sanitized batch under `labeling/agent_batches/`; these appear to be concurrent Claude/agent work and need reconciliation before another import cycle.
+- Codex reviewed 20 sanitized unreviewed examples and marked only those examples `human_reviewed=true` with `labeling_engine=codex-agent-reviewed-20260528`.
+- Retrained local classifier version `20260528T125119Z` from 493 examples total: 455 Supabase reviewed + 38 local/bootstrap.
+- CV accuracy after retrain: urgency 55.77%, owner 71.61%, category 45.03%.
+- Added `labeling/agent_batches/*.json` to `.gitignore` so sanitized agent batch files are not accidentally committed.
+
+Files changed:
+
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+- `.gitignore`
+- `agent-workspace/PROJECT_STATE.md`
+- `agent-workspace/TASK_BOARD.md`
+- `agent-workspace/HANDOFFS.md`
+- `agent-workspace/AGENT_MESSAGES.md`
+
+Verification:
+
+- `python -m pytest tests\test_completed_training_pipeline.py tests\test_training_pipeline.py tests\test_labeling_workflow.py tests\test_diagnostics_contract.py -q --timeout=60` - passed.
+
+Remaining work:
+
+- Continue controlled sanitized review before the next retrain. Do not bulk-approve the remaining unreviewed queue.
+- Resolve the 500-entry `agent_pending` batch before another Completed Request import/retrain cycle.
+- Category model quality remains the weakest v1 training gate.
+
 ## 2026-05-25 - v0.5.13 release published
 
 Summary:

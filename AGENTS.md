@@ -118,23 +118,21 @@ After meaningful work:
 When Brian says **"train the model"** or **"train the classifier"**, follow `docs/TRAINING_WORKFLOW.md` exactly. The important split is:
 
 - The running app and in-app endpoints remain zero-credit and never call Claude/OpenAI/Google during Refresh Inbox or training endpoints.
-- Codex/Claude may perform an explicit agent-assisted labeling/review pass outside the running app when Brian directly asks an agent to train the model. The agent uses its model judgment on redacted/sanitized completed-request content, writes only sanitized labels/examples, retrains the local classifier, and purges raw imported bodies.
+- Codex/Claude must perform an explicit agent-assisted labeling pass outside the running app when Brian directly asks an agent to train the model. The agent uses its own model judgment on redacted/sanitized completed-request content, writes only sanitized labels/examples, retrains the local classifier, and purges raw imported bodies.
 
-Short version:
+Correct outside-agent workflow:
 
-1. **Import + label + upload + purge** in one call:
-   ```python
-   from outlook_dashboard.completed_training_pipeline import run_completed_pipeline
-   result = run_completed_pipeline(mailbox_name="<mailbox>", batch_size=1000)
-   ```
-   Or via the admin API: `POST /api/training/completed-pipeline`
+1. Import unprocessed emails from Outlook `"Completed Request"` without mutating Outlook.
+2. Preserve duplicate-prevention metadata such as stable fingerprints and `completed_requests_log` entries.
+3. Redact/sanitize content before labeling.
+4. Label only safe inputs: redacted body excerpt, sender domain, subject tokens, safe metadata, and stable fingerprint/import key.
+5. Use the outside agent's model judgment as the labeling authority. Required labels are urgency, owner, and category. Add contact type, risk flags, status/no-action, and `recommended_action` when supported.
+6. Store only sanitized labeled training examples.
+7. Train `outlook_dashboard.local_classifier` from agent-reviewed examples.
+8. Purge raw imported Completed Request bodies, while preserving safe duplicate-prevention metadata.
+9. Verify classifier status, version, metrics, targets, warnings, and class imbalance.
 
-2. **Retrain** after examples are reviewed in Supabase:
-   ```python
-   from outlook_dashboard.local_classifier import train
-   train()
-   ```
-   Or via the admin API: `POST /api/training/train`
+`run_completed_pipeline()` is not, by itself, Brian's requested agent-assisted training workflow. It is the zero-credit in-app/sanitized-import pipeline and uses `heuristic_analysis()` labels. Those heuristic labels can be a reference or staging signal, but they are not the final labeler when Brian tells Codex or Claude to train the classifier.
 
 Key constraints:
 - In-app training endpoints **never call external AI** (no Claude, OpenAI, Google).

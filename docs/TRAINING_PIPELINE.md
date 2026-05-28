@@ -1,12 +1,14 @@
 # Training Pipeline
 
-Last updated: 2026-05-20
+Last updated: 2026-05-28
 
 ## Purpose
 
 ReplyRight's training pipeline turns completed emails into privacy-preserving, labeled training examples for the local classifier.
 
-The in-app pipeline is zero-credit. It uses local heuristic or existing `email_analysis` labels, redacts and compacts the latest message, uploads sanitized records to Supabase, and leaves human/agent review as the quality gate.
+The in-app pipeline is zero-credit. It uses local heuristic or existing `email_analysis` labels as staging labels, redacts and compacts the latest message, uploads sanitized records to Supabase, and leaves human/agent review as the quality gate.
+
+When Brian explicitly asks an outside agent to "train the model" or "train the classifier," that outside agent must label sanitized examples using its own model judgment. The app's deterministic heuristic labels can be a reference signal, but they are not the final labeler for Brian's agent-assisted training workflow.
 
 ## Runtime Components
 
@@ -21,11 +23,11 @@ The in-app pipeline is zero-credit. It uses local heuristic or existing `email_a
 ```text
 Completed local email or Completed Request folder
   -> latest-message cleanup
-  -> local heuristic/existing analysis labels
+  -> local heuristic/existing analysis labels as staging labels
   -> redact_sensitive_text()
   -> compact subject tokens + body_redacted
-  -> upload to Supabase training_examples with service-role key
-  -> human or agent-assisted review
+  -> upload to Supabase training_examples with service-role key, usually unreviewed
+  -> human review or outside-agent labeling/review on sanitized examples
   -> train local classifier from reviewed examples
 ```
 
@@ -109,7 +111,23 @@ Do not print passwords, cookies, or service-role keys.
 
 ## Agent-Assisted Review
 
-Brian may use Codex or Claude Code outside the running app to inspect sanitized examples and grade labels. Those reviewed labels should be written back through the review/Supabase workflow. ReplyRight itself should not spend Anthropic platform credits for training.
+Brian may use Codex or Claude outside the running app to inspect sanitized examples and produce labels. This is the required path when Brian tells an outside agent to "train the model" or "train the classifier."
+
+Agent-assisted review means:
+
+- The outside agent labels sanitized examples using model judgment.
+- Safe inputs only: redacted body excerpt, sender domain, subject tokens, safe metadata, and stable fingerprint/import key.
+- Required labels: urgency, owner, and category.
+- Optional labels where supported: contact type, risk flags, status/no-action, and `recommended_action`.
+- The reviewed labels are written back through the review/Supabase workflow or a reviewed agent-training helper.
+
+It does not mean:
+
+- Calling `run_completed_pipeline()` and stopping.
+- Treating `heuristic_analysis()` labels as the final label authority.
+- Calling the app's training endpoint and assuming agent-assisted training happened.
+
+ReplyRight itself should not spend Anthropic/OpenAI/Google platform credits for training endpoints.
 
 ## Human Review
 

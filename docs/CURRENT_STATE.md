@@ -1,11 +1,31 @@
 # Current State
 
-Last updated: 2026-05-25 (deterministic recommended_action + operational queues)
+Last updated: 2026-05-28 (native label highlight fix and local EXE rebuild)
 
 ## Status
 
 - Product name is ReplyRight.
 - Current runnable app is `outlook_dashboard/` plus `run_desktop.py`.
+- 2026-05-28 native PySide6 visual polish:
+  - Fixed the dark rectangular background strips behind plain text in Settings and Conversation Detail by making default `QLabel` backgrounds transparent in the shared Qt theme.
+  - Kept intentional badge/chip backgrounds intact with regression coverage.
+  - Rebuilt the local onedir executable at `dist\ReplyRight\ReplyRight.exe`; build metadata version `0.5.13`, commit `08c1a5a0`, build date `2026-05-28T14:22:40Z`.
+  - Validation passed: `python -m py_compile replyright_qt\styles\theme.py replyright_qt\widgets\conversation_detail.py replyright_qt\widgets\settings_panel.py`; `python -m pytest tests\test_pyside6_no_browser_engine.py -q --timeout=60`; `.\build_exe.ps1`; `.\dist\ReplyRight\ReplyRight.exe --health-smoke`.
+- 2026-05-28 agent-assisted training contract clarification:
+  - Brian clarified that outside-agent requests to "train the model/classifier" require Codex/Claude to label sanitized Completed Request examples using agent model judgment; `run_completed_pipeline()` and `heuristic_analysis()` alone are not enough.
+  - Updated `AGENTS.md`, `CLAUDE.md`, `docs/TRAINING_WORKFLOW.md`, `docs/TRAINING_PIPELINE.md`, and decision logs to preserve the split: app endpoints remain zero-credit; outside agents may label sanitized examples only when Brian explicitly asks.
+  - Repaired the draft `scripts/agent_label_completed_requests.py` helper so new pending batches use the live taxonomy from `outlook_dashboard/taxonomy.py`, validate label values before upload, and print current `local_classifier.train()` result shapes correctly.
+  - Added contract tests in `tests/test_agent_training_workflow_contract.py` so the docs/helper cannot drift back to heuristic-only "training."
+- 2026-05-28 Completed Request training pass:
+  - Codex started the clarified outside-agent training workflow on the pending 500-row sanitized batch. Codex labeled 86 sanitized rows using outside-agent model judgment, representing 73 unique fingerprints after duplicate/thread collisions, uploaded them as `human_reviewed=true` agent-labeled examples, and retrained the classifier.
+  - Latest classifier version is `20260528T141356Z`, trained from 565 examples total (527 Supabase reviewed + 38 local/bootstrap). Current warning: owner and category cross-validation are unavailable because newly introduced rare classes do not yet have enough examples.
+  - Current target metrics: urgency 49.02% CV accuracy; owner/category status `insufficient_data`. Continue labeling more sanitized examples, especially rare owner/category classes, before using the classifier as a v1 quality signal.
+  - Codex ran the read-only Completed Request import against mailbox `NYCWA_Reservations`, folder `Completed Request`: imported 1000, labeled 993 with the zero-credit heuristic path, uploaded 993 sanitized examples, skipped 7, failed 0, and purged 2283 local completed-request email rows afterward.
+  - Cumulative local Completed Request audit status after Codex import was processed 3833, uploaded/labeled 3241, dumped 540, skipped 52, failed 0.
+  - A later ledger check showed 500 additional entries marked `agent_pending` with no matching upload increase, plus an untracked pending sanitized batch under `labeling/agent_batches/`. Treat those as pending Claude/agent work until labels are reviewed and uploaded.
+  - Codex performed a controlled agent review on 20 sanitized unreviewed examples and marked only those examples `human_reviewed=true` with `labeling_engine=codex-agent-reviewed-20260528`.
+  - Retrained the local classifier to version `20260528T125119Z` using 493 examples total (455 Supabase reviewed + 38 local/bootstrap). CV accuracy: urgency 55.77%, owner 71.61%, category 45.03%.
+  - Warning: category accuracy is low after retrain because the live reviewed Supabase set available to this environment is 455 examples, not the older 578-count model metadata from `20260525T200024Z`. Continue controlled review before relying on category predictions for v1 decisions.
 - 2026-05-25 release audit follow-up:
   - `v0.5.10` still failed at `Security Lint (Installer Extraction)` even though lint, docker-build, build-exe, health smoke, runtime env purge, and installer build passed.
   - Follow-up release target `0.5.11` keeps `.env`/`*.env` in the staged payload as a hard failure, but makes the broader payload scanner genuinely warning-only under GitHub PowerShell native-command behavior.

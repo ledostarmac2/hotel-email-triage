@@ -91,3 +91,14 @@ def test_main_window_auto_refreshes_inbox_once_on_startup() -> None:
     assert "_auto_sync_started" in load_inbox_block
     assert "QTimer.singleShot" in load_inbox_block
     assert "self._on_sync" in load_inbox_block
+
+
+def test_theme_makes_plain_labels_transparent() -> None:
+    """Plain QLabel text should not paint dark strips behind settings/detail copy."""
+    from replyright_qt.styles.theme import get_stylesheet
+
+    stylesheet = get_stylesheet("dark")
+    assert "QLabel {\n    background-color: transparent;\n}" in stylesheet
+    # Intentional badge/chip backgrounds should remain explicitly styled.
+    assert "QLabel#badge-urgency-1 { background-color:" in stylesheet
+    assert "QLabel#chip {\n    background-color:" in stylesheet

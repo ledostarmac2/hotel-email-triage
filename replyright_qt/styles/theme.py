@@ -60,6 +60,10 @@ QWidget {{
     background-color: {c["content_bg"]};
 }}
 
+QLabel {{
+    background-color: transparent;
+}}
+
 QWidget#sidebar {{
     background-color: {c["sidebar_bg"]};
     border-right: 1px solid #061025;
