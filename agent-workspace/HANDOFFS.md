@@ -1,5 +1,44 @@
 # Agent Handoffs
 
+## 2026-05-28 - Codex - User-facing Language Cleanup Pass
+
+Summary:
+
+- Completed Brian's language cleanup pass without changing backend triage logic, storage values, Outlook behavior, sending, or dependencies.
+- Added shared PySide6 display-label helpers for action/status/source/role/metadata values.
+- Cleaned visible native UI wording across list/detail, filters, sidebar, admin/status/training tools, KYC, settings, and first-run setup.
+- Updated `docs/OPERATIONS_GUIDE.md` with the operator-facing action/source labels.
+
+Files changed:
+
+- `replyright_qt/display_labels.py`
+- `replyright_qt/widgets/admin_panel.py`
+- `replyright_qt/widgets/conversation_detail.py`
+- `replyright_qt/widgets/conversation_list.py`
+- `replyright_qt/widgets/filter_bar.py`
+- `replyright_qt/widgets/kyc_panel.py`
+- `replyright_qt/widgets/settings_panel.py`
+- `replyright_qt/widgets/sidebar_nav.py`
+- `replyright_qt/windows/credentials_setup_window.py`
+- `docs/OPERATIONS_GUIDE.md`
+- `tests/test_pyside6_no_browser_engine.py`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+- `agent-workspace/PROJECT_STATE.md`
+- `agent-workspace/TASK_BOARD.md`
+- `agent-workspace/HANDOFFS.md`
+- `agent-workspace/AGENT_MESSAGES.md`
+
+Verification:
+
+- `python -m pytest tests/test_pyside6_no_browser_engine.py -q --timeout=60` - 14 passed.
+- `python -m py_compile replyright_qt/display_labels.py replyright_qt/windows/main_window.py replyright_qt/widgets/conversation_list.py replyright_qt/widgets/conversation_detail.py replyright_qt/widgets/filter_bar.py replyright_qt/widgets/sidebar_nav.py replyright_qt/widgets/admin_panel.py replyright_qt/widgets/settings_panel.py replyright_qt/widgets/kyc_panel.py replyright_qt/windows/credentials_setup_window.py replyright_qt/api_client.py` - passed.
+- `python -m pytest tests/ -x --timeout=60 -q --no-header` - attempted; stopped in unrelated dirty/untracked error-hardening work at `tests/test_error_hardening.py::TestClassifierPredictLogging::test_predict_no_models_logs_debug`.
+
+Remaining work:
+
+- Brian should spot-check the native app wording after launch.
+
 ## 2026-05-28 - Codex - Native PySide6 UI Polish Pass
 
 Summary:

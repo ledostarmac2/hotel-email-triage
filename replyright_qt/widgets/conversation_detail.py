@@ -23,63 +23,7 @@ from PySide6.QtWidgets import (
 
 from outlook_dashboard.taxonomy import CATEGORIES, CONTACT_TYPES, DEPARTMENT_OWNERS, STATUSES
 from replyright_qt.api_client import ApiClient, ApiWorker
-
-_ENGINE_DISPLAY = {
-    "heuristic": "Heuristic rules",
-    "local-classifier": "Local ML classifier",
-    "openai": "OpenAI triage",
-    "openai-refresh": "OpenAI refresh",
-    "anthropic": "Claude AI (single-email)",
-    "claude": "Claude AI (single-email)",
-    "unknown": "Unknown",
-}
-
-_RECOMMENDED_ACTION_DISPLAY = {
-    "reply_guest": "Reply to guest",
-    "loop_reservations": "Loop Reservations",
-    "loop_front_office": "Loop Front Office",
-    "loop_concierge": "Loop Concierge",
-    "loop_housekeeping": "Loop Housekeeping",
-    "loop_engineering": "Loop Engineering",
-    "escalate_manager": "Escalate for review",
-    "verify_payment_authorization": "Verify payment authorization",
-    "review_folio": "Review folio",
-    "check_reservation": "Check reservation",
-    "request_missing_information": "Request missing information",
-    "wait_for_guest": "Waiting on guest",
-    "wait_for_internal_team": "Waiting on internal team",
-    "no_action_likely": "No action likely",
-}
-
-_ACRONYMS = {
-    "ai": "AI",
-    "api": "API",
-    "cca": "CCA",
-    "crm": "CRM",
-    "kyc": "KYC",
-    "ml": "ML",
-    "openai": "OpenAI",
-    "ota": "OTA",
-    "vip": "VIP",
-}
-
-
-def _humanize_label(value: object, fallback: str = "Not set") -> str:
-    text = str(value or "").strip()
-    if not text:
-        return fallback
-    text = re.sub(r"[_\-]+", " ", text)
-    text = re.sub(r"\s+", " ", text)
-    words = []
-    for word in text.split(" "):
-        lower = word.lower()
-        words.append(_ACRONYMS.get(lower, lower.capitalize()))
-    return " ".join(words)
-
-
-def _display_action(value: object) -> str:
-    key = str(value or "").strip()
-    return _RECOMMENDED_ACTION_DISPLAY.get(key, _humanize_label(key, "Not set"))
+from replyright_qt.display_labels import display_action, display_engine, display_label
 
 
 def _strip_html(text: str) -> str:
@@ -280,7 +224,7 @@ class ConversationDetailWidget(QWidget):
         }
         current = legacy_statuses.get(str(current), current)
         for status in STATUSES:
-            self._status_combo.addItem(status, status)
+            self._status_combo.addItem(display_label(status), status)
         idx = self._status_combo.findData(current)
         if idx >= 0:
             self._status_combo.setCurrentIndex(idx)
@@ -299,7 +243,7 @@ class ConversationDetailWidget(QWidget):
         self._owner_combo.setMinimumWidth(116)
         self._owner_combo.addItem("Owner", "")
         for owner in DEPARTMENT_OWNERS:
-            self._owner_combo.addItem(owner, owner)
+            self._owner_combo.addItem(display_label(owner), owner)
         current_owner = email.get("recommended_department_owner") or ""
         idx2 = self._owner_combo.findData(current_owner)
         if idx2 >= 0:
@@ -341,10 +285,9 @@ class ConversationDetailWidget(QWidget):
         confidence = email.get("confidence_score")
         confidence_text = f"{float(confidence):.0f}%" if isinstance(confidence, (int, float)) else "Not scored"
         self._add_metric(grid, 2, 1, "Confidence", confidence_text)
-        engine = str(email.get("analysis_engine") or "unknown")
-        engine_display = _ENGINE_DISPLAY.get(engine.lower(), engine.replace("-", " ").title())
-        self._add_metric(grid, 3, 0, "Classification Source", engine_display)
-        action_display = _display_action(email.get("recommended_action"))
+        engine_display = display_engine(email.get("analysis_engine") or "unknown")
+        self._add_metric(grid, 3, 0, "Source", engine_display)
+        action_display = display_action(email.get("recommended_action"))
         self._add_metric(grid, 3, 1, "Recommended Action", action_display, "metric-action")
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 1)
@@ -384,7 +327,7 @@ class ConversationDetailWidget(QWidget):
         layout.setSpacing(4)
         label_widget = QLabel(label)
         label_widget.setObjectName("metric-label")
-        value_widget = QLabel(_humanize_label(value))
+        value_widget = QLabel(display_label(value))
         value_widget.setWordWrap(True)
         if object_name:
             value_widget.setObjectName(object_name)
@@ -417,7 +360,7 @@ class ConversationDetailWidget(QWidget):
         if category in {"Billing dispute", "Accessibility request"}:
             reasons.append(f"category: {category.lower()}")
         if reasons:
-            reason_lbl = QLabel("  |  ".join(_humanize_label(reason) for reason in reasons))
+            reason_lbl = QLabel("  |  ".join(display_label(reason) for reason in reasons))
             reason_lbl.setObjectName("muted-label")
             reason_lbl.setWordWrap(True)
             row.addWidget(reason_lbl)
@@ -431,7 +374,7 @@ class ConversationDetailWidget(QWidget):
         row = QHBoxLayout()
         row.setSpacing(7)
         for value in values[:5]:
-            chip = QLabel(_humanize_label(value))
+            chip = QLabel(display_label(value))
             chip.setObjectName("chip")
             chip.setWordWrap(True)
             row.addWidget(chip)
@@ -446,7 +389,7 @@ class ConversationDetailWidget(QWidget):
         row = QHBoxLayout()
         row.setSpacing(7)
         for flag in flags[:5]:
-            chip = QLabel(_humanize_label(flag))
+            chip = QLabel(display_label(flag))
             chip.setObjectName("risk-chip")
             chip.setWordWrap(True)
             row.addWidget(chip)
@@ -459,7 +402,7 @@ class ConversationDetailWidget(QWidget):
             return
         section, layout = self._section("Action", "section-action")
         for step in steps[:6]:
-            item = QLabel(f"- {str(step).replace('_', ' ').strip()}")
+            item = QLabel(f"- {display_label(step)}")
             item.setWordWrap(True)
             item.setObjectName("summary-text")
             layout.addWidget(item)
@@ -515,10 +458,10 @@ class ConversationDetailWidget(QWidget):
         grid.setVerticalSpacing(8)
 
         self._fb_urgency = self._combo("Urgency", [("No change", ""), *[(f"{i} - {_urgency_label(i).split(' ', 1)[1]}", str(i)) for i in range(1, 6)]])
-        self._fb_category = self._combo("Category", [("No change", ""), *[(c, c) for c in CATEGORIES]])
-        self._fb_owner = self._combo("Owner", [("No change", ""), *[(o, o) for o in DEPARTMENT_OWNERS]])
-        self._fb_contact = self._combo("Contact", [("No change", ""), *[(c, c) for c in CONTACT_TYPES]])
-        self._fb_status = self._combo("Status", [("No change", ""), *[(s, s) for s in STATUSES]])
+        self._fb_category = self._combo("Category", [("No change", ""), *[(display_label(c), c) for c in CATEGORIES]])
+        self._fb_owner = self._combo("Owner", [("No change", ""), *[(display_label(o), o) for o in DEPARTMENT_OWNERS]])
+        self._fb_contact = self._combo("Contact", [("No change", ""), *[(display_label(c), c) for c in CONTACT_TYPES]])
+        self._fb_status = self._combo("Status", [("No change", ""), *[(display_label(s), s) for s in STATUSES]])
         self._fb_summary_rating = self._combo("Summary", [("Summary rating", ""), *[(str(i), str(i)) for i in range(1, 6)]])
         self._fb_reply_rating = self._combo("Reply", [("Reply rating", ""), *[(str(i), str(i)) for i in range(1, 6)]])
 

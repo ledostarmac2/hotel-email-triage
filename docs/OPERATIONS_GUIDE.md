@@ -1,6 +1,6 @@
 # Operations Guide
 
-Last updated: 2026-05-20
+Last updated: 2026-05-28
 
 ## Purpose
 
@@ -17,7 +17,7 @@ It does not send emails or modify Outlook.
 3. Click Refresh Inbox.
 4. Work the queue from highest urgency to lowest.
 5. Open a conversation and review the original messages.
-6. Use the summary, required actions, owner, category, risk flags, and confidence as decision support.
+6. Use the summary, Recommended Action, owner, category, risk flags, and confidence as decision support.
 7. If the classification is wrong, submit feedback.
 8. Use AI Suggestion only when a drafted response would help.
 9. Review and edit any AI text before using it outside ReplyRight.
@@ -48,6 +48,21 @@ Contact types:
 - Group contact
 - Travel agency
 - Direct guest
+
+Common action labels:
+
+- Recommended Action: the next hotel-operations step ReplyRight suggests.
+- Verify Payment Authorization: confirm a payment authorization or completed CCA workflow.
+- Waiting on Guest: ReplyRight believes the next step belongs with the guest or sender.
+- Waiting on Internal Team: another hotel team needs to respond or complete the task.
+- No Action Likely: the latest message appears informational, complete, or not actionable.
+- Needs Human Review: read the thread carefully before relying on the classification.
+
+Classification source labels:
+
+- Rules-Based: deterministic ReplyRight hotel rules.
+- Local Classifier: the locally trained routing model built from reviewed examples.
+- AI Assisted: an optional AI-supported classification pass for inbox refresh.
 
 ## Confidence
 
@@ -103,15 +118,15 @@ Before using a draft:
 
 ## Training And Feedback
 
-The Admin training pipeline can export completed, redacted emails to Supabase as training examples. Human-reviewed examples can train the local classifier.
+The Admin training area can prepare completed, redacted emails as learning examples. Human-reviewed examples can rebuild the Local Classifier.
 
-Operators should focus on accurate feedback. Admins should review labels before classifier training.
+Operators should focus on accurate feedback. Admins should review labels before rebuilding local routing suggestions.
 
-## Admin Onboarding And Diagnostics
+## Admin Onboarding And System Status
 
 Admins can invite users from the Admin users panel. When SMTP is configured, ReplyRight sends the invite/reset email. When SMTP is unavailable, the invite API returns a manual invite URL that can be copied for beta onboarding.
 
-Admins can use deployment diagnostics to confirm app version, database status, Supabase, SMTP, Outlook COM, AI provider configuration, and classifier status without exposing secrets.
+Admins can use System Status to confirm app version, database status, shared learning, email delivery, Outlook Desktop access, AI configuration, and Local Classifier status without exposing secrets.
 
 ## What Not To Do
 

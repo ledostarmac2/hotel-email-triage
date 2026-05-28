@@ -1,11 +1,18 @@
 # Current State
 
-Last updated: 2026-05-28 (native PySide6 UI polish pass)
+Last updated: 2026-05-28 (user-facing language cleanup pass)
 
 ## Status
 
 - Product name is ReplyRight.
 - Current runnable app is `outlook_dashboard/` plus `run_desktop.py`.
+- 2026-05-28 user-facing language cleanup pass:
+  - Added shared native UI display-label helpers for hotel-operations labels while keeping internal constants and stored values unchanged.
+  - Cleaned visible native UI wording across conversation list/detail, filters, sidebar, admin/status/training tools, KYC, settings, and first-run setup.
+  - Replaced rough technical source/action/status wording such as `heuristic`, `external_ai`, `recommended_action`, and `needs_review` with Rules-Based, AI Assisted, Recommended Action, and Needs Human Review in the visible app.
+  - Updated `docs/OPERATIONS_GUIDE.md` with the operator-facing action/source labels.
+  - Validation passed: `python -m pytest tests/test_pyside6_no_browser_engine.py -q --timeout=60`; `python -m py_compile replyright_qt/display_labels.py replyright_qt/windows/main_window.py replyright_qt/widgets/conversation_list.py replyright_qt/widgets/conversation_detail.py replyright_qt/widgets/filter_bar.py replyright_qt/widgets/sidebar_nav.py replyright_qt/widgets/admin_panel.py replyright_qt/widgets/settings_panel.py replyright_qt/widgets/kyc_panel.py replyright_qt/windows/credentials_setup_window.py replyright_qt/api_client.py`.
+  - Full suite was attempted with `python -m pytest tests/ -x --timeout=60 -q --no-header` and stopped in unrelated dirty/untracked error-hardening work at `tests/test_error_hardening.py::TestClassifierPredictLogging::test_predict_no_models_logs_debug`.
 - 2026-05-28 native PySide6 UI polish pass:
   - Improved the native conversation list and detail pane without adding user-facing features or changing backend triage behavior.
   - Added shared display-label helpers so urgency/owner/category/risk/status/recommended-action labels avoid raw `snake_case` and preserve hotel acronyms such as VIP, CCA, KYC, ML, and OpenAI.

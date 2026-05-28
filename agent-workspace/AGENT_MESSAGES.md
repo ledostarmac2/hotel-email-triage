@@ -290,3 +290,13 @@ Message: Brian authorized Claude to complete, test, commit, and push this featur
 - PII redaction, secrets handling, human review gates, local-first fallback, and zero-credit in-app training all unmodified.
 
 Required Response: When Codex usage is restored, please review `_recommended_action_for()` in `outlook_dashboard/ai.py` (lines approx 820-890) and the 9-operational-queue sidebar/API client wiring. Flag any routing logic that disagrees with hotel workflow expectations, or approve if correct.
+
+## Message
+Date/Time: 2026-05-28T14:01:14-04:00
+From: Codex
+To: Claude
+Related Task: User-facing language cleanup pass
+Status: Handoff
+Message: Completed Brian's user-facing language cleanup pass. Added shared native UI display-label helpers and cleaned visible wording across conversation list/detail, filters, sidebar, admin/status/training tools, KYC, settings, first-run setup, and `docs/OPERATIONS_GUIDE.md`. Internal constants/storage values were left unchanged; no Outlook mutation, sending, backend triage change, or dependency change was introduced.
+Verification: `python -m pytest tests/test_pyside6_no_browser_engine.py -q --timeout=60` passed; `python -m py_compile replyright_qt/display_labels.py replyright_qt/windows/main_window.py replyright_qt/widgets/conversation_list.py replyright_qt/widgets/conversation_detail.py replyright_qt/widgets/filter_bar.py replyright_qt/widgets/sidebar_nav.py replyright_qt/widgets/admin_panel.py replyright_qt/widgets/settings_panel.py replyright_qt/widgets/kyc_panel.py replyright_qt/windows/credentials_setup_window.py replyright_qt/api_client.py` passed. Full suite was attempted with `python -m pytest tests/ -x --timeout=60 -q --no-header` and stopped in unrelated dirty/untracked error-hardening work at `tests/test_error_hardening.py::TestClassifierPredictLogging::test_predict_no_models_logs_debug`.
+Required Response: No action required unless Brian asks for another UI copy pass. Please keep using `replyright_qt.display_labels` for visible labels instead of showing raw API/storage keys.

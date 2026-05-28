@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QGroupBox,
@@ -22,6 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from replyright_qt.api_client import ApiClient, ApiWorker
+from replyright_qt.display_labels import display_engine, display_label, display_role, display_value
 
 
 class _StatCard(QWidget):
@@ -63,14 +62,14 @@ def _build_corrections_table(rows: list[dict]) -> QTableWidget:
     table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
     table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
     for i, row in enumerate(rows):
-        table.setItem(i, 0, _read_only_item(row.get("type", "")))
-        table.setItem(i, 1, _read_only_item(row.get("label", "")))
+        table.setItem(i, 0, _read_only_item(display_label(row.get("type", ""))))
+        table.setItem(i, 1, _read_only_item(display_label(row.get("label", ""))))
         table.setItem(i, 2, _read_only_item(str(row.get("count", ""))))
     return table
 
 
 def _build_low_confidence_table(rows: list[dict]) -> QTableWidget:
-    cols = ["Subject", "Sender", "Category", "Confidence", "Needs Review"]
+    cols = ["Subject", "Sender", "Category", "Confidence", "Needs Human Review"]
     table = QTableWidget(len(rows), len(cols))
     table.setHorizontalHeaderLabels(cols)
     table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
@@ -80,7 +79,7 @@ def _build_low_confidence_table(rows: list[dict]) -> QTableWidget:
     for i, row in enumerate(rows):
         table.setItem(i, 0, _read_only_item(row.get("subject", "") or "(no subject)"))
         table.setItem(i, 1, _read_only_item(row.get("sender_email", "")))
-        table.setItem(i, 2, _read_only_item(row.get("category", "")))
+        table.setItem(i, 2, _read_only_item(display_label(row.get("category", ""))))
         conf = row.get("confidence_score")
         table.setItem(i, 3, _read_only_item(f"{conf:.0f}%" if conf is not None else "—"))
         nr = "Yes" if row.get("needs_review") else "No"
@@ -102,12 +101,12 @@ def _build_audit_table(rows: list[dict]) -> QTableWidget:
     for i, row in enumerate(rows):
         ts = row.get("created_at", "")[:16].replace("T", " ")
         table.setItem(i, 0, _read_only_item(ts))
-        table.setItem(i, 1, _read_only_item(row.get("action", "")))
+        table.setItem(i, 1, _read_only_item(display_label(row.get("action", ""))))
         table.setItem(i, 2, _read_only_item(row.get("actor_email", "") or row.get("actor", "")))
         detail = row.get("detail") or row.get("metadata") or ""
         if isinstance(detail, dict):
-            detail = ", ".join(f"{k}={v}" for k, v in list(detail.items())[:3])
-        table.setItem(i, 3, _read_only_item(str(detail)[:120]))
+            detail = display_value(detail)
+        table.setItem(i, 3, _read_only_item(display_value(detail)[:120]))
     return table
 
 
@@ -169,13 +168,13 @@ class _UsersTab(QWidget):
         self._table.setRowCount(len(users))
         for i, u in enumerate(users):
             self._table.setItem(i, 0, _read_only_item(u.get("email", "")))
-            self._table.setItem(i, 1, _read_only_item(u.get("role", "")))
+            self._table.setItem(i, 1, _read_only_item(display_role(u.get("role", ""))))
             ts = (u.get("created_at") or "")[:10]
             self._table.setItem(i, 2, _read_only_item(ts))
             self._table.setItem(i, 3, _read_only_item(str(u.get("id", ""))))
 
     def _on_error(self, message: str) -> None:
-        self._user_status.setText(f"Error: {message}")
+        self._user_status.setText(f"Could not load users. {message}")
 
     def _on_selection(self) -> None:
         self._delete_btn.setEnabled(bool(self._table.selectedItems()))
@@ -187,7 +186,7 @@ class _UsersTab(QWidget):
         self._user_status.setText("Sending invite…")
         worker = ApiWorker(self._client.invite_user, email.strip())
         worker.success.connect(lambda _: self._user_status.setText(f"Invite sent to {email.strip()}."))
-        worker.failure.connect(lambda msg: self._user_status.setText(f"Error: {msg}"))
+        worker.failure.connect(lambda msg: self._user_status.setText(f"Could not send invite. {msg}"))
         worker.start()
         self._invite_worker = worker
 
@@ -210,13 +209,13 @@ class _UsersTab(QWidget):
         self._user_status.setText("Deleting…")
         worker = ApiWorker(self._client.delete_user, str(user["id"]))
         worker.success.connect(lambda _: self.load())
-        worker.failure.connect(lambda msg: self._user_status.setText(f"Error: {msg}"))
+        worker.failure.connect(lambda msg: self._user_status.setText(f"Could not delete user. {msg}"))
         worker.start()
         self._delete_worker = worker
 
 
 class _TrainingTab(QWidget):
-    """Training tab: pipeline status + trigger training / classifier rebuild."""
+    """Training tab: review status + local classifier rebuild."""
 
     def __init__(self, client: ApiClient) -> None:
         super().__init__()
@@ -229,7 +228,7 @@ class _TrainingTab(QWidget):
         layout.setContentsMargins(16, 12, 16, 12)
         layout.setSpacing(14)
 
-        status_group = QGroupBox("Pipeline Status")
+        status_group = QGroupBox("Training Status")
         sg_layout = QVBoxLayout(status_group)
         self._status_label = QLabel("Click Refresh to load status.")
         self._status_label.setWordWrap(True)
@@ -241,11 +240,11 @@ class _TrainingTab(QWidget):
         ag_layout = QVBoxLayout(actions_group)
 
         pipeline_row = QHBoxLayout()
-        self._run_pipeline_btn = QPushButton("Run training pipeline")
+        self._run_pipeline_btn = QPushButton("Prepare Training Examples")
         self._run_pipeline_btn.setObjectName("primary-btn")
         self._run_pipeline_btn.setFixedHeight(34)
         self._run_pipeline_btn.clicked.connect(self._on_run_pipeline)
-        pipeline_desc = QLabel("Process new feedback examples from Supabase (batch_size=10)")
+        pipeline_desc = QLabel("Prepare the next small batch of reviewed learning examples.")
         pipeline_desc.setStyleSheet("color: #718096; font-size: 12px;")
         pipeline_row.addWidget(self._run_pipeline_btn)
         pipeline_row.addWidget(pipeline_desc)
@@ -253,11 +252,11 @@ class _TrainingTab(QWidget):
         ag_layout.addLayout(pipeline_row)
 
         classifier_row = QHBoxLayout()
-        self._run_classifier_btn = QPushButton("Rebuild local classifier")
+        self._run_classifier_btn = QPushButton("Rebuild Local Classifier")
         self._run_classifier_btn.setObjectName("secondary-btn")
         self._run_classifier_btn.setFixedHeight(34)
         self._run_classifier_btn.clicked.connect(self._on_run_classifier)
-        classifier_desc = QLabel("Retrain scikit-learn model from stored training examples")
+        classifier_desc = QLabel("Refresh local routing suggestions from reviewed examples.")
         classifier_desc.setStyleSheet("color: #718096; font-size: 12px;")
         classifier_row.addWidget(self._run_classifier_btn)
         classifier_row.addWidget(classifier_desc)
@@ -282,18 +281,18 @@ class _TrainingTab(QWidget):
         self._status_label.setText("Loading…")
         self._worker = ApiWorker(self._client.get_training_status)
         self._worker.success.connect(self._on_status_loaded)
-        self._worker.failure.connect(lambda msg: self._status_label.setText(f"Error: {msg}"))
+        self._worker.failure.connect(lambda msg: self._status_label.setText(f"Could not load training status. {msg}"))
         self._worker.start()
 
     def _on_status_loaded(self, data: dict) -> None:
         lines = []
         for key, val in data.items():
-            lines.append(f"{key.replace('_', ' ').title()}: {val}")
+            lines.append(f"{display_label(key)}: {display_value(val)}")
         self._status_label.setText("\n".join(lines) if lines else "No status available.")
 
     def _on_run_pipeline(self) -> None:
         self._set_busy(True)
-        self._action_status.setText("Running pipeline…")
+        self._action_status.setText("Preparing training examples...")
         worker = ApiWorker(self._client.run_training_pipeline)
         worker.success.connect(self._on_pipeline_done)
         worker.failure.connect(self._on_action_error)
@@ -303,12 +302,12 @@ class _TrainingTab(QWidget):
     def _on_pipeline_done(self, result: dict) -> None:
         self._set_busy(False)
         processed = result.get("processed", "?")
-        self._action_status.setText(f"Pipeline complete — {processed} examples processed.")
+        self._action_status.setText(f"Training examples prepared: {processed}.")
         self.load()
 
     def _on_run_classifier(self) -> None:
         self._set_busy(True)
-        self._action_status.setText("Training classifier…")
+        self._action_status.setText("Rebuilding Local Classifier...")
         worker = ApiWorker(self._client.run_classifier_train)
         worker.success.connect(self._on_classifier_done)
         worker.failure.connect(self._on_action_error)
@@ -318,7 +317,7 @@ class _TrainingTab(QWidget):
     def _on_classifier_done(self, result: dict) -> None:
         self._set_busy(False)
         accuracy = result.get("accuracy")
-        msg = "Classifier trained."
+        msg = "Local Classifier rebuilt."
         if accuracy is not None:
             msg += f"  Accuracy: {float(accuracy):.1%}"
         self._action_status.setText(msg)
@@ -326,7 +325,7 @@ class _TrainingTab(QWidget):
     def _on_action_error(self, message: str) -> None:
         self._set_busy(False)
         self._action_status.setStyleSheet("font-size: 12px; color: #e53e3e;")
-        self._action_status.setText(f"Error: {message}")
+        self._action_status.setText(f"Training action could not finish. {message}")
 
     def _set_busy(self, busy: bool) -> None:
         self._run_pipeline_btn.setEnabled(not busy)
@@ -336,7 +335,7 @@ class _TrainingTab(QWidget):
 
 
 class _SignalInspectorTab(QWidget):
-    """Signal Inspector tab — enter an email ID to view extracted signals and entities."""
+    """Signal inspector tab for internal triage details."""
 
     def __init__(self, client: ApiClient) -> None:
         super().__init__()
@@ -351,10 +350,10 @@ class _SignalInspectorTab(QWidget):
 
         lookup_row = QHBoxLayout()
         lookup_row.setSpacing(8)
-        label = QLabel("Email ID:")
+        label = QLabel("Conversation ID:")
         label.setStyleSheet("font-size: 13px; font-weight: 600;")
         self._id_field = QLineEdit()
-        self._id_field.setPlaceholderText("Enter email ID (integer)")
+        self._id_field.setPlaceholderText("Enter conversation ID")
         self._id_field.setFixedWidth(160)
         self._id_field.returnPressed.connect(self._on_inspect)
         self._inspect_btn = QPushButton("Inspect")
@@ -372,8 +371,7 @@ class _SignalInspectorTab(QWidget):
         layout.addLayout(lookup_row)
 
         hint = QLabel(
-            "Tip: copy an email ID from the Low Confidence table above, "
-            "or hover over a conversation to find its id."
+            "Tip: copy a conversation ID from the Low Confidence table."
         )
         hint.setStyleSheet("color: #a0aec0; font-size: 11px;")
         hint.setWordWrap(True)
@@ -381,7 +379,7 @@ class _SignalInspectorTab(QWidget):
 
         self._output = QTextEdit()
         self._output.setReadOnly(True)
-        self._output.setPlaceholderText("Signal data will appear here after inspection.")
+        self._output.setPlaceholderText("Conversation details will appear here after inspection.")
         self._output.setStyleSheet("font-family: 'Consolas', monospace; font-size: 12px;")
         layout.addWidget(self._output)
 
@@ -393,9 +391,9 @@ class _SignalInspectorTab(QWidget):
     def _on_inspect(self) -> None:
         email_id = self._id_field.text().strip()
         if not email_id.isdigit():
-            self._status.setText("Enter a valid numeric email ID.")
+            self._status.setText("Enter a valid conversation ID.")
             return
-        self._status.setText("Fetching signals…")
+        self._status.setText("Loading details...")
         self._inspect_btn.setEnabled(False)
         self._output.setPlainText("")
         self._worker = ApiWorker(self._client.get_email_signals, email_id)
@@ -408,30 +406,30 @@ class _SignalInspectorTab(QWidget):
         self._status.setText("")
         lines: list[str] = []
         email_id = data.get("email_id", "?")
-        lines.append(f"=== Signal Report: email_id={email_id} ===\n")
+        lines.append(f"Conversation ID: {email_id}\n")
 
         signals = data.get("signals") or {}
         if signals:
-            lines.append("── Signals ──────────────────────────────")
+            lines.append("Triage Details")
             for k, v in signals.items():
-                lines.append(f"  {k}: {v}")
+                lines.append(f"  {display_label(k)}: {display_value(v)}")
 
         description = data.get("description") or ""
         if description:
-            lines.append(f"\n── Summary ──────────────────────────────\n  {description}")
+            lines.append(f"\nSummary\n  {description}")
 
         if not lines[1:]:
-            lines.append("  (no signal data returned)")
+            lines.append("  No triage details returned.")
 
         self._output.setPlainText("\n".join(lines))
 
     def _on_error(self, message: str) -> None:
         self._inspect_btn.setEnabled(True)
-        self._status.setText(f"Error: {message}")
+        self._status.setText(f"Could not load details. {message}")
 
 
 class _DiagnosticsTab(QWidget):
-    """Deployment diagnostics tab — shows app version, services, classifier state."""
+    """System status tab shown in operator-friendly language."""
 
     def __init__(self, client: ApiClient) -> None:
         super().__init__()
@@ -444,7 +442,7 @@ class _DiagnosticsTab(QWidget):
         layout.setContentsMargins(16, 12, 16, 12)
         layout.setSpacing(12)
 
-        refresh_btn = QPushButton("Refresh diagnostics")
+        refresh_btn = QPushButton("Refresh Status")
         refresh_btn.setObjectName("secondary-btn")
         refresh_btn.setFixedWidth(160)
         refresh_btn.clicked.connect(self.load)
@@ -452,34 +450,36 @@ class _DiagnosticsTab(QWidget):
 
         self._output = QTextEdit()
         self._output.setReadOnly(True)
-        self._output.setPlaceholderText("Diagnostics will appear here.")
+        self._output.setPlaceholderText("System status will appear here.")
         self._output.setStyleSheet("font-family: 'Consolas', monospace; font-size: 12px;")
         layout.addWidget(self._output)
 
     def load(self) -> None:
-        self._output.setPlainText("Loading diagnostics…")
+        self._output.setPlainText("Loading system status...")
         self._worker = ApiWorker(self._client.get_deployment_diagnostics)
         self._worker.success.connect(self._on_loaded)
-        self._worker.failure.connect(lambda msg: self._output.setPlainText(f"Error: {msg}"))
+        self._worker.failure.connect(lambda msg: self._output.setPlainText(f"Could not load system status. {msg}"))
         self._worker.start()
 
     def _on_loaded(self, data: dict) -> None:
-        lines: list[str] = ["=== ReplyRight Deployment Diagnostics ===\n"]
+        lines: list[str] = ["ReplyRight System Status\n"]
         for section, values in data.items():
             if section == "warnings":
                 continue
-            lines.append(f"── {section.upper()} ──────────────────────────")
+            lines.append(display_label(section))
             if isinstance(values, dict):
                 for k, v in values.items():
-                    lines.append(f"  {k}: {v}")
+                    if "engine" in str(k).lower() or "provider" in str(k).lower():
+                        v = display_engine(v)
+                    lines.append(f"  {display_label(k)}: {display_value(v)}")
             else:
-                lines.append(f"  {values}")
+                lines.append(f"  {display_value(values)}")
             lines.append("")
         warnings = data.get("warnings") or []
         if warnings:
-            lines.append("── WARNINGS ──────────────────────────────")
+            lines.append("Needs Attention")
             for w in warnings:
-                lines.append(f"  ⚠  {w}")
+                lines.append(f"  - {display_value(w)}")
         self._output.setPlainText("\n".join(lines))
 
 
@@ -504,7 +504,7 @@ class AdminPanel(QWidget):
         root.setSpacing(16)
 
         header = QHBoxLayout()
-        title = QLabel("Admin Dashboard")
+        title = QLabel("Admin")
         title.setStyleSheet("font-size: 20px; font-weight: bold;")
 
         self._status_label = QLabel("")
@@ -523,11 +523,11 @@ class AdminPanel(QWidget):
 
         stats_row = QHBoxLayout()
         stats_row.setSpacing(12)
-        self._card_emails = _StatCard("Total Emails")
+        self._card_emails = _StatCard("Total Conversations")
         self._card_feedback = _StatCard("Feedback Submitted")
         self._card_users = _StatCard("Users")
         self._card_low_conf = _StatCard("Low Confidence")
-        self._card_needs_review = _StatCard("Needs Review")
+        self._card_needs_review = _StatCard("Needs Human Review")
         for card in (
             self._card_emails,
             self._card_feedback,
@@ -566,10 +566,10 @@ class AdminPanel(QWidget):
         self._tabs.addTab(self._training_tab, "Training")
 
         self._signals_tab = _SignalInspectorTab(self._client)
-        self._tabs.addTab(self._signals_tab, "Signal Inspector")
+        self._tabs.addTab(self._signals_tab, "Triage Details")
 
         self._diagnostics_tab = _DiagnosticsTab(self._client)
-        self._tabs.addTab(self._diagnostics_tab, "Diagnostics")
+        self._tabs.addTab(self._diagnostics_tab, "System Status")
 
         root.addWidget(self._tabs)
 
@@ -604,7 +604,7 @@ class AdminPanel(QWidget):
             ts = (last_sync.get("created_at") or "")[:16].replace("T", " ")
             src = last_sync.get("source", "")
             cnt = last_sync.get("fetched_count", "")
-            self._status_label.setText(f"Last sync: {ts}  ·  {src}  ·  {cnt} fetched")
+            self._status_label.setText(f"Last refresh: {ts}  -  {display_label(src)}  -  {cnt} messages")
 
         corrections = data.get("corrections") or []
         self._tabs.removeTab(0)
@@ -621,4 +621,4 @@ class AdminPanel(QWidget):
 
     def _on_error(self, message: str) -> None:
         self._refresh_btn.setEnabled(True)
-        self._status_label.setText(f"Error: {message}")
+        self._status_label.setText(f"Could not refresh admin view. {message}")

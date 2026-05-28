@@ -52,7 +52,7 @@ class CredentialsSetupWindow(QWidget):
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         subtitle = QLabel(
-            "Enter your Supabase project credentials to get started.\n"
+            "Enter the ReplyRight project credentials to get started.\n"
             "These are saved locally and never transmitted."
         )
         subtitle.setObjectName("login-subtitle")
@@ -71,19 +71,19 @@ class CredentialsSetupWindow(QWidget):
                 f.setEchoMode(QLineEdit.EchoMode.Password)
             return f
 
-        layout.addWidget(QLabel("Supabase Project URL  (https://…)"))
+        layout.addWidget(QLabel("Project URL  (https://...)"))
         self._url_field = _field("https://xxxxxxxx.supabase.co")
         layout.addWidget(self._url_field)
 
-        layout.addWidget(QLabel("Supabase Anon Key"))
+        layout.addWidget(QLabel("Sign-in Key"))
         self._anon_key_field = _field("eyJ…", password=True)
         layout.addWidget(self._anon_key_field)
 
-        layout.addWidget(QLabel("Supabase Service-Role Key"))
+        layout.addWidget(QLabel("Admin Setup Key"))
         self._svc_key_field = _field("eyJ…", password=True)
         layout.addWidget(self._svc_key_field)
 
-        optional_label = QLabel("Anthropic API Key  (optional — enables AI analysis)")
+        optional_label = QLabel("AI Drafting Key  (optional)")
         optional_label.setStyleSheet("color: #718096; font-size: 12px;")
         layout.addWidget(optional_label)
         self._ai_key_field = _field("sk-ant-…", password=True)
@@ -122,13 +122,13 @@ class CredentialsSetupWindow(QWidget):
         ai = self._ai_key_field.text().strip()
 
         if not url.startswith("https://"):
-            self._show_error("Supabase URL must start with https://")
+            self._show_error("Project URL must start with https://")
             return
         if len(anon) < 20:
-            self._show_error("Supabase anon key appears too short.")
+            self._show_error("Sign-in key appears too short.")
             return
         if len(svc) < 20:
-            self._show_error("Supabase service-role key appears too short.")
+            self._show_error("Admin setup key appears too short.")
             return
 
         self._set_loading(True)
@@ -146,7 +146,7 @@ class CredentialsSetupWindow(QWidget):
 
     def _on_failure(self, message: str) -> None:
         self._set_loading(False)
-        self._show_error(message or "Failed to save credentials.")
+        self._show_error(message or "Could not save setup details.")
 
     # ── Helpers ────────────────────────────────────────────────────────────────
 

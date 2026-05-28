@@ -116,13 +116,18 @@ def test_theme_has_distinct_detail_section_states() -> None:
 
 
 def test_native_ui_display_labels_are_human_readable() -> None:
-    from replyright_qt.widgets.conversation_detail import _display_action, _humanize_label
-    from replyright_qt.widgets.conversation_list import _humanize_label as row_label
+    from replyright_qt.display_labels import display_action, display_engine, display_label, display_value
 
-    assert _display_action("request_missing_information") == "Request missing information"
-    assert _humanize_label("vip_pre_arrival") == "VIP Pre Arrival"
-    assert _humanize_label("local-ml-classifier") == "Local ML Classifier"
-    assert row_label("travel_agent_vip") == "Travel Agent VIP"
+    assert display_label("recommended_action") == "Recommended Action"
+    assert display_action("verify_payment_authorization") == "Verify Payment Authorization"
+    assert display_action("wait_for_internal_team") == "Waiting on Internal Team"
+    assert display_action("no_action_likely") == "No Action Likely"
+    assert display_engine("heuristic") == "Rules-Based"
+    assert display_engine("local-classifier") == "Local Classifier"
+    assert display_engine("external_ai") == "AI Assisted"
+    assert display_label("needs_review") == "Needs Human Review"
+    assert display_label("vip_pre_arrival") == "VIP Pre-Arrival"
+    assert display_value({"needs_review": True}) == "Needs Human Review: Yes"
 
 
 def test_sidebar_nav_uses_scroll_area_for_adaptive_height() -> None:

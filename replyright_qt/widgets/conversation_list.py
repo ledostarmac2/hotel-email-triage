@@ -16,6 +16,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from replyright_qt.display_labels import display_label
+
 
 def _fmt_time(iso: str) -> str:
     try:
@@ -41,24 +43,6 @@ def _urgency_value(email: dict) -> int:
         return int(value or 0)
     except (TypeError, ValueError):
         return 0
-
-
-_ACRONYMS = {
-    "ai": "AI",
-    "cca": "CCA",
-    "kyc": "KYC",
-    "ota": "OTA",
-    "vip": "VIP",
-}
-
-
-def _humanize_label(value: object) -> str:
-    text = str(value or "").strip().replace("_", " ").replace("-", " ")
-    words = []
-    for word in text.split():
-        lower = word.lower()
-        words.append(_ACRONYMS.get(lower, lower.capitalize()))
-    return " ".join(words)
 
 
 class ConversationRow(QWidget):
@@ -111,7 +95,7 @@ class ConversationRow(QWidget):
         # Category chips
         category = email.get("category") or triage.get("category", "")
         contact = email.get("contact_type") or triage.get("contact_type", "")
-        chip_texts = [_humanize_label(t) for t in (category, contact) if t]
+        chip_texts = [display_label(t) for t in (category, contact) if t]
         if chip_texts:
             chips_row = QHBoxLayout()
             chips_row.setContentsMargins(0, 3, 0, 0)
@@ -135,7 +119,7 @@ class ConversationRow(QWidget):
             right_col.addWidget(time_lbl)
 
         if email.get("needs_review"):
-            review_badge = QLabel("Review")
+            review_badge = QLabel("Needs Human Review")
             review_badge.setObjectName("badge-needs-review")
             review_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
             right_col.addWidget(review_badge, alignment=Qt.AlignmentFlag.AlignRight)

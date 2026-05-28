@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 )
 
 from replyright_qt.api_client import ApiClient, ApiWorker
+from replyright_qt.display_labels import display_label
 from replyright_qt.widgets.kyc_dialogs import KycNotificationDialog
 
 DEFAULT_TEAM_MEMBERS = ["Hyun Song", "Eleanor Green", "Dakota Weglarz", "Brian Tarabocchia"]
@@ -290,7 +291,7 @@ class KycPanel(QWidget):
 
     def _on_status_error(self, _: str) -> None:
         self._refresh_pending = False
-        self._status_label.setText("Status: Could not connect to backend")
+        self._status_label.setText("Status: Could not connect to ReplyRight")
 
     def _apply_status(self, data: dict) -> None:
         current = data.get("current_event") or {}
@@ -308,7 +309,7 @@ class KycPanel(QWidget):
             self._status_label.setStyleSheet(f"color: {color};")
         elif overdue:
             color = "#e53e3e"
-            self._status_label.setText(f"INSPECTION OVERDUE — {event_status.upper()}")
+            self._status_label.setText(f"Inspection overdue - {display_label(event_status)}")
             self._status_label.setStyleSheet(f"color: {color}; font-weight: bold;")
         else:
             color_map = {
@@ -320,7 +321,7 @@ class KycPanel(QWidget):
                 "expired": "#742a2a",
             }
             color = color_map.get(event_status, "#1a1d2e")
-            self._status_label.setText(f"Status: {event_status.title()}")
+            self._status_label.setText(f"Status: {display_label(event_status)}")
             self._status_label.setStyleSheet(f"color: {color};")
 
         # Due time label
@@ -495,7 +496,7 @@ class KycPanel(QWidget):
 
     def _on_action_error(self, message: str) -> None:
         self._action_error.setStyleSheet("color: #e53e3e;")
-        self._action_error.setText(f"Error: {message}")
+        self._action_error.setText(f"Action could not finish. {message}")
         self._create_btn.setEnabled(True)
         self._fetch_status()
 
@@ -514,7 +515,7 @@ class KycPanel(QWidget):
         }
         worker = ApiWorker(self._client.kyc_update_config, update)
         worker.success.connect(self._on_config_loaded)
-        worker.failure.connect(lambda msg: self._action_error.setText(f"Settings error: {msg}"))
+        worker.failure.connect(lambda msg: self._action_error.setText(f"Could not save settings. {msg}"))
         worker.start()
         self._save_worker = worker
 

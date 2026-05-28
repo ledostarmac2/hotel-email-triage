@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 )
 
 from replyright_qt.api_client import ApiClient, ApiWorker
+from replyright_qt.display_labels import display_role
 
 
 class SettingsPanel(QWidget):
@@ -115,7 +116,7 @@ class SettingsPanel(QWidget):
 
     def set_user(self, user_data: dict) -> None:
         self._user_email = str(user_data.get("email") or "")
-        role = str(user_data.get("role") or "user").title()
+        role = display_role(user_data.get("role") or "user")
         if self._user_email:
             self._account_label.setText(f"{self._user_email}\nRole: {role}")
         else:
@@ -147,7 +148,7 @@ class SettingsPanel(QWidget):
         self._reset_status.setText("Sending reset link...")
         self._reset_worker = ApiWorker(self._client.forgot_password, self._user_email)
         self._reset_worker.success.connect(lambda _: self._reset_status.setText("Reset link sent if email is configured."))
-        self._reset_worker.failure.connect(lambda msg: self._reset_status.setText(f"Error: {msg}"))
+        self._reset_worker.failure.connect(lambda msg: self._reset_status.setText(f"Could not send reset link. {msg}"))
         self._reset_worker.start()
 
     def _on_choose_profile_image(self) -> None:

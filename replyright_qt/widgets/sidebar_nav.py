@@ -15,16 +15,18 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from replyright_qt.display_labels import display_role
+
 QUEUES: list[tuple[str, str]] = [
     ("inbox", "Inbox"),
-    ("review", "Needs Review"),
+    ("review", "Needs Human Review"),
     ("urgent", "Urgent"),
     ("vip", "VIP"),
-    ("missing", "Missing Info"),
+    ("missing", "Missing Information"),
     ("immediate", "Immediate"),
     ("today", "Today"),
     ("waiting_guest", "Waiting on Guest"),
-    ("waiting_internal", "Waiting on Team"),
+    ("waiting_internal", "Waiting on Internal Team"),
     ("billing_risk", "Billing Risk"),
     ("vip_travel", "VIP / Travel Advisor"),
     ("complaints", "Complaints"),
@@ -40,23 +42,23 @@ _ICON_DIR = os.path.join(_ROOT_DIR, "replyright_qt", "resources", "icons")
 
 _QUEUE_GROUPS: list[tuple[str, list[tuple[str, str, str]]]] = [
     (
-        "QUEUES",
+        "INBOX",
         [
             ("inbox", "inbox", "Inbox"),
-            ("review", "review", "Needs Review"),
+            ("review", "review", "Needs Human Review"),
             ("urgent", "urgent", "Urgent"),
             ("vip", "vip", "VIP"),
-            ("missing", "missing", "Missing Info"),
+            ("missing", "missing", "Missing Information"),
             ("kyc", "kyc", "KYC Auto"),
         ],
     ),
     (
-        "OPERATIONAL",
+        "HOTEL OPS",
         [
             ("immediate", "immediate", "Immediate"),
             ("today", "today", "Today"),
             ("waiting_guest", "waiting_guest", "Waiting on Guest"),
-            ("waiting_internal", "waiting_internal", "Waiting on Team"),
+            ("waiting_internal", "waiting_internal", "Waiting on Internal Team"),
             ("billing_risk", "billing_risk", "Billing Risk"),
             ("vip_travel", "vip_travel", "VIP / Travel Advisor"),
             ("complaints", "complaints", "Complaints"),
@@ -211,7 +213,7 @@ class _UserCard(QWidget):
         else:
             self._set_initials(initials, color)
         self._name_lbl.setText(" ".join(part.title() for part in parts) or "Signed in")
-        self._role_lbl.setText(role.replace("_", " ").title() if role else "Reservations")
+        self._role_lbl.setText(display_role(role))
 
     def _set_initials(self, initials: str, color: str) -> None:
         self._avatar.setPixmap(QPixmap())

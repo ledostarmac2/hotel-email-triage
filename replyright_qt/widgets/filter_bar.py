@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
 )
 
 from outlook_dashboard.taxonomy import RISK_FLAGS, STATUSES
+from replyright_qt.display_labels import display_label
 
 
 class FilterBar(QWidget):
@@ -75,7 +76,7 @@ class FilterBar(QWidget):
         self._status.setFixedHeight(30)
         self._status.addItem("All statuses", "")
         for status in STATUSES:
-            self._status.addItem(status, status)
+            self._status.addItem(display_label(status), status)
         self._status.currentIndexChanged.connect(self._emit)
 
         self._risk = QComboBox()
@@ -83,7 +84,7 @@ class FilterBar(QWidget):
         self._risk.setFixedHeight(30)
         self._risk.addItem("All risks", "")
         for risk in RISK_FLAGS:
-            self._risk.addItem(risk, risk)
+            self._risk.addItem(display_label(risk), risk)
         self._risk.currentIndexChanged.connect(self._emit)
 
         more_btn = QPushButton("More filters")
@@ -104,7 +105,7 @@ class FilterBar(QWidget):
         self._category.clear()
         self._category.addItem("All categories", "")
         for category in categories:
-            self._category.addItem(category.replace("_", " ").title(), category)
+            self._category.addItem(display_label(category), category)
         idx = self._category.findData(current)
         if idx >= 0:
             self._category.setCurrentIndex(idx)
