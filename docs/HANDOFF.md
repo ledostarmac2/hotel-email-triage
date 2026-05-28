@@ -1,5 +1,49 @@
 # Handoff Log
 
+## 2026-05-28 - Test suite cleanup pass
+
+Summary:
+
+- Added pytest marker registration and automatic file-based grouping for unit, integration, UI, slow, and safety tests.
+- Removed brittle local-user/build-output assumptions from classifier logging and secret-hygiene tests.
+- Added privacy-hygiene coverage for tracked runtime files, labeling exports, doc passwords, gitignore coverage, and local training redaction.
+- Updated stale UI queue-label coverage to match the current "Needs Human Review" operator label.
+- Rewrote `docs/TESTING.md` with current commands, marker groups, intentional overlap notes, and isolation rules.
+
+Files changed:
+
+- `pytest.ini`
+- `scripts/check_no_bundled_secrets.py`
+- `tests/conftest.py`
+- `tests/test_error_hardening.py`
+- `tests/test_privacy_hygiene.py`
+- `tests/test_v1_features.py`
+- `.gitignore`
+- `outlook_dashboard/database.py`
+- `docs/TESTING.md`
+- `docs/PROPERTY_KNOWLEDGE.md`
+- `labeling/exports/2026-05-18.md` (removed)
+- `labeling/runs/20260518T135617Z.json` (removed)
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+- `agent-workspace/PROJECT_STATE.md`
+- `agent-workspace/TASK_BOARD.md`
+- `agent-workspace/HANDOFFS.md`
+- `agent-workspace/AGENT_MESSAGES.md`
+
+Verification:
+
+- `python -m pytest tests/test_error_hardening.py::TestClassifierPredictLogging -q --timeout=60` - passed.
+- `python -m pytest tests/test_secret_hygiene.py::test_check_no_bundled_secrets_script_passes -q --timeout=60` - passed.
+- `python -m pytest --collect-only -q -m "ui or safety" tests/` - marker grouping collected expected UI/safety files.
+- `python -m py_compile tests/conftest.py tests/test_error_hardening.py tests/test_v1_features.py scripts/check_no_bundled_secrets.py` - passed.
+- `python -m pytest tests/test_privacy_hygiene.py -q --timeout=60` - passed.
+- `python -m pytest tests/ -x --timeout=60 -q --no-header` - 1,466 passed.
+
+Remaining work:
+
+- Continue using markers for new test files so targeted runs stay predictable.
+
 ## 2026-05-28 - User-facing language cleanup pass
 
 Summary:
@@ -2422,7 +2466,7 @@ Remaining work:
 - New `outlook_dashboard/auth.py`: PBKDF2-HMAC-SHA256 password hashing (stdlib `hashlib`, no extra deps), session tokens (40-byte URL-safe, 30-day expiry), full user CRUD.
 - New `users` and `sessions` tables in SQLite, added to `initialize_database()`.
 - `_AuthMiddleware` added to FastAPI (before `_RequestLogMiddleware`): checks `rr_session` HttpOnly cookie on every request; skips `/login`, `/reset-password`, `/api/health`, `/static/`, `/api/auth/` prefix.
-- `ensure_admin("brian.tarabocchia@waldorfastoria.com", "Luzmonkey63!", ...)` called in `lifespan()` — idempotent, only creates if absent. This password is ReplyRight-exclusive — not the Hilton/O365 login.
+- `ensure_admin("brian.tarabocchia@waldorfastoria.com", "[REDACTED]", ...)` called in `lifespan()` — idempotent, only creates if absent. This password is ReplyRight-exclusive — not the Hilton/O365 login. (Password redacted from docs — set via REPLYRIGHT_ADMIN_PASSWORD env var.)
 - **Login page**: two-panel layout (left: logo + brand, right: form). Form submits via server-side `POST /login` → `303 redirect /` with `Set-Cookie` header. This is more reliable in WebView2 than AJAX + `window.location.href`.
 - **Silent login bug root cause & fix**: AJAX `fetch()` + `window.location.href = "/"` was unreliable in WebView2 (cookie not reliably carried through JS-triggered navigation). Fix: converted to real HTML form POST (`method="POST" action="/login"`). Server sets cookie on the redirect response directly.
 
@@ -2479,7 +2523,7 @@ Remaining work:
 
 - `dist\ReplyRight.exe` rebuilt successfully.
 - Login form POST tested: server-side redirect with Set-Cookie.
-- Admin account `brian.tarabocchia@waldorfastoria.com` / `Luzmonkey63!` auto-created on first launch.
+- Admin account `brian.tarabocchia@waldorfastoria.com` / `[REDACTED]` auto-created on first launch.
 
 ### Action required before next session
 

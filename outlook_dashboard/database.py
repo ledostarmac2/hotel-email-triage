@@ -1483,6 +1483,8 @@ def get_local_training_examples(limit: int = 5000, db_path: Path | None = None) 
             """,
             (limit,),
         ).fetchall()
+    from .redaction import redact_sensitive_text
+
     _priority_to_urgency = {"Low": 1, "Normal": 2, "High": 4, "Immediate": 5}
     results = []
     for row in rows:
@@ -1492,7 +1494,9 @@ def get_local_training_examples(limit: int = 5000, db_path: Path | None = None) 
         # Use corrected labels when available
         if d.get("corrected_owner"):
             d["label_owner"] = d["corrected_owner"]
-        d["body_redacted"] = d.get("body_text") or d.get("body_preview") or ""
+        raw_body = (d.get("body_text") or d.get("body_preview") or "")[:4000]
+        body_redacted, _ = redact_sensitive_text(raw_body)
+        d["body_redacted"] = body_redacted[:4000]
         d["subject_tokens"] = d.get("subject") or ""
         d["labeling_engine"] = "local_feedback"
         results.append(d)

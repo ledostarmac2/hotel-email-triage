@@ -291,17 +291,18 @@ class TestClassifierPredictLogging:
         original_level = clf_logger.level
         clf_logger.setLevel(_logging.DEBUG)
         try:
-            result = predict("some email body", db_path=db_path)
+            with patch("outlook_dashboard.local_classifier._get_models", return_value=(None, {})):
+                result = predict("some email body", db_path=db_path)
             debug_msgs = [r.getMessage() for r in handler.buffer]
         finally:
             clf_logger.removeHandler(handler)
             clf_logger.setLevel(original_level)
 
-        assert result is None
+        assert result is None, "predict() must decline when no model bundle is loaded"
         assert any(
             "no trained model" in m.lower() or "skipped" in m.lower()
             for m in debug_msgs
-        ), f"Expected a debug log about no models. Got: {debug_msgs}"
+        ), f"Expected a no-model debug log from predict(); captured logs: {debug_msgs}"
 
     def test_predict_below_threshold_logs_debug(self, tmp_path):
         """When all predictions are below threshold, None is returned with a debug log."""
@@ -332,11 +333,11 @@ class TestClassifierPredictLogging:
             clf_logger.removeHandler(handler)
             clf_logger.setLevel(original_level)
 
-        assert result is None
+        assert result is None, "predict() must decline when all target scores are below threshold"
         assert any(
             "threshold" in m.lower() or "declined" in m.lower()
             for m in debug_msgs
-        ), f"Expected a debug log about threshold. Got: {debug_msgs}"
+        ), f"Expected a threshold-decline debug log from predict(); captured logs: {debug_msgs}"
 
 
 # ── KYC route error handling ──────────────────────────────────────────────────

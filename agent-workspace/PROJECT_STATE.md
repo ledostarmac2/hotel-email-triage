@@ -12,10 +12,11 @@ Last updated: 2026-05-28
 
 ## Current Active Task
 
-User-facing language cleanup is the current session task. Completed Request classifier training remains the broader backlog work; outside-agent training requires Codex/Claude model-judgment labels on sanitized examples, and heuristic-only `run_completed_pipeline()` output is staging data, not completed outside-agent training.
+Test suite cleanup is the current session task. Completed Request classifier training remains the broader backlog work; outside-agent training requires Codex/Claude model-judgment labels on sanitized examples, and heuristic-only `run_completed_pipeline()` output is staging data, not completed outside-agent training.
 
 ## Current Release Context
 
+- 2026-05-28 test suite cleanup pass completed: pytest markers now group unit/integration/UI/slow/safety tests, brittle local-user assumptions were removed, privacy-hygiene coverage was added, and `docs/TESTING.md` now reflects the current commands. Full suite passed with 1,466 tests.
 - 2026-05-28 user-facing language cleanup pass completed: visible native UI labels now use hotel-operations wording through display-label helpers, while storage/API constants remain unchanged.
 - 2026-05-28 native PySide6 UI polish pass completed: conversation list/detail labels, empty/loading/error states, and Summary/Action/Risk/Draft section styling were improved without Outlook mutation, sending, new features, or backend triage changes.
 - `v0.5.3` repaired lint/build lanes but failed the release job at `Security Lint (Installer Extraction)`.

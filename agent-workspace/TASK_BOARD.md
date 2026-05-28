@@ -35,6 +35,7 @@ If the user explicitly bypasses Codex review, document that bypass in `agent-wor
 | Fix native PySide label background highlights and rebuild local EXE | Codex | Done | Default `QLabel` backgrounds are transparent, regression test passed, local `dist\ReplyRight\ReplyRight.exe` rebuilt and health-smoked. |
 | Native PySide6 UI polish pass | Codex | Done | Conversation list/detail polish implemented and targeted tests passed; Brian should visually spot-check the native UI. |
 | User-facing language cleanup pass | Codex | Done | Native UI display labels and operations guide now use hotel-operations wording; targeted tests and py_compile passed. |
+| Test suite cleanup pass | Codex | Done | Pytest markers, brittle-test cleanup, privacy-hygiene coverage, and testing guide updates completed; full suite passed with 1,466 tests. |
 | Adopt mandatory coordination protocol | Claude | Approved by Codex | Protocol acknowledged in `AGENT_MESSAGES.md` at 2026-05-25T20:45:00-04:00. Done pending Codex confirmation. |
 | Review/own local triage behavior test file if applicable | Claude | Approved by Codex | Codex reviewed, ran the tests, approved the test file, and took ownership of the CCA false-positive fix. |
 | Codify outside-agent classifier training contract | Codex | Done | Docs, helper script, and contract tests updated so agent-assisted training requires sanitized agent labels, not heuristic-only pipeline output. |

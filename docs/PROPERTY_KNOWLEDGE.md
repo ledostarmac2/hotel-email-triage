@@ -138,7 +138,7 @@
 ## 8. Hotel Amenities & Services
 
 - **Guerlain Spa** — Flagship spa; signature facials and body treatments; popular pre-arrival request
-- **Bark Avenue** — Pet program; dog bed, welcome treats; managed by Front Office (Arielle Matza is a known loyal guest of this program)
+- **Bark Avenue** — Pet program; dog bed, welcome treats; managed by Front Office (known loyal repeat guest on file)
 - **In-Room Dining (IRD)** — 24-hour; frequently requested for VIP arrivals and amenity orders
 - **Peacock Alley** — All-day dining restaurant
 - **The Cocktail Terrace** — Bar / lounge
@@ -209,18 +209,18 @@
 ## 11. Business Intelligence & Urgency Calibration
 
 ### Revenue Scale (for urgency scoring)
-- **Urgent** — Any folio or group block > $10,000; FIFA/World Cup group ($24,700+); Kricheli long-stay ($93,167.83 folio); contract negotiations; billing disputes > $1,000; VIP same-day complaint
+- **Urgent** — Any folio or group block > $10,000; FIFA/World Cup group ($24,700+); long-stay residential folio disputes (>$90k range); contract negotiations; billing disputes > $1,000; VIP same-day complaint
 - **High** — Folio disputes $500–$999; VIP arrival same-day or next-day; suite upgrades; corporate rate negotiations; OTA extranet issues blocking bookings; wire transfer confirmations
 - **Normal** — Standard reservations, rate quotes, modification requests, amenity orders 3+ days out
 - **Low** — Information requests, newsletter sign-ups, general inquiries, duplicate confirmations, Passkey/Cvent automated notifications
 
 ### Department Routing Logic
 - **Finance (Areum Jo)**: Any wire transfer, master bill reconciliation, folio dispute, credit card chargeback, deposit confirmation
-- **Front Office (Marina/Renee/Noah)**: Same-day arrivals, PG rooms, no-show disputes, room condition complaints, early check-in requests
+- **Front Office (Marina / Renee / Noah)**: Same-day arrivals, PG rooms, no-show disputes, room condition complaints, early check-in requests
 - **Pre-Arrival (Catherine Esposo)**: VIP amenities, OOO notifications, welcome letters, Spa pre-bookings, special occasion setups
 - **Sales (David Martins)**: Corporate rate negotiations, LVMH, FIFA, media/influencer comps, contract renewals, LNR/RFP
 - **Events (Adrien Aloi Haley)**: Group cancellations, BEO changes, attrition waivers, master billing disputes
-- **Reservations (Brian/Chris/Dakota)**: Everything else — standard bookings, rate changes, modifications, general questions
+- **Reservations (Brian / Chris / Dakota)**: Everything else — standard bookings, rate changes, modifications, general questions
 
 ### Contact Type Classification
 - **Internal** — @waldorfastoria.com, @hilton.com, any known staff email address
@@ -234,18 +234,22 @@
 
 ## 12. Notable VIP Guest & Account Profiles
 
+Guest surnames below are anonymized. Staff and corporate names are retained as they are
+operational contact data needed for routing. Full guest names remain in the local property
+knowledge database only, not in this committed doc.
+
 | Guest / Account | Segment & Notes | Primary Owner |
 |---|---|---|
-| Kricheli family | Long-stay residential; $93,167.83 folio; dry-cleaning billing dispute; very high relationship value | Areum Jo + Chris Song |
+| Long-stay residential family (VIP A) | Long-stay residential; high-value folio (>$90k); billing dispute history; very high relationship value | Areum Jo + Chris Song |
 | FIFA / World Cup 2026 | June 2026 group block; 50+ rooms; $24,700+ revenue; must not be declined or delayed | David Martins |
 | Louis Vuitton / LVMH | Corporate rate ~$350/night; VIP treatment expected; frequent high-value bookings | David Martins |
 | Antares Capital | Established LNR corporate account | David Martins / Reservations |
-| Michael Liebowitz | High-value repeat guest; direct relationship with Sales; specific preferences on file | David Martins |
-| Arielle Matza | Bark Avenue / pet program loyal guest; repeat booker; warm relationship | Front Office |
-| Szor family | VIP status; amenity-heavy arrivals; relationship tracked to GM level | Pre-Arrival + Sales |
+| High-value repeat guest (VIP B) | Direct relationship with Sales; specific preferences on file | David Martins |
+| Pet program loyal repeat guest (VIP C) | Bark Avenue / pet program; repeat booker; warm relationship | Front Office |
+| VIP family (VIP D) | VIP status; amenity-heavy arrivals; relationship tracked to GM level | Pre-Arrival + Sales |
 | QCC / Goldman Sachs | Corporate event client; large group; master billing; high compliance requirements | Events + Finance |
 | Singapore Exchange (SGX) | Corporate booking; international wire payment; compliance-sensitive | Finance + Reservations |
-| Glendorf (complaint) | Dissatisfied guest with escalated complaint; requires MD-level response and recovery | Luigi Romaniello |
+| Escalated complaint guest (VIP E) | Dissatisfied guest with escalated complaint; requires MD-level response and recovery | Luigi Romaniello |
 | Champ Travel clients | Residential / long-stay agent-booked guests; extended stays in residential block | HT Concierge / Residential desk |
 | Media / Influencer guests | Social media and press comp or discounted stays; require Marketing approval before confirming | Daniel Harpaz |
 | Brian Tarabocchia | Hotel staff / system developer; any reservation under this name = Internal/Staff — lowest priority | Self |
@@ -255,11 +259,11 @@
 ## 13. Key Business Rules for the Triage Model
 
 1. **FIFA/World Cup emails (June 2026)** — Always Urgent; always Sales (David Martins); $24,700+ revenue at stake; never route to general Reservations
-2. **Kricheli emails** — Always Urgent; Finance (Areum Jo) + Reservations (Chris Song); $93,167.83 folio dispute; treat with extreme care
+2. **Long-stay residential VIP folio emails** — Always Urgent; Finance (Areum Jo) + Reservations (Chris Song); high-value folio dispute; treat with extreme care
 3. **LVMH rate requests** — High priority; Sales (David Martins) approval required before applying rate; do not self-approve
 4. **OOO room notifications** — High priority; Pre-Arrival (Catherine Esposo) must proactively contact guest before arrival
 5. **No-show / PG disputes** — High priority; Front Office (Marina/Renee/Noah) primary; Finance (Areum Jo) for billing
-6. **Bark Avenue / pet requests** — Normal priority; note Arielle Matza as known loyal repeat guest
+6. **Bark Avenue / pet requests** — Normal priority; note known loyal repeat guest on file
 7. **Guerlain Spa requests** — Normal priority; route to Pre-Arrival (Catherine Esposo) for coordination
 8. **Passkey / Cvent automated emails** — Low priority; Automated contact type; Group Reservations (Jenna Fisco)
 9. **Wire transfer / Sertifi authorization requests** — High priority; Finance (Areum Jo); time-sensitive

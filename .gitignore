@@ -37,12 +37,19 @@ data/
 *.sqlite3
 *.db
 
-# Labeling raw label files contain redacted but potentially sensitive email content
+# Labeling files — contain redacted but potentially sensitive email content/metadata.
+# Only .gitkeep placeholder files are tracked; all data files are ignored.
 labeling/inbox/*.json
 labeling/Claude/*.json
 labeling/ChatGPT/*.json
 labeling/agent_batches/*.json
 labeling/runs/*.json
+# Export files (Markdown labeling batches) may contain redacted guest/staff context
+labeling/exports/*.md
+labeling/exports/*.json
+labeling/exports/*.txt
+# Any future labeling batch format
+labeling/agent_batches/*.md
 
 build/
 dist/
@@ -71,3 +78,16 @@ new_dependencies.txt
 
 # -- Inactive scaffolds -- kept locally, never committed
 app/
+
+# ── Runtime logs — may contain request paths with email IDs ────────────────
+*.log
+*.log.*
+replyright-runtime.log
+data/replyright-runtime.log
+
+# ── Crash / diagnostic output ───────────────────────────────────────────────
+crash*.txt
+crash*.log
+*.crash
+error_report*.txt
+diagnostics*.json

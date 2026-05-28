@@ -1,5 +1,49 @@
 # Agent Handoffs
 
+## 2026-05-28 - Codex - Test Suite Cleanup Pass
+
+Summary:
+
+- Completed Brian's test-suite cleanup pass without app feature changes or coverage reduction.
+- Added registered pytest markers and automatic file-based grouping for unit, integration, UI, slow, and safety tests.
+- Removed brittle local-machine assumptions from classifier logging and source secret-hygiene tests.
+- Added privacy-hygiene coverage for tracked runtime files, labeling exports, doc passwords, gitignore coverage, and local training redaction.
+- Updated stale UI queue-label coverage and rewrote `docs/TESTING.md` with current commands and test group guidance.
+
+Files changed:
+
+- `pytest.ini`
+- `scripts/check_no_bundled_secrets.py`
+- `tests/conftest.py`
+- `tests/test_error_hardening.py`
+- `tests/test_privacy_hygiene.py`
+- `tests/test_v1_features.py`
+- `.gitignore`
+- `outlook_dashboard/database.py`
+- `docs/TESTING.md`
+- `docs/PROPERTY_KNOWLEDGE.md`
+- `labeling/exports/2026-05-18.md` (removed)
+- `labeling/runs/20260518T135617Z.json` (removed)
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+- `agent-workspace/PROJECT_STATE.md`
+- `agent-workspace/TASK_BOARD.md`
+- `agent-workspace/HANDOFFS.md`
+- `agent-workspace/AGENT_MESSAGES.md`
+
+Verification:
+
+- `python -m pytest tests/test_error_hardening.py::TestClassifierPredictLogging -q --timeout=60` - passed.
+- `python -m pytest tests/test_secret_hygiene.py::test_check_no_bundled_secrets_script_passes -q --timeout=60` - passed.
+- `python -m pytest --collect-only -q -m "ui or safety" tests/` - marker grouping collected expected UI/safety files.
+- `python -m py_compile tests/conftest.py tests/test_error_hardening.py tests/test_v1_features.py scripts/check_no_bundled_secrets.py` - passed.
+- `python -m pytest tests/test_privacy_hygiene.py -q --timeout=60` - passed.
+- `python -m pytest tests/ -x --timeout=60 -q --no-header` - 1,466 passed.
+
+Remaining work:
+
+- Keep new test files assigned to the marker groups in `tests/conftest.py`.
+
 ## 2026-05-28 - Claude - Error Handling Hardening Pass
 
 Summary:

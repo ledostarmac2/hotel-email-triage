@@ -1,11 +1,19 @@
 # Current State
 
-Last updated: 2026-05-28 (user-facing language cleanup pass)
+Last updated: 2026-05-28 (test suite cleanup pass)
 
 ## Status
 
 - Product name is ReplyRight.
 - Current runnable app is `outlook_dashboard/` plus `run_desktop.py`.
+- 2026-05-28 test suite cleanup pass:
+  - Added registered pytest markers for `unit`, `integration`, `ui`, `slow`, and `safety`, with automatic file-based grouping in `tests/conftest.py`.
+  - Kept tests local-first by clearing live AI/Supabase environment variables by default; tests that need configured values set fake values and mock network boundaries.
+  - Removed brittle local-machine assumptions from classifier logging and source secret-hygiene tests.
+  - Added privacy-hygiene coverage for tracked runtime files, labeling exports, doc passwords, `.gitignore` coverage, and local training-example redaction.
+  - Updated stale sidebar queue label coverage to the current "Needs Human Review" UI wording.
+  - Rewrote `docs/TESTING.md` with current commands, marker usage, intentional overlap notes, and isolation rules.
+  - Validation passed: `python -m pytest tests/ -x --timeout=60 -q --no-header` (1,466 passed).
 - 2026-05-28 user-facing language cleanup pass:
   - Added shared native UI display-label helpers for hotel-operations labels while keeping internal constants and stored values unchanged.
   - Cleaned visible native UI wording across conversation list/detail, filters, sidebar, admin/status/training tools, KYC, settings, and first-run setup.

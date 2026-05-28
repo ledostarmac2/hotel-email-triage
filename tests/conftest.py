@@ -6,6 +6,84 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+_INTEGRATION_TEST_FILES = {
+    "test_api_full_coverage.py",
+    "test_api_workflow_pytest.py",
+    "test_auth_supabase.py",
+    "test_diagnostics_contract.py",
+    "test_do178c_compliance.py",
+    "test_first_run_setup.py",
+    "test_kyc_backend.py",
+    "test_kyc_service_full.py",
+    "test_training_pipeline.py",
+    "test_v1_features.py",
+}
+
+_UI_TEST_FILES = {
+    "test_desktop_startup.py",
+    "test_first_run_setup.py",
+    "test_migration_docs_reference_no_qwebengine.py",
+    "test_pyside6_no_browser_engine.py",
+    "test_pyside6_scaffold.py",
+}
+
+_SLOW_TEST_FILES = {
+    "test_api_full_coverage.py",
+    "test_do178c_compliance.py",
+    "test_email_triage_behavior.py",
+    "test_recommended_action.py",
+    "test_safety_guardrails.py",
+    "test_triage_real_world.py",
+    "test_v1_features.py",
+}
+
+_SAFETY_TEST_FILES = {
+    "test_bundled_secrets.py",
+    "test_config_contract.py",
+    "test_error_hardening.py",
+    "test_installer_contract.py",
+    "test_platform_guards.py",
+    "test_privacy_hygiene.py",
+    "test_safety_guardrails.py",
+    "test_safety_regression.py",
+    "test_secret_hygiene.py",
+}
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    """Apply coarse-grained markers by file so test selection stays maintainable."""
+    for item in items:
+        filename = Path(str(item.path)).name
+        assigned = False
+        if filename in _INTEGRATION_TEST_FILES:
+            item.add_marker(pytest.mark.integration)
+            assigned = True
+        if filename in _UI_TEST_FILES:
+            item.add_marker(pytest.mark.ui)
+            assigned = True
+        if filename in _SLOW_TEST_FILES:
+            item.add_marker(pytest.mark.slow)
+        if filename in _SAFETY_TEST_FILES:
+            item.add_marker(pytest.mark.safety)
+            assigned = True
+        if not assigned:
+            item.add_marker(pytest.mark.unit)
+
+
+@pytest.fixture(autouse=True)
+def _disable_live_services_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep unit tests local-first even when the developer shell has live keys."""
+    for key in (
+        "OPENAI_API_KEY",
+        "GOOGLE_AI_API_KEY",
+        "GEMINI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "SUPABASE_URL",
+        "SUPABASE_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+    ):
+        monkeypatch.setenv(key, " ")
+
 
 # ── Settings cache reset ──────────────────────────────────────────────────────
 # get_settings() is @lru_cache.  Tests that use monkeypatch.setenv/delenv to

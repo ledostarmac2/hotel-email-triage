@@ -1,123 +1,109 @@
-# ReplyRight — Testing Guide
+# ReplyRight Testing Guide
 
-## Stack
+Last updated: 2026-05-28
 
-| Layer | Tool | Purpose |
-|---|---|---|
-| Test runner | pytest 9.x | Unified runner for all test types |
-| Coverage | pytest-cov | Line/branch coverage reports |
-| Async support | pytest-asyncio | `async def` test functions (kernel orchestration) |
-| HTTP assertions | httpx + FastAPI TestClient | FastAPI route tests without a live server |
-| HTML parsing | beautifulsoup4 | Dashboard shell structure assertions |
+## Primary Commands
 
-Legacy `unittest` test classes run automatically through pytest's built-in discovery.
+Run the full suite the same way Codex and release-prep tasks do:
 
-## Commands
-
-### Run all tests
 ```powershell
-python -m pytest tests/
+python -m pytest tests/ -x --timeout=60 -q --no-header
 ```
 
-### Verbose output
+Useful focused runs:
+
 ```powershell
-python -m pytest tests/ -v
+python -m pytest -m unit tests/ -q --timeout=60
+python -m pytest -m integration tests/ -q --timeout=60
+python -m pytest -m ui tests/ -q --timeout=60
+python -m pytest -m safety tests/ -q --timeout=60
+python -m pytest -m "not slow" tests/ -q --timeout=60
 ```
 
-### Coverage report (terminal)
+Run a specific file or test:
+
 ```powershell
-python -m pytest tests/ --cov=outlook_dashboard --cov=replyright_kernel --cov-report=term-missing
+python -m pytest tests/test_recommended_action.py -q --timeout=60
+python -m pytest tests/test_v1_features.py::TestSidebarNeedsReviewQueue -q --timeout=60
 ```
 
-### Coverage report (HTML — open dist/htmlcov/index.html)
+Collect tests without running them:
+
 ```powershell
-python -m pytest tests/ --cov=outlook_dashboard --cov=replyright_kernel --cov-report=html:dist/htmlcov
+python -m pytest --collect-only -q tests/
+python -m pytest --collect-only -q -m ui tests/
 ```
 
-### Run a specific file
+Coverage report:
+
 ```powershell
-python -m pytest tests/test_redaction.py -v
+python -m pytest tests/ --cov=outlook_dashboard --cov=replyright_qt --cov=replyright_kernel --cov-report=term-missing
 ```
 
-### Run a specific test class or function
-```powershell
-python -m pytest tests/test_redaction.py::TestCardRedaction -v
-python -m pytest tests/test_malformed_emails.py::TestUrgencyBoundaries::test_legal_threat_urgency_is_maximum -v
-```
+## Pytest Markers
 
-### Legacy unittest runner (still works, useful for CI comparison)
-```powershell
-python -m unittest discover -s tests
-```
+Markers are registered in `pytest.ini` and applied in `tests/conftest.py` by file.
 
-## Test Files
-
-| File | Count | Coverage area |
-|---|---|---|
-| `test_ai_and_database.py` | 14 | Core triage logic, database, auth, adaptive feedback, rule candidates, Supabase cache |
-| `test_import_smoke.py` | 1 | All active Python modules import cleanly |
-| `test_business_logic_pytest.py` | 4 | PII redaction pipeline, category classification, malformed email baseline |
-| `test_api_workflow_pytest.py` | 3 | FastAPI routes end-to-end: import, list, detail, analyze, feedback, admin stats, rate limit |
-| `test_redaction.py` | 40 | Luhn validation, card/CVV/expiry/email/phone/payment-link/confirmation-number redaction |
-| `test_malformed_emails.py` | 37 | Empty/None/malformed inputs, oversized text, unicode, HTML, reply thread isolation, urgency bounds |
-| `test_kernel_plugins.py` | 43 | PriorityTriagePlugin, ExecutiveSummaryPlugin, AuditCompliancePlugin |
-| `test_kernel_orchestration.py` | 18 | End-to-end kernel pipeline with mocked LLM |
-| **Total** | **160** | |
-
-## Key Design Rules
-
-- **No real credentials**: all tests set `OPENAI_API_KEY=""`, `ANTHROPIC_API_KEY=""`, `GOOGLE_AI_API_KEY=""`, `SUPABASE_URL=""`.
-- **No live Outlook**: inbox tests use the `POST /api/outlook-desktop/import-json` route with synthetic payloads.
-- **No live Supabase**: Supabase upload/download calls are no-ops when `SUPABASE_URL` is empty.
-- **Isolated databases**: every test that touches SQLite uses a `tmp_path`-scoped temporary database.
-- **Mocked LLM**: kernel orchestration tests patch the kernel's `invoke_prompt` with a `MagicMock`.
-- **Deterministic**: no random seeds, no timing dependencies, no network calls.
-
-## Shared Fixtures (conftest.py)
-
-| Fixture | Scope | What it provides |
-|---|---|---|
-| `tmp_db` | function | Fresh initialized SQLite at `tmp_path/test.sqlite3` |
-| `plain_email` | function | Minimal email dict, no urgency signals |
-| `urgent_email` | function | Same-day + VIP + accessibility + follow-up signals |
-| `complaint_email` | function | Legal threat language, high urgency |
-| `cca_completion_email` | function | Completed CCA form — low urgency, Reservations owner |
-| `accessibility_email` | function | ADA request — ADA risk flag expected |
-| `thread_with_quoted_upset` | function | Outlook thread with positive latest reply over upset quoted history |
-| `app_client` | function | Authenticated FastAPI TestClient (admin login, temp DB, no external AI) |
-
-## Coverage Targets
-
-Run with `--cov-report=term-missing` to see uncovered lines. Current focus areas:
-
-| Module | Notes |
+| Marker | Use |
 |---|---|
-| `outlook_dashboard/redaction.py` | Fully covered by `test_redaction.py` |
-| `outlook_dashboard/ai.py` | Core triage covered; OpenAI/Gemini/Claude branches require API key |
-| `outlook_dashboard/database.py` | Core paths covered; admin analytics covered via `app_client` |
-| `outlook_dashboard/auth.py` | Login, admin repair, session management covered |
-| `replyright_kernel/plugins/` | All three plugins fully covered |
-| `replyright_kernel/engine.py` | Covered with and without API key |
+| `unit` | Fast isolated tests with no live services or repo runtime writes. |
+| `integration` | Local multi-module or FastAPI route tests with mocked services. |
+| `ui` | Native desktop/UI contract tests; no browser engine or live Outlook. |
+| `slow` | Broad scans or high-volume scenario suites. |
+| `safety` | Read-only Outlook, secrets, privacy, error-hardening, and no-external-AI guardrails. |
 
-## What Is Not Tested Here
+## Test Groups
 
-- Live Microsoft Graph OAuth flow (requires Entra app registration + real tenant)
-- Live Outlook COM import (requires classic Outlook for Windows + pywin32 accessible mailbox)
-- Live OpenAI/Gemini/Claude draft generation (requires real API key and incurs cost)
-- Live Supabase upload/download (requires `SUPABASE_URL`/`SUPABASE_KEY` and live schema)
-- pywebview desktop window rendering (requires WebView2 runtime, not a unit test concern)
+### Recommended Action And Queues
 
-These paths should be tested manually using the instructions in `docs/CURRENT_STATE.md`.
+- `tests/test_recommended_action.py`: deterministic action routing, taxonomy completeness, operational queue filtering, and realistic hotel scenarios.
+- `tests/test_safety_regression.py`: safety contracts proving recommended-action and queue metadata stay deterministic and metadata-only.
+- `tests/test_v1_features.py`: API-client queue mapping, sidebar queue labels/order, and schema compatibility.
 
-## Phase 7 Testing Considerations
+Overlap is intentional here: unit tests prove routing decisions, safety tests prove boundaries, and v1 tests prove UI/API wiring.
 
-When local classifier training is added (Phase 7), the following test categories will be needed:
+### Safety And Privacy
 
-- Sanitized training record creation (verify PII is stripped before Supabase storage)
-- Feature extraction from email → classifier input vector
-- Classifier prediction output validation (schema, score ranges)
-- Confidence threshold routing (high → local predict, low → external AI)
-- Model activation/rollback round-trip (activate new version, verify it loads, rollback)
-- Admin metrics endpoint correctness
+- `tests/test_safety_guardrails.py`: Outlook read-only contract, no auto-send, no external AI in guarded paths, PII handling.
+- `tests/test_secret_hygiene.py`: source and payload secret hygiene.
+- `tests/test_installer_contract.py`: installer payload exclusions and runtime dependency contracts.
+- `tests/test_config_contract.py`: centralized access to guarded environment variables.
+- `tests/test_platform_guards.py`: optional Windows/COM imports remain lazy.
+- `tests/test_error_hardening.py`: plain-English API/UI errors and internal diagnostic logging.
+- `tests/test_privacy_hygiene.py`: no tracked runtime data, no tracked labeling exports, doc password hygiene, and training-data redaction.
 
-No raw guest email bodies, reservation numbers, or payment details should appear in any test fixture or training record.
+Normal source secret scans intentionally ignore local ignored build output such as `dist/`; release payload audits scan staged build output explicitly.
+
+### UI And Desktop
+
+- `tests/test_pyside6_no_browser_engine.py`: native PySide6 shell contract, no `QWebEngineView`, display labels, theme guardrails.
+- `tests/test_pyside6_scaffold.py`: native scaffold imports and window availability.
+- `tests/test_desktop_startup.py`: startup health-gate contracts without launching live Outlook.
+- `tests/test_first_run_setup.py`: first-run setup API/native workflow contracts.
+- `tests/test_migration_docs_reference_no_qwebengine.py`: docs and migration contract for native UI.
+
+### API And Integration
+
+- `tests/test_api_workflow_pytest.py`, `tests/test_api_full_coverage.py`: FastAPI workflows with synthetic payloads and mocked external services.
+- `tests/test_auth_supabase.py`: Supabase Auth request construction with mocked network calls.
+- `tests/test_diagnostics_contract.py`: deployment/system status response shape.
+- `tests/test_kyc_backend.py`, `tests/test_kyc_service_full.py`: KYC service and API behavior with local temp databases.
+- `tests/test_training_pipeline.py`, `tests/test_completed_training_pipeline.py`, `tests/test_labeling_workflow.py`: sanitized training/export workflows.
+
+## Isolation Rules
+
+- Unit tests must not contact live Outlook, live Supabase, OpenAI, Google AI, Claude, SMTP, or Microsoft Graph.
+- `tests/conftest.py` clears live AI/Supabase environment variables by default. Tests that need configured values must set fake values and mock the network boundary.
+- Tests that touch SQLite should use `tmp_path`, `tmp_db`, or `app_client`; do not write local databases under repo `data/`.
+- Tests must not create `.env`, `.sqlite3`, `.msg`, build output, packaged binaries, or raw mailbox exports in tracked repo paths.
+- Synthetic email fixtures must not include real guest data, real reservation IDs, payment card data, live message IDs, or full sender addresses from production mailboxes.
+
+## What Is Not Covered By Unit Tests
+
+- Live classic Outlook COM import against the shared mailbox.
+- Live Microsoft Graph OAuth against a tenant.
+- Live Supabase schema and Auth behavior beyond mocked request contracts.
+- Live OpenAI, Google AI, or Claude generation.
+- Installer install/uninstall on a clean Windows machine.
+
+Use manual smoke testing and release workflow checks for those paths.

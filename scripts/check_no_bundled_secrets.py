@@ -134,11 +134,6 @@ def main() -> int:
             root / ".env.example",
             root / "build_exe.ps1",
         ]
-        if dist_dir.exists():
-            directories_to_scan.append(dist_dir)
-        if installer_out.exists():
-            directories_to_scan.append(installer_out)
-
     all_files = set(files_to_scan)
     for d in directories_to_scan:
         if d.exists():

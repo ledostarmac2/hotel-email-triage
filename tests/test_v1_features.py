@@ -898,10 +898,12 @@ class TestSidebarNeedsReviewQueue:
         keys = [q[0] for q in QUEUES]
         assert "review" in keys
 
-    def test_review_queue_has_correct_label(self):
+    def test_review_queue_label_uses_human_review_language(self):
         from replyright_qt.widgets.sidebar_nav import QUEUES
         labels = {q[0]: q[1] for q in QUEUES}
-        assert labels["review"] == "Needs Review"
+        assert labels["review"] == "Needs Human Review", (
+            "Sidebar review queue should use the current operator-facing label"
+        )
 
     def test_queue_order_sensible(self):
         from replyright_qt.widgets.sidebar_nav import QUEUES
