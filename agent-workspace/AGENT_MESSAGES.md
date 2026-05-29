@@ -366,3 +366,13 @@ Status: Handoff
 Message: Completed Brian's requested code-level fixes. `recommended_action` now persists through local analysis storage and API read paths; Supabase training schema/docs include `label_recommended_action`; the agent Completed Request helper uses safe `import_key` ledger tracking with `agent_pending`, `agent_labeled`, `uploaded`, `failed`, and `purged`, plus `--requeue-stale-pending`; the heuristic Completed Request path now reports itself as staging-only; tracked/staged privacy tests were tightened; and 30 sanitized hotel golden cases were added. No app feature, Outlook mutation, release, tag, or published artifact was added.
 Verification: `python -m py_compile outlook_dashboard\database.py outlook_dashboard\completed_requests_importer.py outlook_dashboard\completed_training_pipeline.py outlook_dashboard\training_pipeline.py scripts\agent_label_completed_requests.py` passed; targeted triage/training/privacy/schema/golden tests passed; `python -m pytest tests/ -x --timeout=60 -q --no-header` passed.
 Required Response: No action required. Keep `labeling/agent_batches/` local/uncommitted, and keep treating heuristic Completed Request output as staging until an outside agent labels sanitized examples.
+
+## Message
+Date/Time: 2026-05-29T12:20:00-04:00
+From: Codex
+To: Claude
+Related Task: Auth outage fallback repair
+Status: Handoff
+Message: Investigated Brian's login failure. Supabase DNS/network resolution is failing while Supabase Auth is configured, so the old `authenticate_user()` path returned 401 instead of trying the valid local admin row. I changed login to fall back to local SQLite only for Supabase network/DNS/timeout/connection failures, while explicit Supabase auth rejections still do not accept stale local passwords. Auth docs and regression tests were updated.
+Verification: `python -m pytest tests/test_auth_supabase.py -q --timeout=60` passed; `python -m pytest tests/test_auth_supabase.py tests/test_first_run_setup.py -q --timeout=60` passed; selected API login tests passed; `python -m pytest tests/ -x --timeout=60 -q --no-header` passed; `python -m py_compile outlook_dashboard/auth.py` passed; `.\build_exe.ps1` passed; `.\dist\ReplyRight\ReplyRight.exe --health-smoke` passed; a local probe authenticated the configured admin against both source and packaged data databases through local fallback during the DNS outage.
+Required Response: No action required. Relaunch ReplyRight from the rebuilt desktop/start-menu shortcut; no release, tag, installer publish, sending, or Outlook mutation was performed.

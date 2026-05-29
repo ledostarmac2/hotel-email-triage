@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-05-29: Supabase Network Outages Use Local Auth Fallback
+
+Decision: When Supabase Auth is configured, ReplyRight still treats valid Supabase responses and explicit Supabase login rejections as authoritative. If the Supabase auth request fails because the provider is unreachable due to network, DNS, timeout, or connection errors, login may fall back to an existing local SQLite user and must still verify the local password.
+
+Rationale: Installed desktop builds need local-first continuity during provider or DNS outages. This preserves the security boundary that bad Supabase credentials do not silently pass while allowing the seeded local admin account to work when Supabase cannot be reached at all.
+
+Consequences: Login diagnostics should distinguish Supabase connectivity failures from invalid credentials. Local fallback remains a resilience path only; it does not send, mutate Outlook, or change user provisioning.
+
 ## 2026-05-29: Conservative Dependency Adoption For Privacy Helpers
 
 Decision: Only `rapidfuzz==3.14.5` is added from the evaluated dependency list, and only as an optional helper layer with deterministic fallback. Presidio remains optional and disabled by default without a requirements entry; small-text, PySide6 theme packages, and structlog are deferred.

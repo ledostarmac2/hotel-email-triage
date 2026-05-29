@@ -69,6 +69,25 @@ def _req(url: str, headers: dict, body: dict | None = None, method: str = "GET")
         raise RuntimeError(f"Supabase {exc.code}: {err_body}") from exc
 
 
+def _is_supabase_network_error(exc: Exception) -> bool:
+    """Return True for Supabase connectivity failures, not auth rejections."""
+    if isinstance(exc, urllib.error.URLError):
+        return True
+    if isinstance(exc, (ConnectionError, TimeoutError)):
+        return True
+    text = str(exc).lower()
+    network_markers = (
+        "urlopen error",
+        "getaddrinfo failed",
+        "name resolution",
+        "temporary failure",
+        "timed out",
+        "connection refused",
+        "network is unreachable",
+    )
+    return any(marker in text for marker in network_markers)
+
+
 def _normalize_user(data: dict) -> dict:
     user = data.get("user") or data
     meta = user.get("app_metadata") or {}
@@ -114,7 +133,7 @@ def _decode_session(cookie: str) -> tuple[str, str] | None:
 
 
 def authenticate_user(email: str, password: str, db_path: Path | None = None) -> dict | None:
-    """Sign in with Supabase when configured, otherwise use local SQLite."""
+    """Sign in with Supabase when configured, with local fallback during outages."""
     normalized = email.lower().strip()
     if _supabase_auth_configured():
         try:
@@ -133,6 +152,11 @@ def authenticate_user(email: str, password: str, db_path: Path | None = None) ->
                 return user
         except Exception as exc:
             _log.warning("Supabase sign-in failed: %s", exc)
+            if _is_supabase_network_error(exc):
+                local_user = _authenticate_local_user(normalized, password, db_path)
+                if local_user:
+                    _log.warning("Supabase sign-in unavailable; using local auth fallback")
+                    return local_user
             return None
     return _authenticate_local_user(normalized, password, db_path)
 

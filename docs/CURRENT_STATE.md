@@ -1,11 +1,16 @@
 # Current State
 
-Last updated: 2026-05-29 (privacy tooling and local intelligence helper pass)
+Last updated: 2026-05-29 (auth outage fallback repair)
 
 ## Status
 
 - Product name is ReplyRight.
 - Current runnable app is `outlook_dashboard/` plus `run_desktop.py`.
+- 2026-05-29 auth outage fallback repair:
+  - Diagnosed current login failures as Supabase DNS/network reachability errors while Supabase Auth was configured.
+  - Login still treats Supabase success and explicit Supabase auth rejections as authoritative, but now falls back to an existing local SQLite user only when Supabase is unreachable because of network, DNS, timeout, or connection failure.
+  - Local fallback still verifies the local password and does not change Outlook read-only behavior, sending, or provisioning rules.
+  - Validation passed: `python -m pytest tests/test_auth_supabase.py -q --timeout=60`; `python -m pytest tests/test_auth_supabase.py tests/test_first_run_setup.py -q --timeout=60`; selected API login tests; `python -m pytest tests/ -x --timeout=60 -q --no-header`; `python -m py_compile outlook_dashboard/auth.py`; `.\build_exe.ps1`; `.\dist\ReplyRight\ReplyRight.exe --health-smoke`; a local probe authenticated the configured admin against both source and packaged data databases through local fallback during the DNS outage.
 - 2026-05-29 privacy tooling and local intelligence helper pass:
   - Added `docs/DEPENDENCY_EVALUATION.md` and integrated only `rapidfuzz==3.14.5` after a local Windows import/package smoke; Presidio, small-text, PySide6 theme packages, and structlog are deferred.
   - Added privacy-safe local helpers for active-learning candidate ranking and fuzzy follow-up/thread scoring. These helpers do not override core triage classification, do not call external AI, and strip unsafe raw email fields from returned candidate payloads.
@@ -296,7 +301,7 @@ Last updated: 2026-05-29 (privacy tooling and local intelligence helper pass)
 - Confidence scoring (10–95%) is computed per email and shown as a color-coded pill in the UI.
 - Rule candidate engine mines local feedback for recurring correction patterns. Three matching corrections create visible candidates; five or more mark the rule as auto-promoted for hands-off shared learning.
 - Admin Suggested Rules now includes emergency `Reject` and `Dismiss` controls. Dismissed candidates are hidden locally; rejected candidates stay visible as rejected and are skipped by Supabase auto-promotion.
-- Login uses Supabase Auth when configured and does not silently accept local SQLite passwords in that mode. Local SQLite users/sessions remain available only when Supabase is unconfigured. The configured Supabase admin account can still be repaired from `REPLYRIGHT_ADMIN_EMAIL` / `REPLYRIGHT_ADMIN_PASSWORD`; if no admin exists and Supabase service-role config is absent, first-run setup can create a local admin without asking for API keys.
+- Login uses Supabase Auth when configured and does not silently accept local SQLite passwords after an explicit Supabase auth rejection. Local SQLite users/sessions remain available when Supabase is unconfigured, and existing local users can authenticate during Supabase network/DNS/timeout outages. The configured Supabase admin account can still be repaired from `REPLYRIGHT_ADMIN_EMAIL` / `REPLYRIGHT_ADMIN_PASSWORD`; if no admin exists and Supabase service-role config is absent, first-run setup can create a local admin without asking for API keys.
 - Login failures render a persistent static error message with an X close button and preserve the typed email address. Dashboard action failures such as invite/reset errors now use a persistent dismissable error toast.
 - Auth middleware protects `/api/auth/me` and admin endpoints again. Public auth routes are limited to login/logout/forgot-password/reset-password, fixing the post-login dashboard boot loop.
 - Admin view now has its own dashboard shell: the Refresh Inbox button is hidden while Admin is active, the topbar changes to Admin, and leaving Admin restores/rebinds the inbox queue/detail DOM so Inbox, Urgent, VIP, and Missing Info render correctly again.

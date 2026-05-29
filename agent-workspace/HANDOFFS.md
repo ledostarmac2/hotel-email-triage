@@ -996,3 +996,38 @@ Verification:
 Remaining work:
 
 - Continue resolving the existing local untracked agent batch data separately; do not commit `labeling/agent_batches/`.
+
+## 2026-05-29 - Codex - Auth outage fallback repair
+
+Summary:
+
+- Investigated Brian's current login failure and found Supabase DNS/network errors while Supabase Auth was configured.
+- Updated `authenticate_user()` so Supabase success and explicit auth rejection remain authoritative, while network/DNS/timeout/connection failures can fall back to an existing local SQLite user after verifying the local password.
+- Updated auth behavior docs and added regression coverage for both the outage fallback and wrong-password rejection path.
+
+Files changed:
+
+- `outlook_dashboard/auth.py`
+- `tests/test_auth_supabase.py`
+- `docs/ARCHITECTURE.md`
+- `docs/CURRENT_STATE.md`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+- `agent-workspace/HANDOFFS.md`
+- `agent-workspace/TASK_BOARD.md`
+- `agent-workspace/AGENT_MESSAGES.md`
+
+Verification:
+
+- `python -m pytest tests/test_auth_supabase.py -q --timeout=60` - passed.
+- `python -m pytest tests/test_auth_supabase.py tests/test_first_run_setup.py -q --timeout=60` - passed.
+- `python -m pytest tests/test_api_workflow_pytest.py::test_auth_rate_limit_returns_429 tests/test_api_workflow_pytest.py::test_remember_email_survives_app_restart_style_login -q --timeout=60` - passed.
+- `python -m pytest tests/ -x --timeout=60 -q --no-header` - passed.
+- `python -m py_compile outlook_dashboard/auth.py` - passed.
+- `.\build_exe.ps1` - passed.
+- `.\dist\ReplyRight\ReplyRight.exe --health-smoke` - passed.
+- Local diagnostic probe authenticated the configured admin against both source and packaged data databases through local fallback during the DNS outage.
+
+Remaining work:
+
+- Relaunch ReplyRight from the rebuilt desktop/start-menu shortcut; no release, tag, installer publish, sending, or Outlook mutation was performed.

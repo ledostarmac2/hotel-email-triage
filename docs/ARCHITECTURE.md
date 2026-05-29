@@ -109,7 +109,7 @@ Dashboard login uses Supabase Auth whenever Supabase is configured. `auth.py` us
 
 The `rr_session` cookie stores access and refresh tokens in an HttpOnly cookie. `_AuthMiddleware` validates or refreshes the token for protected routes.
 
-For no-key development and local-first continuity, `auth.py` still supports local SQLite users and sessions only when Supabase is not configured. Once Supabase URL and anon key are present, password login is Supabase-authoritative and does not silently accept local SQLite credentials.
+For no-key development and local-first continuity, `auth.py` still supports local SQLite users and sessions. Once Supabase URL and anon key are present, password login is Supabase-authoritative for successful Supabase responses and explicit Supabase auth rejections, so stale local passwords are not silently accepted. If Supabase is unreachable because of a network, DNS, or timeout failure, an existing local SQLite user may authenticate with the matching local password so installed desktops can keep operating during provider outages.
 
 Admin-created invites are the current onboarding model. SMTP can send invite/reset emails; when SMTP is unavailable or sending fails, the invite endpoint returns a manual local invite URL for beta use. A future broad multi-machine rollout should replace local reset links with a public/Supabase-hosted redirect or equivalent centralized invite flow.
 

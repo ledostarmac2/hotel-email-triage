@@ -107,6 +107,47 @@ def test_supabase_configured_auth_does_not_use_local_password_fallback(tmp_path,
         assert authenticate_user("agent@example.com", "LocalPassword123!", db_path=db_path) is None
 
 
+def test_supabase_network_error_uses_local_password_fallback(tmp_path, monkeypatch) -> None:
+    _set_supabase_env(monkeypatch)
+    db_path = tmp_path / "auth.sqlite3"
+    initialize_database(db_path)
+    with managed_connect(db_path) as db:
+        db.execute(
+            "INSERT INTO users (email, password_hash, role, created_at) VALUES (?, ?, 'admin', ?)",
+            ("agent@example.com", _hash_password("LocalPassword123!"), "2026-05-19T00:00:00"),
+        )
+
+    with patch(
+        "urllib.request.urlopen",
+        side_effect=urllib.error.URLError(OSError(11001, "getaddrinfo failed")),
+    ):
+        user = authenticate_user("Agent@Example.com", "LocalPassword123!", db_path=db_path)
+
+    assert user is not None, "local admin should work during a Supabase network outage"
+    assert user["email"] == "agent@example.com"
+    assert user["role"] == "admin"
+    assert user["_local_session"] is True
+
+
+def test_supabase_network_error_rejects_wrong_local_password(tmp_path, monkeypatch) -> None:
+    _set_supabase_env(monkeypatch)
+    db_path = tmp_path / "auth.sqlite3"
+    initialize_database(db_path)
+    with managed_connect(db_path) as db:
+        db.execute(
+            "INSERT INTO users (email, password_hash, role, created_at) VALUES (?, ?, 'admin', ?)",
+            ("agent@example.com", _hash_password("LocalPassword123!"), "2026-05-19T00:00:00"),
+        )
+
+    with patch(
+        "urllib.request.urlopen",
+        side_effect=urllib.error.URLError(OSError(11001, "getaddrinfo failed")),
+    ):
+        user = authenticate_user("agent@example.com", "WrongPassword123!", db_path=db_path)
+
+    assert user is None, "Supabase outage fallback must still verify the local password"
+
+
 def test_get_session_user_refreshes_expired_token(monkeypatch) -> None:
     _set_supabase_env(monkeypatch)
     calls: list[str] = []
