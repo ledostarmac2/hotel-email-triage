@@ -1,11 +1,17 @@
 # Current State
 
-Last updated: 2026-05-29 (code-level triage/training hardening pass)
+Last updated: 2026-05-29 (privacy tooling and local intelligence helper pass)
 
 ## Status
 
 - Product name is ReplyRight.
 - Current runnable app is `outlook_dashboard/` plus `run_desktop.py`.
+- 2026-05-29 privacy tooling and local intelligence helper pass:
+  - Added `docs/DEPENDENCY_EVALUATION.md` and integrated only `rapidfuzz==3.14.5` after a local Windows import/package smoke; Presidio, small-text, PySide6 theme packages, and structlog are deferred.
+  - Added privacy-safe local helpers for active-learning candidate ranking and fuzzy follow-up/thread scoring. These helpers do not override core triage classification, do not call external AI, and strip unsafe raw email fields from returned candidate payloads.
+  - Added optional disabled-by-default Presidio redaction hook behind `REPLYRIGHT_ENABLE_PRESIDIO_REDACTION`; if Presidio is missing or fails, existing regex/Luhn redaction remains the fallback and diagnostics are scrubbed.
+  - Added stdlib structured logging helpers that scrub raw bodies, full emails, phone numbers, confirmation numbers, payment links, API keys, service-role keys, cookies, and tokens.
+  - Tightened safety coverage for tracked/staged runtime, build, installer, diagnostic, Outlook export, log, and labeling JSON artifacts.
 - 2026-05-29 code-level triage/training hardening pass:
   - Persisted `recommended_action` through local `email_analysis` schema, migrations, `save_analysis()`, `get_email()`, `list_emails()`, conversation reads, and Supabase training schema metadata.
   - Hardened agent-assisted Completed Request state transitions with safe `import_key` tracking, `agent_pending`, `agent_labeled`, `uploaded`, `failed`, and `purged` ledger states, duplicate-label skips, and `--requeue-stale-pending`.

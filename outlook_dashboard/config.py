@@ -44,6 +44,13 @@ def _int_env(name: str, default: int) -> int:
         return default
 
 
+def _bool_env(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
 @dataclass(frozen=True)
 class Settings:
     microsoft_client_id: str
@@ -75,6 +82,7 @@ class Settings:
     supabase_url: str
     supabase_key: str
     supabase_service_role_key: str
+    enable_presidio_redaction: bool
 
     @property
     def graph_scopes(self) -> tuple[str, ...]:
@@ -220,4 +228,5 @@ def get_settings() -> Settings:
         supabase_url=os.getenv("SUPABASE_URL", "").strip(),
         supabase_key=os.getenv("SUPABASE_KEY", "").strip(),
         supabase_service_role_key=os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip(),
+        enable_presidio_redaction=_bool_env("REPLYRIGHT_ENABLE_PRESIDIO_REDACTION", False),
     )

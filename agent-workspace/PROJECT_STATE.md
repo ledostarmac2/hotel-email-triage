@@ -12,10 +12,11 @@ Last updated: 2026-05-29
 
 ## Current Active Task
 
-Code-level triage/training hardening is the current session task. Completed Request classifier training remains the broader backlog work; outside-agent training requires Codex/Claude model-judgment labels on sanitized examples, and heuristic-only `run_completed_pipeline()` output is staging data, not completed outside-agent training.
+Privacy tooling and local intelligence helper hardening is the current session task. Completed Request classifier training remains the broader backlog work; outside-agent training requires Codex/Claude model-judgment labels on sanitized examples, and heuristic-only `run_completed_pipeline()` output is staging data, not completed outside-agent training.
 
 ## Current Release Context
 
+- 2026-05-29 privacy tooling/local intelligence helper pass completed: `rapidfuzz==3.14.5` passed local smoke and is the only new dependency; Presidio/small-text/theme packages/structlog are deferred; local active-learning, threading, optional Presidio hook, and safe logging helpers were added without Outlook mutation or classifier override. Full suite passed.
 - 2026-05-29 code-level triage/training hardening completed: `recommended_action` is persisted through local analysis storage/API reads, agent-assisted Completed Request batches have recoverable ledger states and stale-pending requeue support, heuristic Completed Request output is labeled staging-only, tracked/staged privacy tests were tightened, and 30 sanitized hotel golden cases were added.
 - 2026-05-28 build/install confidence pass completed locally: build and installer scripts now fail clearly for missing required inputs, packaged health smoke prints useful diagnostics, CI artifacts are labeled as non-release CI outputs, and build/deployment/testing docs distinguish local build, CI build, installer build, and release publishing.
 - 2026-05-28 test suite cleanup pass completed: pytest markers now group unit/integration/UI/slow/safety tests, brittle local-user assumptions were removed, privacy-hygiene coverage was added, and `docs/TESTING.md` now reflects the current commands. Full suite passed with 1,466 tests.

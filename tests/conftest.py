@@ -45,6 +45,8 @@ _SAFETY_TEST_FILES = {
     "test_installer_contract.py",
     "test_platform_guards.py",
     "test_privacy_hygiene.py",
+    "test_logging_privacy.py",
+    "test_redaction_presidio_optional.py",
     "test_safety_guardrails.py",
     "test_safety_regression.py",
     "test_secret_hygiene.py",

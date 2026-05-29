@@ -1,6 +1,12 @@
 from __future__ import annotations
 
+import logging
 import re
+from functools import lru_cache
+from typing import Any
+
+from .config import get_settings
+from .runtime_log import get_logger, safe_log
 
 CARD_CANDIDATE_RE = re.compile(r"\b(?:\d[ -]?){13,19}\b")
 CVV_RE = re.compile(
@@ -24,6 +30,8 @@ CONFIRMATION_RE = re.compile(
     r"\s*(?:number|no\.?|#|id)?\s*[:#-]?\s*)[A-Z0-9-]{6,18}\b",
     re.IGNORECASE,
 )
+
+_log = get_logger("redaction")
 
 
 def _luhn_valid(number: str) -> bool:
@@ -76,4 +84,59 @@ def redact_sensitive_text(text: str) -> tuple[str, dict[str, int]]:
     counts["phones"] = phone_count
     counts["payment_links"] = payment_link_count
     counts["confirmation_numbers"] = confirmation_count
+    redacted, presidio_counts = _apply_presidio_second_pass(redacted)
+    counts.update(presidio_counts)
     return redacted, counts
+
+
+def _presidio_enabled() -> bool:
+    try:
+        return bool(get_settings().enable_presidio_redaction)
+    except Exception:
+        return False
+
+
+@lru_cache(maxsize=1)
+def _get_presidio_engines() -> tuple[Any, Any]:
+    from presidio_analyzer import AnalyzerEngine
+    from presidio_anonymizer import AnonymizerEngine
+
+    return AnalyzerEngine(), AnonymizerEngine()
+
+
+def _apply_presidio_second_pass(text: str) -> tuple[str, dict[str, int]]:
+    if not text or not _presidio_enabled():
+        return text, {}
+
+    try:
+        analyzer, anonymizer = _get_presidio_engines()
+    except Exception as exc:
+        safe_log(
+            _log,
+            logging.WARNING,
+            "redaction.presidio_unavailable",
+            error_type=type(exc).__name__,
+            error=str(exc),
+        )
+        return text, {}
+
+    try:
+        results = analyzer.analyze(text=text, language="en")
+        if not results:
+            return text, {"presidio_entities": 0}
+        anonymized = anonymizer.anonymize(text=text, analyzer_results=results)
+        counts: dict[str, int] = {"presidio_entities": len(results)}
+        for result in results:
+            entity = str(getattr(result, "entity_type", "entity") or "entity").lower()
+            key = "presidio_" + re.sub(r"[^a-z0-9]+", "_", entity).strip("_")
+            counts[key] = counts.get(key, 0) + 1
+        return str(getattr(anonymized, "text", text)), counts
+    except Exception as exc:
+        safe_log(
+            _log,
+            logging.WARNING,
+            "redaction.presidio_failed",
+            error_type=type(exc).__name__,
+            error=str(exc),
+        )
+        return text, {}

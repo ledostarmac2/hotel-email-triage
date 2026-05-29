@@ -2937,6 +2937,58 @@ Remaining work:
 - No release, tag, or published artifact was created for this task.
 - Installer output under `installer\output\` is local build output and should remain uncommitted.
 
+## 2026-05-29 - Privacy tooling and local intelligence helpers
+
+Summary:
+
+- Added a practical dependency evaluation and integrated only `rapidfuzz==3.14.5` after a local Windows smoke check.
+- Added local active-learning candidate ranking that strips unsafe raw email fields before returning review candidates.
+- Added local fuzzy/fallback thread scoring helpers for follow-up/duplicate detection without changing core classification decisions.
+- Added optional disabled-by-default Presidio second-pass redaction hook with safe fallback and scrubbed diagnostics only.
+- Added stdlib structured logging helpers that scrub raw bodies, emails, phone numbers, confirmation numbers, payment links, keys, cookies, and tokens.
+- Tightened privacy hygiene tests for tracked/staged runtime, build, installer, diagnostic, Outlook export, log, and labeling JSON artifacts.
+
+Files changed:
+
+- `docs/DEPENDENCY_EVALUATION.md`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+- `docs/SECURITY_AND_PRIVACY.md`
+- `docs/TESTING.md`
+- `requirements.txt`
+- `outlook_dashboard/active_learning.py`
+- `outlook_dashboard/config.py`
+- `outlook_dashboard/redaction.py`
+- `outlook_dashboard/runtime_log.py`
+- `outlook_dashboard/threading.py`
+- `tests/conftest.py`
+- `tests/test_active_learning.py`
+- `tests/test_logging_privacy.py`
+- `tests/test_privacy_hygiene.py`
+- `tests/test_redaction_presidio_optional.py`
+- `tests/test_symbol_contracts.py`
+- `tests/test_threading.py`
+- `agent-workspace/PROJECT_STATE.md`
+- `agent-workspace/TASK_BOARD.md`
+- `agent-workspace/HANDOFFS.md`
+- `agent-workspace/AGENT_MESSAGES.md`
+
+Verification:
+
+- `python -m pip install rapidfuzz==3.14.5` - passed.
+- RapidFuzz import/package smoke - passed.
+- `python -m pytest tests/test_threading.py tests/test_active_learning.py tests/test_logging_privacy.py -q --timeout=60` - passed.
+- `python -m pytest tests/test_redaction.py tests/test_redaction_presidio_optional.py -q --timeout=60` - passed.
+- `python -m pytest tests/test_privacy_hygiene.py tests/test_safety_guardrails.py -q --timeout=60` - passed.
+- `python -m pytest tests/test_pyside6_no_browser_engine.py -q --timeout=60` - passed.
+- `python -m pytest tests/ -x --timeout=60 -q --no-header` - passed.
+- `python -m py_compile outlook_dashboard/redaction.py outlook_dashboard/active_learning.py outlook_dashboard/threading.py outlook_dashboard/runtime_log.py outlook_dashboard/config.py` - passed.
+
+Remaining work:
+
+- Presidio remains optional and disabled until a separate packaging spike proves NLP model/PyInstaller safety.
+- Fuzzy matching is helper-only and does not override triage classification.
+
 ## 2026-05-29 - Code-level triage/training hardening pass
 
 Summary:

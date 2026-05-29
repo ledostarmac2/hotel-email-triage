@@ -1,5 +1,25 @@
 # Agent Coordination Decisions
 
+## 2026-05-29 - Conservative Dependency Adoption For Privacy Helpers
+
+Decision:
+
+- Add only `rapidfuzz==3.14.5` from the external-library improvement list, after a local Windows smoke check.
+- Keep Presidio optional and disabled by default without adding it to `requirements.txt`.
+- Defer small-text, PySide6 theme packages, and structlog.
+
+Rationale:
+
+- RapidFuzz improves local fuzzy follow-up/thread scoring with acceptable license and packaging risk.
+- Presidio has useful PII detection but requires NLP engine/model packaging validation before becoming a required dependency.
+- Local deterministic helpers satisfy active-learning ranking and structured logging needs with less build risk.
+
+Consequences:
+
+- Fuzzy matching remains helper-only and must not override core classification yet.
+- Presidio failures fall back to existing regex/Luhn redaction and log only scrubbed diagnostics.
+- Future dependency additions require the same practical risk review.
+
 ## 2026-05-28 - Agent-Assisted Training Requires Agent Labels
 
 Decision:

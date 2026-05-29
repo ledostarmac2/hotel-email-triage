@@ -1,6 +1,15 @@
 # Agent Messages
 
 ## Message
+Date/Time: 2026-05-29T08:49:55-04:00
+From: Codex
+To: Claude
+Related Task: Privacy tooling and local intelligence helper pass
+Status: Handoff
+Message: Completed Brian's tightened implementation pass. Added `docs/DEPENDENCY_EVALUATION.md`; integrated only `rapidfuzz==3.14.5` after local Windows smoke; deferred Presidio as a required dependency, small-text, PySide6 theme packages, and structlog. Added local active-learning candidate ranking that strips unsafe raw email fields, local fuzzy/fallback thread scoring helpers that do not override core classification, optional disabled-by-default Presidio second-pass redaction with safe fallback, and stdlib privacy-safe structured logging helpers. Tightened tests for unsafe tracked/staged runtime/build/diagnostic/log/labeling files. No release, tag, installer publish, sending, Outlook mutation, external AI training endpoint, or inactive app scaffold changes.
+Required Response: No action required unless Brian asks for review. Keep fuzzy matching helper-only until separate evidence proves it should influence classification, and do not make Presidio required until packaging/NLP model safety is proven.
+
+## Message
 Date/Time: 2026-05-28T19:30:00-04:00
 From: Claude
 To: Codex

@@ -1,5 +1,42 @@
 # Agent Handoffs
 
+## 2026-05-29 - Codex - Privacy Tooling and Local Intelligence Helpers
+
+Summary:
+
+- Added dependency evaluation for Presidio, small-text, PySide6 theme packages, rapidfuzz, and structlog.
+- Integrated only `rapidfuzz==3.14.5` after a local Windows smoke check; all other candidates are deferred.
+- Added optional disabled-by-default Presidio second-pass redaction hook with existing redaction fallback.
+- Added local active-learning candidate ranking that strips raw/unsafe email fields.
+- Added local fuzzy/fallback thread scoring helpers without overriding core classification.
+- Added stdlib privacy-safe structured logging helpers.
+
+Files changed:
+
+- `docs/DEPENDENCY_EVALUATION.md`
+- `requirements.txt`
+- `outlook_dashboard/active_learning.py`
+- `outlook_dashboard/config.py`
+- `outlook_dashboard/redaction.py`
+- `outlook_dashboard/runtime_log.py`
+- `outlook_dashboard/threading.py`
+- focused tests/docs/coordination files
+
+Verification so far:
+
+- `python -m pip install rapidfuzz==3.14.5` - passed.
+- RapidFuzz import/package smoke - passed.
+- `python -m pytest tests/test_threading.py tests/test_active_learning.py tests/test_logging_privacy.py -q --timeout=60` - passed.
+- `python -m pytest tests/test_redaction.py tests/test_redaction_presidio_optional.py -q --timeout=60` - passed.
+- `python -m pytest tests/test_privacy_hygiene.py tests/test_safety_guardrails.py -q --timeout=60` - passed.
+- `python -m pytest tests/test_pyside6_no_browser_engine.py -q --timeout=60` - passed.
+- `python -m pytest tests/ -x --timeout=60 -q --no-header` - passed.
+- `python -m py_compile outlook_dashboard/redaction.py outlook_dashboard/active_learning.py outlook_dashboard/threading.py outlook_dashboard/runtime_log.py outlook_dashboard/config.py` - passed.
+
+Remaining work:
+
+- Final git checks, commit, and push safe source/docs/tests only.
+
 ## 2026-05-28 - Codex - Test Suite Cleanup Pass
 
 Summary:

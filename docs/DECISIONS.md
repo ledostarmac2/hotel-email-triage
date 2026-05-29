@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-05-29: Conservative Dependency Adoption For Privacy Helpers
+
+Decision: Only `rapidfuzz==3.14.5` is added from the evaluated dependency list, and only as an optional helper layer with deterministic fallback. Presidio remains optional and disabled by default without a requirements entry; small-text, PySide6 theme packages, and structlog are deferred.
+
+Rationale: RapidFuzz provides a clear local benefit for fuzzy follow-up/thread scoring and passed a Windows import/package smoke. Presidio is useful but carries NLP model/PyInstaller risk. The active-learning and logging needs are small enough for local deterministic helpers, and the existing Qt theme is already tailored to ReplyRight.
+
+Consequences: Fuzzy scoring must not override core classification until separately proven safe. Presidio failures must fall back to existing redaction and log only scrubbed diagnostics. Future dependency additions need the same license, maintenance, install/build, and PyInstaller review.
+
 ## 2026-05-28: Outside-Agent Training Requires Agent-Labeled Sanitized Examples
 
 Decision: When Brian explicitly asks Codex or Claude to "train the model" or "train the classifier," the outside agent must label sanitized Completed Request examples using its own model judgment before training the local classifier. `run_completed_pipeline()` and `heuristic_analysis()` remain zero-credit in-app/staging tools; they are not the final labeler for Brian's outside-agent training request.

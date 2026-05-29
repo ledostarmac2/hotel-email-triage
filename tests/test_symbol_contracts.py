@@ -191,7 +191,7 @@ def test_text_utils_symbols() -> None:
 # ── outlook_dashboard.runtime_log ────────────────────────────────────────────
 
 def test_runtime_log_symbols() -> None:
-    _sym("outlook_dashboard.runtime_log", "get_logger", "configure")
+    _sym("outlook_dashboard.runtime_log", "get_logger", "configure", "safe_log", "scrub_log_value")
 
 
 # ── outlook_dashboard.completed_training_pipeline ────────────────────────────
@@ -208,3 +208,17 @@ def test_completed_training_pipeline_symbols() -> None:
 
 def test_sender_intelligence_symbols() -> None:
     _sym("outlook_dashboard.sender_intelligence", "get_sender_profile", "refresh_profiles")
+
+
+def test_active_learning_symbols() -> None:
+    _sym("outlook_dashboard.active_learning", "rank_training_candidates")
+
+
+def test_threading_symbols() -> None:
+    _sym(
+        "outlook_dashboard.threading",
+        "normalize_subject",
+        "subject_similarity",
+        "thread_match_score",
+        "is_likely_followup_text",
+    )

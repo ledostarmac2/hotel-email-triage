@@ -88,6 +88,9 @@ def test_no_sensitive_runtime_files_tracked_or_staged() -> None:
     risky_paths = {
         "data/outlook_exports",
         "labeling/agent_batches",
+        "labeling/runs",
+        "build",
+        "dist",
         "installer/output",
         "dist/ReplyRight/data",
         "crash_reports",
@@ -98,11 +101,19 @@ def test_no_sensitive_runtime_files_tracked_or_staged() -> None:
     bad: list[str] = []
     for path in files:
         rel = str(path.relative_to(ROOT)).replace("\\", "/")
+        if path.name == ".gitkeep":
+            continue
         if path.name in allowed_names:
             continue
         if path.name in risky_names or path.name.endswith(".env"):
             bad.append(rel)
+        elif path.name.lower().startswith("diagnostics") and path.suffix.lower() == ".json":
+            bad.append(rel)
         elif path.suffix.lower() in risky_suffixes:
+            bad.append(rel)
+        elif rel.startswith("labeling/agent_batches/") and path.suffix.lower() == ".json":
+            bad.append(rel)
+        elif rel.startswith("labeling/runs/") and path.suffix.lower() == ".json":
             bad.append(rel)
         elif any(rel == part or rel.startswith(f"{part}/") or f"/{part}/" in rel for part in risky_paths):
             bad.append(rel)

@@ -1,6 +1,6 @@
 # Security And Privacy
 
-Last updated: 2026-05-20
+Last updated: 2026-05-29
 
 ## Core Posture
 
@@ -52,6 +52,10 @@ Do not log:
 - Full AI prompts containing mailbox content
 
 Application modules should use `runtime_log.get_logger()` and log concise operational metadata only.
+Use `runtime_log.safe_log()` for structured diagnostic events that may include
+untrusted values. It scrubs raw bodies, full emails, phone numbers, confirmation
+numbers, payment links, API keys, service-role keys, cookies, bearer tokens, and
+session tokens before writing to the rotating runtime log.
 
 ## Redaction
 
@@ -68,6 +72,12 @@ Coverage includes:
 - Confirmation-number labels, including selected localized variants
 
 Do not weaken redaction to improve model accuracy. Improve redaction coverage instead.
+
+An optional Presidio second-pass hook exists behind
+`REPLYRIGHT_ENABLE_PRESIDIO_REDACTION=false` by default. Presidio is not a
+required dependency; if it is unavailable, misconfigured, or fails, ReplyRight
+falls back to the existing local regex/Luhn redaction and logs only a scrubbed
+diagnostic event.
 
 ## External AI Policy
 

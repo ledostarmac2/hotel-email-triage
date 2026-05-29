@@ -88,6 +88,9 @@ Overlap is intentional here: unit tests prove routing decisions, safety tests pr
 - `tests/test_config_contract.py`: centralized access to guarded environment variables.
 - `tests/test_platform_guards.py`: optional Windows/COM imports remain lazy.
 - `tests/test_error_hardening.py`: plain-English API/UI errors and internal diagnostic logging.
+- `tests/test_logging_privacy.py`: structured runtime logging scrubber coverage for raw bodies, emails, phone numbers, confirmation numbers, payment links, keys, cookies, and tokens.
+- `tests/test_redaction_presidio_optional.py`: disabled/missing/failing optional Presidio second-pass behavior.
+- `tests/test_active_learning.py`: sanitized active-learning candidate ranking and unsafe-field stripping.
 - `tests/test_privacy_hygiene.py`: no tracked runtime data, no tracked labeling exports, doc password hygiene, and training-data redaction.
 
 Normal source secret scans intentionally ignore local ignored build output such as `dist/`; release payload audits scan staged build output explicitly.
@@ -107,6 +110,7 @@ Normal source secret scans intentionally ignore local ignored build output such 
 - `tests/test_diagnostics_contract.py`: deployment/system status response shape.
 - `tests/test_kyc_backend.py`, `tests/test_kyc_service_full.py`: KYC service and API behavior with local temp databases.
 - `tests/test_training_pipeline.py`, `tests/test_completed_training_pipeline.py`, `tests/test_labeling_workflow.py`: sanitized training/export workflows.
+- `tests/test_threading.py`: local fuzzy/fallback follow-up scoring helpers without Outlook mutation or classification override.
 
 ## Isolation Rules
 
