@@ -420,8 +420,8 @@ class TestDatabaseSchemaIntegrity:
         initialize_database(db_path)
         with sqlite3.connect(db_path) as conn:
             cols = {r[1] for r in conn.execute("PRAGMA table_info(email_analysis)")}
-        for col in ("email_id", "category", "priority_level", "confidence_score",
-                    "needs_review"):
+        for col in ("email_id", "category", "priority_level", "recommended_action",
+                    "confidence_score", "needs_review"):
             assert col in cols, f"Missing column: email_analysis.{col}"
 
     def test_triage_feedback_table_columns(self, tmp_path) -> None:

@@ -4,7 +4,7 @@ Last updated: 2026-05-28
 
 ## Purpose
 
-ReplyRight's training pipeline turns completed emails into privacy-preserving, labeled training examples for the local classifier.
+ReplyRight's training pipeline turns completed emails into privacy-preserving, staged training examples for review and local classifier training.
 
 The in-app pipeline is zero-credit. It uses local heuristic or existing `email_analysis` labels as staging labels, redacts and compacts the latest message, uploads sanitized records to Supabase, and leaves human/agent review as the quality gate.
 
@@ -14,7 +14,7 @@ When Brian explicitly asks an outside agent to "train the model" or "train the c
 
 - `outlook_dashboard/training_pipeline.py` exports completed local email rows.
 - `outlook_dashboard/completed_requests_importer.py` reads Outlook `"Completed Request"` through read-only COM.
-- `outlook_dashboard/completed_training_pipeline.py` imports completed requests, applies heuristic labels, and uploads sanitized examples.
+- `outlook_dashboard/completed_training_pipeline.py` imports completed requests, applies heuristic staging labels, and uploads sanitized examples.
 - `outlook_dashboard/redaction.py` removes payment-like and sensitive identifiers.
 - `outlook_dashboard/local_classifier.py` trains from human-reviewed Supabase examples.
 
@@ -32,6 +32,7 @@ Completed local email or Completed Request folder
 ```
 
 ReplyRight training endpoints do not call Claude/Anthropic, OpenAI, or Google AI.
+Heuristic staging does not equal agent-reviewed training.
 
 ## Privacy Contract
 
@@ -61,6 +62,7 @@ Important columns:
 - `label_status`
 - `label_sentiment`
 - `label_contact_type`
+- `label_recommended_action`
 - `label_missing_info`
 - `label_reply_required`
 - `label_escalation_required`

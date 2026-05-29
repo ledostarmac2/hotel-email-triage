@@ -55,7 +55,9 @@ def test_completed_pipeline_uses_heuristics_without_external_ai(db: Path) -> Non
     assert result["labeled"] == 1
     assert result["uploaded"] == 1
     assert result["external_ai_used"] is False
-    assert result["labeling_mode"] == "heuristic"
+    assert result["labeling_mode"] == "heuristic_staging"
+    assert result["review_status"] == "staging_only"
+    assert "does not equal agent-reviewed training" in result["message"]
 
     example = upload.call_args.args[0]
     assert example["labeling_engine"] == "heuristic"
@@ -85,6 +87,8 @@ def test_completed_pipeline_does_not_call_property_knowledge_claude(db: Path) ->
     status = completed_pipeline_status(db_path=db)
     assert status["labeled"] == 1
     assert status["external_ai_used"] is False
+    assert status["labeling_mode"] == "heuristic_staging"
+    assert status["review_status"] == "staging_only"
 
     with managed_connect(db) as conn:
         row = conn.execute("SELECT result FROM completed_requests_log").fetchone()

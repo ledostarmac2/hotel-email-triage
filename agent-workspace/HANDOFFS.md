@@ -911,3 +911,51 @@ Remaining work:
 
 - Keep local build artifacts uncommitted.
 - No release-publishing action is pending from this task.
+
+## 2026-05-29 - Codex - Code-level triage/training hardening pass
+
+Summary:
+
+- Completed Brian's requested code-level fixes without adding app features, Outlook mutation, release publishing, or tags.
+- Persisted `recommended_action` through local analysis storage and API read paths.
+- Added `label_recommended_action` to Supabase training schema/docs.
+- Hardened agent-assisted Completed Request batch state transitions with `agent_pending`, `agent_labeled`, `uploaded`, `failed`, and `purged`, plus safe `import_key` recovery and `--requeue-stale-pending`.
+- Made the heuristic Completed Request pipeline explicitly report `heuristic_staging` / `staging_only`.
+- Added tracked-or-staged privacy tests and 30 sanitized deterministic hotel golden cases.
+
+Files changed:
+
+- `outlook_dashboard/database.py`
+- `outlook_dashboard/completed_requests_importer.py`
+- `outlook_dashboard/completed_training_pipeline.py`
+- `outlook_dashboard/training_pipeline.py`
+- `scripts/agent_label_completed_requests.py`
+- `docs/TRAINING_PIPELINE.md`
+- `docs/TRAINING_WORKFLOW.md`
+- `docs/supabase_schema.sql`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+- `docs/TESTING.md`
+- `agent-workspace/PROJECT_STATE.md`
+- `agent-workspace/TASK_BOARD.md`
+- `agent-workspace/HANDOFFS.md`
+- `agent-workspace/AGENT_MESSAGES.md`
+- `tests/conftest.py`
+- `tests/test_agent_training_workflow_contract.py`
+- `tests/test_completed_training_pipeline.py`
+- `tests/test_do178c_compliance.py`
+- `tests/test_hotel_golden_cases.py`
+- `tests/test_privacy_hygiene.py`
+- `tests/test_recommended_action.py`
+- `tests/test_schema_contract.py`
+- `tests/test_training_pipeline.py`
+
+Verification:
+
+- `python -m py_compile outlook_dashboard\database.py outlook_dashboard\completed_requests_importer.py outlook_dashboard\completed_training_pipeline.py outlook_dashboard\training_pipeline.py scripts\agent_label_completed_requests.py` - passed.
+- Targeted triage/training/privacy/schema/golden test run - passed.
+- `python -m pytest tests/ -x --timeout=60 -q --no-header` - passed.
+
+Remaining work:
+
+- Continue resolving the existing local untracked agent batch data separately; do not commit `labeling/agent_batches/`.

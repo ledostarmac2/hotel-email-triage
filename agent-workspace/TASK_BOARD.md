@@ -37,6 +37,7 @@ If the user explicitly bypasses Codex review, document that bypass in `agent-wor
 | User-facing language cleanup pass | Codex | Done | Native UI display labels and operations guide now use hotel-operations wording; targeted tests and py_compile passed. |
 | Test suite cleanup pass | Codex | Done | Pytest markers, brittle-test cleanup, privacy-hygiene coverage, and testing guide updates completed; full suite passed with 1,466 tests. |
 | Build and install confidence pass | Codex | Done | Build/installer preflight checks, health-smoke diagnostics, CI artifact labeling, and docs updates completed; full suite, local EXE build, health smoke, and installer build passed. |
+| Code-level triage/training hardening pass | Codex | Done | Persisted recommended_action, hardened agent batch recovery states, clarified heuristic staging, tightened tracked/staged privacy tests, and added sanitized hotel golden cases; full suite passed. |
 | Adopt mandatory coordination protocol | Claude | Approved by Codex | Protocol acknowledged in `AGENT_MESSAGES.md` at 2026-05-25T20:45:00-04:00. Done pending Codex confirmation. |
 | Review/own local triage behavior test file if applicable | Claude | Approved by Codex | Codex reviewed, ran the tests, approved the test file, and took ownership of the CCA false-positive fix. |
 | Codify outside-agent classifier training contract | Codex | Done | Docs, helper script, and contract tests updated so agent-assisted training requires sanitized agent labels, not heuristic-only pipeline output. |

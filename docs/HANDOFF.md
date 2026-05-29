@@ -2936,3 +2936,51 @@ Remaining work:
 
 - No release, tag, or published artifact was created for this task.
 - Installer output under `installer\output\` is local build output and should remain uncommitted.
+
+## 2026-05-29 - Code-level triage/training hardening pass
+
+Summary:
+
+- Persisted `recommended_action` through `email_analysis`, migrations, `save_analysis()`, detail/list/conversation reads, and Supabase training schema metadata.
+- Hardened `scripts/agent_label_completed_requests.py` with safe `import_key` tracking, recoverable agent states, duplicate-label skips, and `--requeue-stale-pending`.
+- Made the Completed Request heuristic pipeline report itself as staging-only, not agent-reviewed training.
+- Tightened privacy hygiene tests so sensitive runtime/build/diagnostic/labeling files fail if tracked or staged.
+- Added 30 sanitized hotel golden cases covering current deterministic category, owner, priority, and recommended-action behavior.
+
+Files changed:
+
+- `outlook_dashboard/database.py`
+- `outlook_dashboard/completed_requests_importer.py`
+- `outlook_dashboard/completed_training_pipeline.py`
+- `outlook_dashboard/training_pipeline.py`
+- `scripts/agent_label_completed_requests.py`
+- `docs/TRAINING_PIPELINE.md`
+- `docs/TRAINING_WORKFLOW.md`
+- `docs/supabase_schema.sql`
+- `docs/CURRENT_STATE.md`
+- `docs/HANDOFF.md`
+- `docs/TESTING.md`
+- `agent-workspace/PROJECT_STATE.md`
+- `agent-workspace/TASK_BOARD.md`
+- `agent-workspace/HANDOFFS.md`
+- `agent-workspace/AGENT_MESSAGES.md`
+- `tests/conftest.py`
+- `tests/test_agent_training_workflow_contract.py`
+- `tests/test_completed_training_pipeline.py`
+- `tests/test_do178c_compliance.py`
+- `tests/test_hotel_golden_cases.py`
+- `tests/test_privacy_hygiene.py`
+- `tests/test_recommended_action.py`
+- `tests/test_schema_contract.py`
+- `tests/test_training_pipeline.py`
+
+Verification:
+
+- `python -m py_compile outlook_dashboard\database.py outlook_dashboard\completed_requests_importer.py outlook_dashboard\completed_training_pipeline.py outlook_dashboard\training_pipeline.py scripts\agent_label_completed_requests.py` - passed.
+- `python -m pytest tests/test_recommended_action.py tests/test_agent_training_workflow_contract.py tests/test_completed_training_pipeline.py tests/test_training_pipeline.py tests/test_privacy_hygiene.py tests/test_schema_contract.py tests/test_do178c_compliance.py tests/test_hotel_golden_cases.py -q --timeout=60` - passed.
+- `python -m pytest tests/ -x --timeout=60 -q --no-header` - passed.
+
+Remaining work:
+
+- No app feature, Outlook mutation, release, tag, or artifact publishing was added.
+- Existing untracked `labeling/agent_batches/` data remains local and uncommitted.

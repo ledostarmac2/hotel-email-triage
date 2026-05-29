@@ -218,17 +218,24 @@ def mark_processed(
     result: str,
     subject_tokens: str | None = None,
     sender_domain: str | None = None,
+    import_key: str | None = None,
     db_path: Path | None = None,
 ) -> None:
     """Record that an Outlook entry from Completed Requests has been processed."""
     with managed_connect(db_path) as db:
         db.execute(
             """
-            INSERT OR IGNORE INTO completed_requests_log
-                (outlook_entry_id, subject_tokens, sender_domain, result, processed_at)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO completed_requests_log
+                (outlook_entry_id, import_key, subject_tokens, sender_domain, result, processed_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(outlook_entry_id) DO UPDATE SET
+                import_key = COALESCE(excluded.import_key, completed_requests_log.import_key),
+                subject_tokens = COALESCE(excluded.subject_tokens, completed_requests_log.subject_tokens),
+                sender_domain = COALESCE(excluded.sender_domain, completed_requests_log.sender_domain),
+                result = excluded.result,
+                processed_at = excluded.processed_at
             """,
-            (outlook_entry_id, subject_tokens, sender_domain, result, utc_now_iso()),
+            (outlook_entry_id, import_key, subject_tokens, sender_domain, result, utc_now_iso()),
         )
 
 
@@ -263,7 +270,10 @@ def _load_processed_entry_ids(db_path: Path | None) -> set[str]:
     try:
         with managed_connect(db_path) as db:
             rows = db.execute(
-                "SELECT outlook_entry_id FROM completed_requests_log"
+                """
+                SELECT outlook_entry_id FROM completed_requests_log
+                WHERE result NOT IN ('failed')
+                """
             ).fetchall()
             return {str(r["outlook_entry_id"]) for r in rows}
     except Exception as exc:

@@ -181,6 +181,17 @@ def test_run_pipeline_uploads_on_success(db: Path):
     assert example["human_reviewed"] is False
 
 
+def test_heuristic_training_examples_remain_unreviewed(db: Path):
+    _insert_completed_email(db, email_id=1)
+    with patch("outlook_dashboard.training_pipeline._upload_example", return_value=(True, "")) as mock_upload:
+        run_pipeline(batch_size=5, refine=False, db_path=db)
+
+    example = mock_upload.call_args[0][0]
+    assert example["labeling_engine"] == "heuristic"
+    assert example["human_reviewed"] is False
+    assert example.get("label_recommended_action") is None
+
+
 def test_run_pipeline_logs_failure(db: Path):
     _insert_completed_email(db, email_id=1)
     with patch("outlook_dashboard.training_pipeline._upload_example", return_value=(False, "network error")):

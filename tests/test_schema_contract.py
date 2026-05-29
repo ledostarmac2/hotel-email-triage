@@ -118,7 +118,7 @@ def test_training_bootstrap_table(tmp_path: Path) -> None:
 
 def test_completed_requests_log_table(tmp_path: Path) -> None:
     db = _init(tmp_path)
-    _q(db, "SELECT id, outlook_entry_id, result, processed_at FROM completed_requests_log LIMIT 0")
+    _q(db, "SELECT id, outlook_entry_id, import_key, result, processed_at FROM completed_requests_log LIMIT 0")
 
 
 def test_property_knowledge_items_table(tmp_path: Path) -> None:

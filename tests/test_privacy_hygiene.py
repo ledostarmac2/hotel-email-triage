@@ -30,6 +30,16 @@ def _tracked_files() -> list[Path]:
     return [ROOT / p for p in result.stdout.splitlines() if p.strip()]
 
 
+def _staged_files() -> list[Path]:
+    result = subprocess.run(
+        ["git", "diff", "--cached", "--name-only"],
+        capture_output=True,
+        text=True,
+        cwd=ROOT,
+    )
+    return [ROOT / p for p in result.stdout.splitlines() if p.strip()]
+
+
 # ── Test 1: No runtime sensitive files in git ─────────────────────────────────
 
 
@@ -68,6 +78,36 @@ def test_no_msg_or_eml_files_tracked() -> None:
     tracked = _tracked_files()
     bad = [f for f in tracked if f.suffix in (".msg", ".eml")]
     assert not bad, f"Email export files tracked in git: {bad}"
+
+
+def test_no_sensitive_runtime_files_tracked_or_staged() -> None:
+    """Runtime, diagnostics, installer, and labeling data must stay out of git."""
+    files = sorted({*(_tracked_files()), *(_staged_files())})
+    risky_suffixes = {".sqlite", ".sqlite3", ".db", ".msg", ".eml", ".log", ".dmp", ".crash"}
+    risky_names = {".env"}
+    risky_paths = {
+        "data/outlook_exports",
+        "labeling/agent_batches",
+        "installer/output",
+        "dist/ReplyRight/data",
+        "crash_reports",
+        "diagnostics",
+    }
+    allowed_names = {".env.example", "sample.env"}
+
+    bad: list[str] = []
+    for path in files:
+        rel = str(path.relative_to(ROOT)).replace("\\", "/")
+        if path.name in allowed_names:
+            continue
+        if path.name in risky_names or path.name.endswith(".env"):
+            bad.append(rel)
+        elif path.suffix.lower() in risky_suffixes:
+            bad.append(rel)
+        elif any(rel == part or rel.startswith(f"{part}/") or f"/{part}/" in rel for part in risky_paths):
+            bad.append(rel)
+
+    assert not bad, "Sensitive runtime files are tracked or staged:\n" + "\n".join(bad)
 
 
 # ── Test 2: No labeling data files tracked ───────────────────────────────────

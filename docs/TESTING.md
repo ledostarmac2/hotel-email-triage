@@ -1,6 +1,6 @@
 # ReplyRight Testing Guide
 
-Last updated: 2026-05-28
+Last updated: 2026-05-29
 
 ## Primary Commands
 
@@ -74,6 +74,7 @@ Markers are registered in `pytest.ini` and applied in `tests/conftest.py` by fil
 ### Recommended Action And Queues
 
 - `tests/test_recommended_action.py`: deterministic action routing, taxonomy completeness, operational queue filtering, and realistic hotel scenarios.
+- `tests/test_hotel_golden_cases.py`: sanitized hotel-operation golden cases for deterministic category, owner, priority, and recommended action behavior.
 - `tests/test_safety_regression.py`: safety contracts proving recommended-action and queue metadata stay deterministic and metadata-only.
 - `tests/test_v1_features.py`: API-client queue mapping, sidebar queue labels/order, and schema compatibility.
 

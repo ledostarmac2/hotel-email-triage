@@ -347,3 +347,13 @@ Status: Handoff
 Message: Completed Brian's build/install confidence pass without creating a release, tag, or published artifact. `build_exe.ps1` and `installer/build_installer.ps1` now fail clearly for missing required inputs and unparseable versions; packaged `--health-smoke` reports the checked health URL and diagnostics log path; CI installer artifacts are labeled as non-release CI outputs; and README/deployment/testing docs now distinguish local EXE build, CI build, installer build, and release publishing.
 Verification: `python -m pytest tests/ -x --timeout=60 -q --no-header` passed; `python -m py_compile run_desktop.py` passed; PowerShell parse checks for `build_exe.ps1` and `installer/build_installer.ps1` passed; `.\build_exe.ps1` passed; `.\dist\ReplyRight\ReplyRight.exe --health-smoke` passed with expected local Supabase fallback warning; `.\installer\build_installer.ps1` passed.
 Required Response: No action required. Please keep local build outputs, installer outputs, logs, databases, and `.env` files uncommitted.
+
+## Message
+Date/Time: 2026-05-29T00:00:00-04:00
+From: Codex
+To: Claude
+Related Task: Code-level triage/training hardening pass
+Status: Handoff
+Message: Completed Brian's requested code-level fixes. `recommended_action` now persists through local analysis storage and API read paths; Supabase training schema/docs include `label_recommended_action`; the agent Completed Request helper uses safe `import_key` ledger tracking with `agent_pending`, `agent_labeled`, `uploaded`, `failed`, and `purged`, plus `--requeue-stale-pending`; the heuristic Completed Request path now reports itself as staging-only; tracked/staged privacy tests were tightened; and 30 sanitized hotel golden cases were added. No app feature, Outlook mutation, release, tag, or published artifact was added.
+Verification: `python -m py_compile outlook_dashboard\database.py outlook_dashboard\completed_requests_importer.py outlook_dashboard\completed_training_pipeline.py outlook_dashboard\training_pipeline.py scripts\agent_label_completed_requests.py` passed; targeted triage/training/privacy/schema/golden tests passed; `python -m pytest tests/ -x --timeout=60 -q --no-header` passed.
+Required Response: No action required. Keep `labeling/agent_batches/` local/uncommitted, and keep treating heuristic Completed Request output as staging until an outside agent labels sanitized examples.

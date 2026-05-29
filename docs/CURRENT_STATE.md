@@ -1,11 +1,18 @@
 # Current State
 
-Last updated: 2026-05-28 (test suite cleanup pass)
+Last updated: 2026-05-29 (code-level triage/training hardening pass)
 
 ## Status
 
 - Product name is ReplyRight.
 - Current runnable app is `outlook_dashboard/` plus `run_desktop.py`.
+- 2026-05-29 code-level triage/training hardening pass:
+  - Persisted `recommended_action` through local `email_analysis` schema, migrations, `save_analysis()`, `get_email()`, `list_emails()`, conversation reads, and Supabase training schema metadata.
+  - Hardened agent-assisted Completed Request state transitions with safe `import_key` tracking, `agent_pending`, `agent_labeled`, `uploaded`, `failed`, and `purged` ledger states, duplicate-label skips, and `--requeue-stale-pending`.
+  - Renamed the heuristic Completed Request pipeline/status output as staging-only so heuristic exports cannot be confused with agent-reviewed training.
+  - Added tracked-or-staged privacy hygiene coverage for runtime data, diagnostics/logs, installer output, Outlook exports, and labeling batch JSON.
+  - Added `tests/test_hotel_golden_cases.py` with 30 sanitized hotel-operation scenarios covering current deterministic category/owner/priority/action behavior.
+  - Validation passed: `python -m py_compile outlook_dashboard\database.py outlook_dashboard\completed_requests_importer.py outlook_dashboard\completed_training_pipeline.py outlook_dashboard\training_pipeline.py scripts\agent_label_completed_requests.py`; targeted triage/training/privacy/schema/golden tests; `python -m pytest tests/ -x --timeout=60 -q --no-header`.
 - 2026-05-28 build and install confidence pass:
   - `build_exe.ps1` now fails early with clear messages when required app, static asset, PySide6 shell, PyInstaller, version, or packaged EXE inputs are missing.
   - `installer/build_installer.ps1` now fails early for missing installer inputs and requires a parseable app version instead of silently falling back.

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
+
+from outlook_dashboard.database import initialize_database, managed_connect
 
 
 def test_agent_training_runbook_requires_agent_labels_not_heuristics() -> None:
@@ -88,3 +91,105 @@ def test_agent_label_helper_prints_unavailable_negative_accuracy(capsys) -> None
     out = capsys.readouterr().out
     assert "category: 3 rows (accuracy unavailable)" in out
     assert "-100.0%" not in out
+
+
+def test_agent_requeue_stale_pending_recovers_lost_batch(tmp_path: Path) -> None:
+    from scripts.agent_label_completed_requests import requeue_stale_pending
+
+    db_path = tmp_path / "agent_requeue.sqlite3"
+    initialize_database(db_path)
+    with managed_connect(db_path) as db:
+        db.execute(
+            """
+            INSERT INTO completed_requests_log
+                (outlook_entry_id, import_key, result, processed_at)
+            VALUES
+                ('entry-stale', 'import-stale', 'agent_pending', '2026-05-28T00:00:00+00:00'),
+                ('entry-uploaded', 'import-uploaded', 'uploaded', '2026-05-28T00:00:00+00:00')
+            """
+        )
+
+    count = requeue_stale_pending(stale_minutes=60, db_path=db_path)
+
+    with managed_connect(db_path) as db:
+        rows = {
+            row["import_key"]: row["result"]
+            for row in db.execute("SELECT import_key, result FROM completed_requests_log")
+        }
+    assert count == 1
+    assert rows["import-stale"] == "failed"
+    assert rows["import-uploaded"] == "uploaded"
+
+
+def test_agent_upload_marks_reviewed_and_skips_duplicate_labels(tmp_path: Path, monkeypatch) -> None:
+    from scripts.agent_label_completed_requests import phase_upload
+
+    db_path = tmp_path / "agent_upload.sqlite3"
+    initialize_database(db_path)
+    with managed_connect(db_path) as db:
+        db.execute(
+            """
+            INSERT INTO completed_requests_log
+                (outlook_entry_id, import_key, result, processed_at)
+            VALUES ('entry-1', 'import-1', 'agent_pending', '2026-05-28T00:00:00+00:00')
+            """
+        )
+
+    pending_path = tmp_path / "batch_pending.json"
+    labels_path = tmp_path / "batch_labeled.json"
+    pending_path.write_text(
+        json.dumps(
+            {
+                "examples": [
+                    {
+                        "fingerprint": "f" * 64,
+                        "import_key": "import-1",
+                        "sender_domain": "example.com",
+                        "subject_tokens": "payment authorization",
+                        "body_excerpt": "Completed payment authorization form.",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    label = {
+        "fingerprint": "f" * 64,
+        "category": "Billing authorization",
+        "priority_level": "Normal",
+        "owner": "Reservations",
+        "contact_type": "Travel agency",
+        "guest_sentiment": "Neutral",
+        "label_missing_info": False,
+        "label_reply_required": False,
+        "label_escalation_required": False,
+        "recommended_action": "verify_payment_authorization",
+    }
+    labels_path.write_text(json.dumps([label, label]), encoding="utf-8")
+
+    uploaded: list[dict] = []
+
+    def _fake_upload(record: dict) -> tuple[bool, str]:
+        uploaded.append(record)
+        return True, ""
+
+    monkeypatch.setattr("outlook_dashboard.training_pipeline._upload_example", _fake_upload)
+
+    result = phase_upload(
+        pending_path=pending_path,
+        labels_path=labels_path,
+        db_path=db_path,
+        skip_train=True,
+        skip_purge=True,
+    )
+
+    assert result["uploaded"] == 1
+    assert result["skipped"] == 1
+    assert uploaded[0]["labeling_engine"] == "claude-agent"
+    assert uploaded[0]["human_reviewed"] is True
+    assert uploaded[0]["label_recommended_action"] == "verify_payment_authorization"
+    with managed_connect(db_path) as db:
+        status = db.execute(
+            "SELECT result FROM completed_requests_log WHERE import_key = 'import-1'"
+        ).fetchone()["result"]
+    assert status == "uploaded"

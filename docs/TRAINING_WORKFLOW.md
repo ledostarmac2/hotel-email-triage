@@ -26,7 +26,7 @@ They must not:
 - Call Claude, OpenAI, Google AI, or any external model from in-app training endpoints.
 - Treat heuristic labels as final agent-reviewed labels.
 
-`run_completed_pipeline()` belongs to this path. By itself, it does not satisfy Brian's outside-agent request to train the classifier because it uses `heuristic_analysis()` as the labeler. Heuristics are not the final labeler for outside-agent training.
+`run_completed_pipeline()` belongs to this path. It is heuristic staging only. By itself, it does not satisfy Brian's outside-agent request to train the classifier because it uses `heuristic_analysis()` as the labeler. Heuristics are not the final labeler for outside-agent training.
 
 ## Path B: Outside-Agent Assisted Training
 
@@ -97,6 +97,15 @@ The final agent-assisted labels must come from the outside agent reviewing sanit
 1. `--import`: read unimported Completed Request messages, emit sanitized pending examples, and write duplicate-prevention ledger entries.
 2. Outside agent: read the sanitized pending examples and create a labeled JSON file using model judgment.
 3. `--upload`: upload sanitized labeled examples, train the classifier, and purge transient raw imports.
+4. `--requeue-stale-pending`: recover stale `agent_pending` or `agent_labeled` ledger rows by marking them `failed` so a lost pending batch can be imported again. Rows already marked `uploaded` or `purged` remain blocked to avoid duplicate uploads.
+
+Agent-assisted ledger states are:
+
+- `agent_pending`: sanitized batch emitted and awaiting labels.
+- `agent_labeled`: labels accepted and upload started.
+- `uploaded`: sanitized reviewed example uploaded.
+- `failed`: import/upload/validation failed and can be recovered.
+- `purged`: upload succeeded and purge step ran.
 
 If using another workflow, it must meet the same contract.
 

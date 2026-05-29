@@ -104,6 +104,7 @@ CREATE TABLE IF NOT EXISTS training_examples (
     label_status            TEXT,
     label_sentiment         TEXT,
     label_contact_type      TEXT,
+    label_recommended_action TEXT,
     label_missing_info      BOOLEAN DEFAULT FALSE,
     label_reply_required    BOOLEAN DEFAULT FALSE,
     label_escalation_required BOOLEAN DEFAULT FALSE,
@@ -120,6 +121,7 @@ CREATE INDEX IF NOT EXISTS idx_training_reviewed ON training_examples (human_rev
 
 -- Migration: add label_contact_type column if not present (safe to run on existing tables)
 ALTER TABLE training_examples ADD COLUMN IF NOT EXISTS label_contact_type TEXT;
+ALTER TABLE training_examples ADD COLUMN IF NOT EXISTS label_recommended_action TEXT;
 
 -- kyc_settings ---------------------------------------------------------------
 -- Shared KYC operational configuration. Do not store KYC passwords or browser

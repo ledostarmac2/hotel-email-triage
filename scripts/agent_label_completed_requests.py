@@ -14,7 +14,8 @@ Three phases, run in sequence:
     Reads unimported Completed Request emails from Outlook. Sanitizes in
     memory (redact PII, keep only safe fields). Writes a sanitized batch
     to labeling/agent_batches/<timestamp>_pending.json. Marks entries in
-    the import ledger (completed_requests_log) so they are never re-imported.
+    the import ledger (completed_requests_log) as agent_pending so they can
+    either advance to agent_labeled/uploaded/purged or be recovered.
 
     Safe output fields (no raw bodies, no full emails, no message IDs):
       fingerprint   — sha256(domain:subject_tokens), stable dedup key
@@ -52,18 +53,27 @@ Three phases, run in sequence:
     Trains the local classifier. Purges raw imported email bodies from SQLite.
     Keeps completed_requests_log intact (deduplication ledger).
 
+Recovery:
+    python scripts/agent_label_completed_requests.py --requeue-stale-pending --stale-minutes 60
+
+    Marks stale agent_pending/agent_labeled rows as failed so a later import can
+    recreate a lost pending batch. Final uploaded/purged rows remain blocked to
+    avoid duplicate uploads.
+
 Usage examples:
     python scripts/agent_label_completed_requests.py --import --batch-size 500
     python scripts/agent_label_completed_requests.py --upload labeling/agent_batches/20260528T120000Z_pending.json
+    python scripts/agent_label_completed_requests.py --requeue-stale-pending --stale-minutes 60
     python scripts/agent_label_completed_requests.py --status
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -81,6 +91,8 @@ from outlook_dashboard.taxonomy import (
 _load_env()
 
 AGENT_BATCHES_DIR = ROOT / "labeling" / "agent_batches"
+
+AGENT_LEDGER_STATUSES = ("agent_pending", "agent_labeled", "uploaded", "failed", "purged")
 
 _PRIORITY_TO_URGENCY: dict[str, int] = {
     "Low": 1,
@@ -158,6 +170,74 @@ RULES
 
 def _fmt_list(values: list[str]) -> str:
     return "\n".join(f"  {value}" for value in values)
+
+
+def _import_key(entry_id: str) -> str:
+    """Return a stable non-Outlook identifier for a Completed Request ledger row."""
+    return hashlib.sha256(entry_id.encode("utf-8", errors="ignore")).hexdigest()
+
+
+def _ledger_rows_by_import_key(import_keys: list[str], db_path: Path | None) -> dict[str, dict[str, Any]]:
+    if not import_keys:
+        return {}
+    from outlook_dashboard.database import managed_connect
+
+    placeholders = ",".join("?" for _ in import_keys)
+    with managed_connect(db_path) as db:
+        rows = db.execute(
+            f"""
+            SELECT import_key, result, processed_at
+            FROM completed_requests_log
+            WHERE import_key IN ({placeholders})
+            """,
+            import_keys,
+        ).fetchall()
+    return {str(row["import_key"]): dict(row) for row in rows if row["import_key"]}
+
+
+def _update_ledger_status_by_import_key(
+    import_key: str | None,
+    status: str,
+    db_path: Path | None,
+) -> None:
+    if not import_key:
+        return
+    from outlook_dashboard.database import managed_connect
+    from outlook_dashboard.text_utils import utc_now_iso
+
+    with managed_connect(db_path) as db:
+        db.execute(
+            """
+            UPDATE completed_requests_log
+            SET result = ?, processed_at = ?
+            WHERE import_key = ?
+            """,
+            (status, utc_now_iso(), import_key),
+        )
+
+
+def requeue_stale_pending(
+    *,
+    stale_minutes: int,
+    db_path: Path | None,
+    now: datetime | None = None,
+) -> int:
+    """Mark stale agent pending/labeled rows failed so import can recover them."""
+    from outlook_dashboard.database import managed_connect
+
+    cutoff = (now or datetime.now(timezone.utc)) - timedelta(minutes=max(0, stale_minutes))
+    cutoff_iso = cutoff.isoformat()
+    with managed_connect(db_path) as db:
+        cur = db.execute(
+            """
+            UPDATE completed_requests_log
+            SET result = 'failed', processed_at = ?
+            WHERE result IN ('agent_pending', 'agent_labeled')
+              AND processed_at < ?
+            """,
+            (datetime.now(timezone.utc).isoformat(), cutoff_iso),
+        )
+        return int(cur.rowcount)
 
 
 # Keep the label prompt tied to the active app taxonomy. The earlier draft
@@ -265,6 +345,7 @@ def phase_import(
         domain = (sender_email.split("@")[-1] if "@" in sender_email else "").lower() or None
         tokens = _subject_tokens(subject)
         fingerprint = _fingerprint(sender_email, subject)
+        import_key = _import_key(entry_id) if entry_id else ""
 
         body_raw = str(msg.get("body_text") or msg.get("body_content") or "")
         body_latest = latest_message_text(body_raw, max_chars=4000)
@@ -275,6 +356,7 @@ def phase_import(
 
         examples.append({
             "fingerprint": fingerprint,
+            "import_key": import_key or None,
             "sender_domain": domain,
             "subject_tokens": tokens or None,
             "body_excerpt": body_redacted[:800],
@@ -283,7 +365,7 @@ def phase_import(
 
         # Mark in ledger immediately — prevents re-import on any subsequent run
         if entry_id:
-            mark_processed(entry_id, "agent_pending", tokens, domain, db_path=db_path)
+            mark_processed(entry_id, "agent_pending", tokens, domain, import_key=import_key, db_path=db_path)
 
     ts = datetime.now(tz=timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     AGENT_BATCHES_DIR.mkdir(parents=True, exist_ok=True)
@@ -305,6 +387,7 @@ def phase_import(
     print(f"\nWrote {len(examples)} sanitized examples -> {out_path.relative_to(ROOT)}")
     print()
     print("NEXT STEPS:")
+    print("  Heuristic staging does not equal agent-reviewed training.")
     print("  1. Read the pending batch file above.")
     print("  2. Assign labels for each entry (see labeling_instructions inside the file).")
     print(f"  3. Write your labeled JSON array to: {labels_path.relative_to(ROOT)}")
@@ -342,9 +425,17 @@ def phase_upload(
     examples_by_fp: dict[str, dict] = {
         e["fingerprint"]: e for e in pending.get("examples", [])
     }
+    import_keys = [
+        str(e.get("import_key") or "")
+        for e in pending.get("examples", [])
+        if e.get("import_key")
+    ]
+    ledger_by_import_key = _ledger_rows_by_import_key(import_keys, db_path)
 
     stats: dict[str, int] = {"uploaded": 0, "skipped": 0, "failed": 0}
     run_log: list[dict] = []
+    seen_fingerprints: set[str] = set()
+    uploaded_import_keys: set[str] = set()
 
     print(f"Uploading {len(labels_raw)} labeled examples to Supabase...")
 
@@ -355,7 +446,23 @@ def phase_upload(
             stats["skipped"] += 1
             continue
 
+        if fp in seen_fingerprints:
+            print(f"  WARNING: duplicate label for {fp[:12]} - skipping.", file=sys.stderr)
+            stats["skipped"] += 1
+            continue
+        seen_fingerprints.add(fp)
+
         meta = examples_by_fp.get(fp, {})
+        import_key = str(meta.get("import_key") or "")
+        ledger_row = ledger_by_import_key.get(import_key) if import_key else None
+        if ledger_row and ledger_row.get("result") in {"uploaded", "purged"}:
+            stats["skipped"] += 1
+            run_log.append({"fingerprint": fp[:12], "status": "already_uploaded"})
+            continue
+
+        if import_key:
+            _update_ledger_status_by_import_key(import_key, "agent_labeled", db_path)
+
         priority = str(label.get("priority_level") or "Normal")
         urgency = _PRIORITY_TO_URGENCY.get(priority, 2)
         category = str(label.get("category") or "")
@@ -365,18 +472,22 @@ def phase_upload(
 
         if category not in CATEGORIES:
             print(f"  WARNING: invalid category for {fp[:12]} - skipping.", file=sys.stderr)
+            _update_ledger_status_by_import_key(import_key, "failed", db_path)
             stats["skipped"] += 1
             continue
         if owner not in DEPARTMENT_OWNERS:
             print(f"  WARNING: invalid owner for {fp[:12]} - skipping.", file=sys.stderr)
+            _update_ledger_status_by_import_key(import_key, "failed", db_path)
             stats["skipped"] += 1
             continue
         if contact_type and str(contact_type) not in CONTACT_TYPES:
             print(f"  WARNING: invalid contact_type for {fp[:12]} - skipping.", file=sys.stderr)
+            _update_ledger_status_by_import_key(import_key, "failed", db_path)
             stats["skipped"] += 1
             continue
         if recommended_action and str(recommended_action) not in RECOMMENDED_ACTIONS:
             print(f"  WARNING: invalid recommended_action for {fp[:12]} - skipping.", file=sys.stderr)
+            _update_ledger_status_by_import_key(import_key, "failed", db_path)
             stats["skipped"] += 1
             continue
 
@@ -396,6 +507,7 @@ def phase_upload(
             "label_category": category,
             "label_status": label.get("status") or "Completed",
             "label_sentiment": label.get("guest_sentiment") or None,
+            "label_recommended_action": recommended_action,
             "label_missing_info": label_missing,
             "label_reply_required": bool(label.get("label_reply_required")),
             "label_escalation_required": bool(label.get("label_escalation_required")),
@@ -407,9 +519,13 @@ def phase_upload(
         ok, error = _upload_example(record)
         if ok:
             stats["uploaded"] += 1
+            if import_key:
+                uploaded_import_keys.add(import_key)
+                _update_ledger_status_by_import_key(import_key, "uploaded", db_path)
             run_log.append({"fingerprint": fp[:12], "status": "ok"})
         else:
             stats["failed"] += 1
+            _update_ledger_status_by_import_key(import_key, "failed", db_path)
             run_log.append({"fingerprint": fp[:12], "status": "failed", "error": error})
             print(f"  FAILED {fp[:12]}: {error}", file=sys.stderr)
 
@@ -441,6 +557,8 @@ def phase_upload(
         purge = purge_processed_training_emails(db_path=db_path)
         print(f"Purged: {purge['deleted_rows']} email rows, {purge['deleted_files']} export files.")
         print("Import ledger (completed_requests_log) preserved for deduplication.")
+        for import_key in sorted(uploaded_import_keys):
+            _update_ledger_status_by_import_key(import_key, "purged", db_path)
 
     return {**stats, "log": str(log_path)}
 
@@ -457,6 +575,7 @@ def phase_status(db_path: Path | None) -> None:
     for k, v in pipeline.items():
         if k != "knowledge":
             print(f"  {k}: {v}")
+    print(f"  agent_statuses: {', '.join(AGENT_LEDGER_STATUSES)}")
 
     print()
     print("=== Local classifier ===")
@@ -515,6 +634,8 @@ def main() -> None:
                        help="Phase 3: upload Claude labels, train, purge.")
     group.add_argument("--status", action="store_true",
                        help="Print ledger and classifier status.")
+    group.add_argument("--requeue-stale-pending", action="store_true",
+                       help="Mark stale agent_pending/agent_labeled imports failed so they can be imported again.")
 
     parser.add_argument("--labels", type=Path, metavar="LABELS_FILE",
                         help="Path to the labeled JSON file (required with --upload).")
@@ -528,6 +649,8 @@ def main() -> None:
                         help="Skip classifier training after upload.")
     parser.add_argument("--skip-purge", action="store_true",
                         help="Skip raw body purge after upload.")
+    parser.add_argument("--stale-minutes", type=int, default=60,
+                        help="Age threshold for --requeue-stale-pending (default: 60).")
 
     args = parser.parse_args()
 
@@ -569,6 +692,12 @@ def main() -> None:
 
     elif args.status:
         phase_status(db_path=db_path)
+
+    elif args.requeue_stale_pending:
+        count = requeue_stale_pending(stale_minutes=args.stale_minutes, db_path=db_path)
+        print(f"Requeued {count} stale agent pending/labeled imports.")
+        if count:
+            print("Next import can recover these rows without re-uploading completed rows.")
 
 
 if __name__ == "__main__":

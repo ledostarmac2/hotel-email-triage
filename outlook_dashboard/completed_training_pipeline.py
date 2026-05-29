@@ -1,7 +1,7 @@
-"""Completed Request training pipeline.
+"""Completed Request heuristic staging pipeline.
 
 Imports emails from the Outlook 'Completed Request' folder, runs heuristic
-labels, and uploads sanitized examples for human/agent review.
+staging labels, and uploads sanitized examples for human/agent review.
 
 PRIVACY CONTRACT - same as training_pipeline.py:
 - Raw body_text is never uploaded. Only body_redacted is stored.
@@ -40,11 +40,12 @@ def run_completed_pipeline(
     batch_size: int = DEFAULT_BATCH_SIZE,
     db_path: Path | None = None,
 ) -> dict[str, Any]:
-    """Run one batch of the Completed Requests training pipeline.
+    """Run one batch of the Completed Requests heuristic staging pipeline.
 
     The pipeline is zero-credit: it imports read-only Outlook messages, labels
     them with deterministic heuristics, builds redacted training examples, and
-    uploads those sanitized records for review.
+    uploads those sanitized records for review. Heuristic staging does not equal
+    agent-reviewed training.
     """
     result: dict[str, Any] = {
         "imported": 0,
@@ -55,7 +56,9 @@ def run_completed_pipeline(
         "folder": folder_name,
         "mailbox": mailbox_name,
         "external_ai_used": False,
-        "labeling_mode": "heuristic",
+        "labeling_mode": "heuristic_staging",
+        "review_status": "staging_only",
+        "message": "Heuristic staging does not equal agent-reviewed training.",
     }
 
     try:
@@ -210,7 +213,9 @@ def completed_pipeline_status(db_path: Path | None = None) -> dict[str, Any]:
             "knowledge": {},
             "total_knowledge_items": 0,
             "external_ai_used": False,
-            "labeling_mode": "heuristic",
+            "labeling_mode": "heuristic_staging",
+            "review_status": "staging_only",
+            "message": "Heuristic staging does not equal agent-reviewed training.",
         }
 
     labeled = counts.get("heuristic", 0)
@@ -224,5 +229,7 @@ def completed_pipeline_status(db_path: Path | None = None) -> dict[str, Any]:
         "knowledge": knowledge,
         "total_knowledge_items": sum(knowledge.values()),
         "external_ai_used": False,
-        "labeling_mode": "heuristic",
+        "labeling_mode": "heuristic_staging",
+        "review_status": "staging_only",
+        "message": "Heuristic staging does not equal agent-reviewed training.",
     }

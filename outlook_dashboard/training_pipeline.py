@@ -34,7 +34,7 @@ from .database import (
 )
 from .redaction import redact_sensitive_text
 from .runtime_log import get_logger
-from .taxonomy import CATEGORIES, DEPARTMENT_OWNERS, STATUSES
+from .taxonomy import CATEGORIES, DEPARTMENT_OWNERS, RECOMMENDED_ACTIONS, STATUSES
 
 _log = get_logger("training_pipeline")
 
@@ -147,12 +147,15 @@ def _build_example(row: dict, labels: dict, labeling_engine: str) -> dict:
     category = labels.get("category")
     status = labels.get("status")
     sentiment = labels.get("sentiment") or labels.get("guest_sentiment")
+    recommended_action = labels.get("recommended_action")
     if owner not in DEPARTMENT_OWNERS:
         owner = None
     if category not in CATEGORIES:
         category = None
     if status not in STATUSES:
         status = None
+    if recommended_action not in RECOMMENDED_ACTIONS:
+        recommended_action = None
 
     return {
         "email_fingerprint": _fingerprint(sender_email, subject),
@@ -164,6 +167,7 @@ def _build_example(row: dict, labels: dict, labeling_engine: str) -> dict:
         "label_category": category,
         "label_status": status,
         "label_sentiment": sentiment,
+        "label_recommended_action": recommended_action,
         "label_missing_info": bool(labels.get("missing_info") or labels.get("missing_information")),
         "label_reply_required": bool(labels.get("reply_required")),
         "label_escalation_required": bool(labels.get("escalation_required")),

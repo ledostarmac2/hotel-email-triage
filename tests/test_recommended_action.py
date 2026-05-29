@@ -21,6 +21,7 @@ os.environ.setdefault("SUPABASE_URL", "")
 os.environ.setdefault("SUPABASE_KEY", "")
 
 from outlook_dashboard.ai import _recommended_action_for, heuristic_analysis, triage_email
+from outlook_dashboard.database import get_email, initialize_database, list_emails, save_analysis, upsert_email
 from outlook_dashboard.taxonomy import RECOMMENDED_ACTIONS, OPERATIONAL_QUEUES
 
 
@@ -316,6 +317,35 @@ class TestRecommendedActionViaHeuristic:
         assert result["analysis_engine"] == "local-classifier"
         assert result["category"] == "Billing dispute"
         assert result["recommended_action"] == "review_folio"
+
+    def test_recommended_action_persists_to_email_analysis(self, tmp_path) -> None:
+        db_path = tmp_path / "recommended_action.sqlite3"
+        initialize_database(db_path)
+        email_id, _ = upsert_email(
+            {
+                "graph_message_id": "msg-recommended-action",
+                "subject": "Payment authorization",
+                "sender_email": "advisor@example.com",
+                "body_text": "Please confirm the completed CCA for tomorrow.",
+            },
+            db_path=db_path,
+        )
+
+        save_analysis(
+            email_id,
+            {
+                "category": "Billing authorization",
+                "recommended_department_owner": "Reservations",
+                "recommended_action": "verify_payment_authorization",
+            },
+            db_path=db_path,
+        )
+
+        detail = get_email(email_id, db_path=db_path)
+        rows = list_emails(db_path=db_path)
+        assert detail is not None
+        assert detail["recommended_action"] == "verify_payment_authorization"
+        assert rows[0]["recommended_action"] == "verify_payment_authorization"
 
 
 # ── 3. TestOperationalQueueFilter ────────────────────────────────────────────

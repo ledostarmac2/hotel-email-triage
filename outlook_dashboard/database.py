@@ -72,6 +72,7 @@ def initialize_database(db_path: Path | None = None) -> None:
                 missing_information TEXT,
                 risk_flags TEXT,
                 recommended_department_owner TEXT,
+                recommended_action TEXT,
                 contact_type TEXT,
                 suggested_reply_draft TEXT,
                 model TEXT,
@@ -222,6 +223,7 @@ def initialize_database(db_path: Path | None = None) -> None:
         )
         _ensure_password_reset_tokens_supabase_schema(db)
         _ensure_column(db, "email_analysis", "contact_type", "TEXT")
+        _ensure_column(db, "email_analysis", "recommended_action", "TEXT")
         _ensure_column(db, "email_analysis", "confidence_score", "INTEGER")
         _ensure_column(db, "email_analysis", "confidence_reason", "TEXT")
         _ensure_column(db, "email_analysis", "needs_review", "INTEGER NOT NULL DEFAULT 0")
@@ -260,6 +262,7 @@ def initialize_database(db_path: Path | None = None) -> None:
             CREATE TABLE IF NOT EXISTS completed_requests_log (
                 id               INTEGER PRIMARY KEY AUTOINCREMENT,
                 outlook_entry_id TEXT NOT NULL UNIQUE,
+                import_key       TEXT,
                 subject_tokens   TEXT,
                 sender_domain    TEXT,
                 result           TEXT NOT NULL DEFAULT 'pending',
@@ -281,6 +284,15 @@ def initialize_database(db_path: Path | None = None) -> None:
             CREATE INDEX IF NOT EXISTS idx_pki_type ON property_knowledge_items (item_type);
             """
         )
+        _ensure_column(db, "completed_requests_log", "import_key", "TEXT")
+        # Index must come after the column migration
+        try:
+            db.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_crl_import_key "
+                "ON completed_requests_log (import_key) WHERE import_key IS NOT NULL"
+            )
+        except Exception:
+            pass
         from .kyc.repository import ensure_kyc_schema
 
         ensure_kyc_schema(db)
@@ -436,6 +448,7 @@ def save_analysis(email_id: int, analysis: dict[str, Any], db_path: Path | None 
         _encode_json(analysis.get("missing_information", [])),
         _encode_json(analysis.get("risk_flags", [])),
         analysis.get("recommended_department_owner", "Reservations"),
+        analysis.get("recommended_action"),
         analysis.get("contact_type", "Direct guest"),
         analysis.get("suggested_reply_draft", ""),
         analysis.get("model", ""),
@@ -460,7 +473,7 @@ def save_analysis(email_id: int, analysis: dict[str, Any], db_path: Path | None 
                 SET ai_summary = ?, category = ?, priority_level = ?,
                     guest_sentiment = ?, internal_next_steps = ?,
                     missing_information = ?, risk_flags = ?,
-                    recommended_department_owner = ?, contact_type = ?,
+                    recommended_department_owner = ?, recommended_action = ?, contact_type = ?,
                     suggested_reply_draft = ?,
                     model = ?, analysis_engine = ?, analysis_error = ?,
                     redaction_counts = ?, confidence_score = ?, confidence_reason = ?,
@@ -475,11 +488,12 @@ def save_analysis(email_id: int, analysis: dict[str, Any], db_path: Path | None 
             INSERT INTO email_analysis (
                 email_id, ai_summary, category, priority_level, guest_sentiment,
                 internal_next_steps, missing_information, risk_flags,
-                recommended_department_owner, contact_type, suggested_reply_draft, model,
+                recommended_department_owner, recommended_action, contact_type,
+                suggested_reply_draft, model,
                 analysis_engine, analysis_error, redaction_counts,
                 confidence_score, confidence_reason, needs_review, created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             values,
         )
@@ -491,7 +505,8 @@ def get_email(email_id: int, db_path: Path | None = None) -> dict[str, Any] | No
             """
             SELECT e.*, a.ai_summary, a.category, a.priority_level, a.guest_sentiment,
                    a.internal_next_steps, a.missing_information, a.risk_flags,
-                   a.recommended_department_owner, a.contact_type, a.suggested_reply_draft,
+                   a.recommended_department_owner, a.recommended_action,
+                   a.contact_type, a.suggested_reply_draft,
                    a.model, a.analysis_engine, a.analysis_error, a.redaction_counts,
                    a.confidence_score, a.confidence_reason, a.needs_review,
                    a.created_at AS analysis_created_at, a.updated_at AS analysis_updated_at
@@ -546,7 +561,7 @@ def list_emails(
                    e.source, e.mailbox_mode, e.status, a.ai_summary, a.category,
                    a.priority_level, a.guest_sentiment, a.internal_next_steps,
                    a.missing_information, a.risk_flags, a.recommended_department_owner,
-                   a.contact_type, a.suggested_reply_draft, a.analysis_engine,
+                   a.recommended_action, a.contact_type, a.suggested_reply_draft, a.analysis_engine,
                    a.confidence_score, a.needs_review, e.conversation_id
             FROM emails e
             LEFT JOIN email_analysis a ON a.email_id = e.id
@@ -567,7 +582,8 @@ def list_conversation_emails(conversation_id: str, db_path: Path | None = None) 
             """
             SELECT e.*, a.ai_summary, a.category, a.priority_level, a.guest_sentiment,
                    a.internal_next_steps, a.missing_information, a.risk_flags,
-                   a.recommended_department_owner, a.contact_type, a.suggested_reply_draft,
+                   a.recommended_department_owner, a.recommended_action,
+                   a.contact_type, a.suggested_reply_draft,
                    a.model, a.analysis_engine, a.analysis_error, a.redaction_counts,
                    a.created_at AS analysis_created_at, a.updated_at AS analysis_updated_at
             FROM emails e

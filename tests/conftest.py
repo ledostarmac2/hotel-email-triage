@@ -31,6 +31,7 @@ _SLOW_TEST_FILES = {
     "test_api_full_coverage.py",
     "test_do178c_compliance.py",
     "test_email_triage_behavior.py",
+    "test_hotel_golden_cases.py",
     "test_recommended_action.py",
     "test_safety_guardrails.py",
     "test_triage_real_world.py",
