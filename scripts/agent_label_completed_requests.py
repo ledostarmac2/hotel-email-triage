@@ -507,7 +507,6 @@ def phase_upload(
             "label_category": category,
             "label_status": label.get("status") or "Completed",
             "label_sentiment": label.get("guest_sentiment") or None,
-            "label_recommended_action": recommended_action,
             "label_missing_info": label_missing,
             "label_reply_required": bool(label.get("label_reply_required")),
             "label_escalation_required": bool(label.get("label_escalation_required")),
@@ -515,6 +514,10 @@ def phase_upload(
             "human_reviewed": True,
             "app_version": __version__,
         }
+        # NOTE: label_recommended_action intentionally omitted —
+        # Supabase training_examples table does not yet have that column.
+        # Recommended action is preserved locally in run logs only.
+        _ = recommended_action
 
         ok, error = _upload_example(record)
         if ok:
